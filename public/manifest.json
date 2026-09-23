@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "OPS SIGAP — Security Operations System",
+  "short_name": "OPS SIGAP",
+  "description": "Sistem operasional keamanan komprehensif untuk patroli QR & GPS radius, serah terima jaga, pelaporan insiden, galeri dokumentasi terpusat, dan command center Super Admin.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

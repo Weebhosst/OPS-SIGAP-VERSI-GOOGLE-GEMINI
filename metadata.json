@@ -1,0 +1,9 @@
+{
+  "name": "OPS SIGAP — Security Operations System",
+  "description": "Sistem operasional keamanan komprehensif untuk patroli QR & GPS radius, serah terima jaga, pelaporan insiden, galeri dokumentasi terpusat, dan command center Super Admin.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

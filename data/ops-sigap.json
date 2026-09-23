@@ -1,0 +1,285 @@
+{
+  "users": [
+    {
+      "id": "USR-BB92-001",
+      "name": "Ahmad Sopyan",
+      "npk": "234378",
+      "email": "ahmadsopyaan2004@gmail.com",
+      "role": "ANGGOTA",
+      "siteId": "BB92",
+      "status": "ACTIVE",
+      "passwordHash": "$2b$10$8OVSx38/23pNJXWbCbmaB.gvt46sP1GXJcUec1xND/QQQRmgc8dru",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "USR-BB92-002",
+      "name": "Arif Janwaripin",
+      "npk": "305464",
+      "email": "arif.jawaripin@gmail.com",
+      "role": "ANGGOTA",
+      "siteId": "BB92",
+      "status": "ACTIVE",
+      "passwordHash": "$2b$10$kPOTuB5q1rtNMoo/qUON6uHtneQ/nkbz5VUmnxT8ej2iWQm5Uj6w6",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "USR-BB92-003",
+      "name": "Ayo Sunaryo",
+      "npk": "237129",
+      "email": "ayosunario@gmail.com",
+      "role": "ANGGOTA",
+      "siteId": "BB92",
+      "status": "ACTIVE",
+      "passwordHash": "$2b$10$KfEd0ipywrzMM9YYvnUgBuQnSyBDjNNO31TnuiY82maBVIApmeNMC",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "USR-BB92-004",
+      "name": "Deni Winarya",
+      "npk": "230557",
+      "email": "asahideni@gmail.com",
+      "role": "ANGGOTA",
+      "siteId": "BB92",
+      "status": "ACTIVE",
+      "passwordHash": "$2b$10$V5yfWvANH.WCxALypa9I4.M0LTcAooLDn2S4tTgxxKCBgJMsWGtZ.",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "USR-SUPER-001",
+      "name": "SUPER ADMIN SIGAP",
+      "npk": "999001",
+      "email": "sigapgda77@gmail.com",
+      "role": "SUPER_ADMIN",
+      "siteId": null,
+      "status": "ACTIVE",
+      "passwordHash": "$2b$10$aaAds/IDO00Tj.kVQUem5eVx1.gwNz154.hrGxbJi6F8prYRdbHTS",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "USR-SUPER-999",
+      "name": "SUPER ADMIN (DEMO)",
+      "npk": "999999",
+      "email": "admin@ops-sigap.local",
+      "role": "SUPER_ADMIN",
+      "siteId": null,
+      "status": "ACTIVE",
+      "passwordHash": "$2b$10$nOiZM8JF.gn0sp8p2hkXEuLUBJDZkU9yOccNQ4PBk30SJ5GxmOpja",
+      "createdAt": "2026-09-23T15:55:55.945Z",
+      "updatedAt": "2026-09-23T15:55:55.945Z"
+    }
+  ],
+  "sites": [
+    {
+      "id": "BB92",
+      "name": "BARANG BUKTI KM 92",
+      "timezone": "Asia/Jakarta",
+      "status": "ACTIVE",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "BB92-CP01",
+      "siteId": "BB92",
+      "code": "CP01",
+      "name": "LOKASI UJUNG BB92",
+      "latitude": -6.480722,
+      "longitude": 107.631389,
+      "radiusMeters": 15,
+      "qrToken": "BB92-TT72OQD30E3PSOKN",
+      "status": "ACTIVE",
+      "qrStatus": "ACTIVE",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "BB92-CP02",
+      "siteId": "BB92",
+      "code": "CP02",
+      "name": "LOKASI TENGAH BB92",
+      "latitude": -6.48125,
+      "longitude": 107.631806,
+      "radiusMeters": 15,
+      "qrToken": "BB92-QPRZPQ3WKEKZ43E",
+      "status": "ACTIVE",
+      "qrStatus": "ACTIVE",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "BB92-CP03",
+      "siteId": "BB92",
+      "code": "CP03",
+      "name": "PINTU GEMBOK AKSES KARYAWAN KELUAR MASUK",
+      "latitude": -6.482111,
+      "longitude": 107.632333,
+      "radiusMeters": 10,
+      "qrToken": "BB92-GREGBTSQX3YYBJX",
+      "status": "ACTIVE",
+      "qrStatus": "ACTIVE",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "BB92-CP04",
+      "siteId": "BB92",
+      "code": "CP04",
+      "name": "LOKASI PANEL TENGAH",
+      "latitude": -6.482056,
+      "longitude": 107.632472,
+      "radiusMeters": 10,
+      "qrToken": "BB92-JMAFICUA4X0S3DH",
+      "status": "ACTIVE",
+      "qrStatus": "ACTIVE",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "BB92-CP05",
+      "siteId": "BB92",
+      "code": "CP05",
+      "name": "GERBANG AKSES UTAMA / POS BB92",
+      "latitude": -6.482861,
+      "longitude": 107.632889,
+      "radiusMeters": 15,
+      "qrToken": "BB92-NJR6GNRPQOGILG5",
+      "status": "ACTIVE",
+      "qrStatus": "ACTIVE",
+      "createdAt": "2026-09-23T15:54:49.340Z",
+      "updatedAt": "2026-09-23T15:54:49.340Z"
+    }
+  ],
+  "patrol_sessions": [],
+  "patrol_logs": [],
+  "shift_handovers": [],
+  "incident_reports": [],
+  "media_gallery": [],
+  "radius_calibrations": [
+    {
+      "id": "CAL-BB92-001",
+      "siteId": "BB92",
+      "checkpointId": "BB92-CP02",
+      "testedByUserId": "USR-BB92-001",
+      "testedAt": "2026-09-20T15:54:49.829Z",
+      "latitude": -6.48135,
+      "longitude": 107.6319,
+      "gpsAccuracyM": 4.2,
+      "calculatedDistanceM": 16.29,
+      "configuredRadiusM": 15,
+      "verdict": "REJECTED",
+      "deviceModel": "Android Handheld BB92",
+      "notes": "Uji batas luar: Jarak 16.29m ditolak (melebihi batas radius 15m)",
+      "createdAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "CAL-BB92-002",
+      "siteId": "BB92",
+      "checkpointId": "BB92-CP02",
+      "testedByUserId": "USR-BB92-001",
+      "testedAt": "2026-09-21T15:54:49.829Z",
+      "latitude": -6.48126,
+      "longitude": 107.63182,
+      "gpsAccuracyM": 3.5,
+      "calculatedDistanceM": 14.86,
+      "configuredRadiusM": 15,
+      "verdict": "VALID",
+      "deviceModel": "Android Handheld BB92",
+      "notes": "Uji batas perimeter dalam: Jarak 14.86m valid (dalam batas radius 15m)",
+      "createdAt": "2026-09-23T15:54:49.340Z"
+    },
+    {
+      "id": "CAL-BB92-003",
+      "siteId": "BB92",
+      "checkpointId": "BB92-CP05",
+      "testedByUserId": "USR-BB92-002",
+      "testedAt": "2026-09-22T15:54:49.829Z",
+      "latitude": -6.48288,
+      "longitude": 107.6329,
+      "gpsAccuracyM": 2.8,
+      "calculatedDistanceM": 7.31,
+      "configuredRadiusM": 15,
+      "verdict": "VALID",
+      "deviceModel": "Android Field Unit",
+      "notes": "Uji titik pos gerbang utama: Jarak 7.31m valid",
+      "createdAt": "2026-09-23T15:54:49.340Z"
+    }
+  ],
+  "audit_logs": [
+    {
+      "id": "AUD-1790178963157-fe2jp",
+      "createdAt": "2026-09-23T15:56:03.157Z",
+      "actorUserId": "USR-BB92-001",
+      "action": "LOGIN_SUCCESS",
+      "entityType": "user",
+      "entityId": "USR-BB92-001",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "id": "AUD-1790178961091-jg2nq",
+      "createdAt": "2026-09-23T15:56:01.091Z",
+      "actorUserId": "USR-SUPER-001",
+      "action": "LOGIN_SUCCESS",
+      "entityType": "user",
+      "entityId": "USR-SUPER-001",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "id": "AUD-1790178959049-yaw3h",
+      "createdAt": "2026-09-23T15:55:59.049Z",
+      "actorUserId": "USR-SUPER-999",
+      "action": "LOGIN_SUCCESS",
+      "entityType": "user",
+      "entityId": "USR-SUPER-999",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "id": "AUD-1790178929550-k8l5f",
+      "createdAt": "2026-09-23T15:55:29.550Z",
+      "actorUserId": "USR-BB92-001",
+      "action": "LOGIN_SUCCESS",
+      "entityType": "user",
+      "entityId": "USR-BB92-001",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "curl/7.88.1"
+    }
+  ],
+  "admin_filter_state": [],
+  "settings": {
+    "appName": "OPS SIGAP",
+    "subtitle": "Security Operations System",
+    "timezone": "Asia/Jakarta",
+    "minRoundsPerShift": 5,
+    "defaultSiteId": "BB92"
+  },
+  "go_live_checklist": [
+    {
+      "item": "Master Data Checkpoints BB92 terverifikasi",
+      "done": true
+    },
+    {
+      "item": "QR Token tergenerate dan siap cetak",
+      "done": true
+    },
+    {
+      "item": "Radius geofence ketat aktif (CP03 & CP04 @ 10m)",
+      "done": true
+    },
+    {
+      "item": "Akun 4 Anggota & Super Admin seeded",
+      "done": true
+    },
+    {
+      "item": "Koneksi offline queue IndexedDB siap",
+      "done": true
+    }
+  ]
+}

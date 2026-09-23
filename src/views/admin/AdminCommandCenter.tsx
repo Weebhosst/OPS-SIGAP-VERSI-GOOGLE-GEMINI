@@ -1,0 +1,602 @@
+/**
+ * OPS SIGAP — Super Admin Command Center
+ * Tactical Monitoring Hub with 4 KPIs, persistent global filters, and operational alert panels
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  Shield,
+  Activity,
+  AlertTriangle,
+  XCircle,
+  FileText,
+  Filter,
+  RotateCcw,
+  CheckCircle2,
+  MapPin,
+  Clock,
+  User as UserIcon,
+  ChevronRight,
+  ExternalLink,
+  Users,
+  QrCode,
+  Sliders,
+  History,
+  LogOut,
+} from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
+import {
+  AdminFilterState,
+  AdminKpis,
+  PatrolSession,
+  PatrolLog,
+  ShiftHandover,
+  IncidentReport,
+  MediaGalleryItem,
+} from '../../types/ops';
+
+interface AdminCommandCenterProps {
+  onNavigateTab: (tab: string) => void;
+}
+
+export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNavigateTab }) => {
+  const { user, logout } = useAuth();
+  const [filterState, setFilterState] = useState<AdminFilterState | null>(null);
+  const [kpis, setKpis] = useState<AdminKpis>({
+    patroliAktif: 0,
+    kejadianOpen: 0,
+    rejectedHariIni: 0,
+    serahTerimaHariIni: 0,
+  });
+  const [panels, setPanels] = useState<{
+    activePatrols: PatrolSession[];
+    validationAlerts: PatrolLog[];
+    recentHandovers: ShiftHandover[];
+    criticalIncidents: IncidentReport[];
+    recentMedia: MediaGalleryItem[];
+  }>({
+    activePatrols: [],
+    validationAlerts: [],
+    recentHandovers: [],
+    criticalIncidents: [],
+    recentMedia: [],
+  });
+
+  const [options, setOptions] = useState<{
+    sites: any[];
+    users: any[];
+    shifts: any[];
+  }>({ sites: [], users: [], shifts: [] });
+
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [selectedSite, setSelectedSite] = useState<string>('');
+  const [selectedShift, setSelectedShift] = useState<string>('');
+  const [selectedMember, setSelectedMember] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  const loadDashboard = async () => {
+    try {
+      const res = await api.getCommandCenter();
+      if (res.success) {
+        setFilterState(res.filterState);
+        setKpis(res.kpis);
+        setPanels(res.panels);
+        setOptions(res.options);
+
+        setSelectedSite(res.filterState.siteId || '');
+        setSelectedShift(res.filterState.shiftCode || '');
+        setSelectedMember(res.filterState.memberUserId || '');
+      }
+    } catch (err) {
+      console.warn('Failed to load command center:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboard();
+    // Auto refresh every 20 seconds
+    const interval = setInterval(loadDashboard, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleApplyFilter = async () => {
+    try {
+      const res = await api.setAdminFilter({
+        siteId: selectedSite || null,
+        shiftCode: (selectedShift as any) || null,
+        memberUserId: selectedMember || null,
+      });
+      if (res.success) {
+        setShowFilterModal(false);
+        await loadDashboard();
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal mengubah filter');
+    }
+  };
+
+  const handleResetFilter = async () => {
+    try {
+      const res = await api.resetAdminFilter();
+      if (res.success) {
+        setSelectedSite('');
+        setSelectedShift('');
+        setSelectedMember('');
+        setShowFilterModal(false);
+        await loadDashboard();
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal mereset filter');
+    }
+  };
+
+  // Helper for active filter text
+  const getFilterSummaryText = () => {
+    const siteText = filterState?.siteId
+      ? options.sites.find((s) => s.id === filterState.siteId)?.name || filterState.siteId
+      : 'SEMUA SITE';
+    const shiftText = filterState?.shiftCode || 'SEMUA SHIFT';
+    const memberText = filterState?.memberUserId
+      ? options.users.find((u) => u.id === filterState.memberUserId)?.name || filterState.memberUserId
+      : 'SEMUA ANGGOTA';
+
+    return `${siteText} • ${shiftText} • ${memberText}`;
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
+      {/* Tactical Top Header */}
+      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-black">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-black text-white text-base tracking-tight">COMMAND CENTER</h1>
+                <span className="text-[10px] bg-red-950/80 border border-red-800 text-red-300 font-mono px-2 py-0.5 rounded font-bold">
+                  SUPER ADMIN
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-medium">
+                OPS SIGAP — Security Operations System
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilterModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-950/40 transition"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Filter</span>
+            </button>
+            <button
+              onClick={logout}
+              className="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-400 hover:text-white"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 pt-4 space-y-5">
+        {/* Active Filter Indicator Bar */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400 font-semibold">Filter Aktif:</span>
+            <span className="font-mono font-bold text-blue-400 bg-blue-950/60 border border-blue-900/60 px-2.5 py-1 rounded-lg">
+              {getFilterSummaryText()}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilterModal(true)}
+              className="text-xs text-slate-300 hover:text-white font-semibold underline underline-offset-2"
+            >
+              Ubah Filter
+            </button>
+            {(filterState?.siteId || filterState?.shiftCode || filterState?.memberUserId) && (
+              <button
+                onClick={handleResetFilter}
+                className="text-xs text-red-400 hover:text-red-300 font-semibold"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 4 TOP KPI CARDS */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* 1. Patroli Aktif */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Patroli Aktif
+              </span>
+              <Activity className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2 font-mono">
+              {kpis.patroliAktif}
+            </div>
+            <p className="text-[11px] text-blue-400 font-medium mt-1">Sesi ronde OPEN</p>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500" />
+          </div>
+
+          {/* 2. Kejadian Open */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Kejadian Open
+              </span>
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-3xl font-black text-amber-400 mt-2 font-mono">
+              {kpis.kejadianOpen}
+            </div>
+            <p className="text-[11px] text-amber-300 font-medium mt-1">Perlu atensi & tindak lanjut</p>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500" />
+          </div>
+
+          {/* 3. Rejected Hari Ini */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Rejected Hari Ini
+              </span>
+              <XCircle className="w-4 h-4 text-red-400" />
+            </div>
+            <div className="text-3xl font-black text-red-400 mt-2 font-mono">
+              {kpis.rejectedHariIni}
+            </div>
+            <p className="text-[11px] text-red-300 font-medium mt-1">Luar radius / duplikasi</p>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-red-500" />
+          </div>
+
+          {/* 4. Serah Terima Hari Ini */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Serah Terima Hari Ini
+              </span>
+              <FileText className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-3xl font-black text-emerald-400 mt-2 font-mono">
+              {kpis.serahTerimaHariIni}
+            </div>
+            <p className="text-[11px] text-emerald-300 font-medium mt-1">Mutasi regu tercatat</p>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
+          </div>
+        </div>
+
+        {/* Tactical Panels Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Panel: Patroli Aktif */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-400" />
+                <h2 className="font-bold text-sm text-white">PATROLI AKTIF LAPANGAN</h2>
+              </div>
+              <span className="text-xs font-mono font-bold text-slate-400">
+                {panels.activePatrols.length} Sesi
+              </span>
+            </div>
+
+            {panels.activePatrols.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Tidak ada sesi patroli yang sedang aktif saat ini.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {panels.activePatrols.map((s) => (
+                  <div
+                    key={s.id}
+                    className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-white text-xs">
+                          {options.users.find((u) => u.id === s.userId)?.name || s.userId}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {s.siteId} • Ronde #{s.roundNumber || 1} • {s.shiftCode}
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-400 font-mono">
+                        {s.totalValid}/{s.totalRequired} CP ({s.completionPct}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full"
+                        style={{ width: `${s.completionPct}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Panel: Validation Alerts (REJECTED / REVIEW) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-400" />
+                <h2 className="font-bold text-sm text-white">VALIDATION ALERTS (REJECTED & REVIEW)</h2>
+              </div>
+              <span className="text-xs font-mono font-bold text-red-400">
+                {panels.validationAlerts.length} Peringatan
+              </span>
+            </div>
+
+            {panels.validationAlerts.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Tidak ada alert penolakan atau scan mencurigakan.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {panels.validationAlerts.map((l) => (
+                  <div
+                    key={l.id}
+                    className="p-3 bg-slate-950 border border-red-950/80 rounded-xl space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] bg-red-950 border border-red-800 text-red-300 font-mono px-1.5 rounded font-bold">
+                          {l.validationStatus}
+                        </span>
+                        <span className="font-bold text-xs text-white">
+                          {options.users.find((u) => u.id === l.userId)?.name || l.userId}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {new Date(l.createdAt).toLocaleTimeString('id-ID')} WIB
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-red-300 font-medium">
+                      {l.rejectionMessage || l.rejectionReason}
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
+                      <span>Jarak Terhitung: {l.calculatedDistanceM.toFixed(1)}m</span>
+                      {l.isLowGpsAccuracy && <span className="text-amber-400 font-bold">• GPS LOW ACCURACY</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Panel: Kejadian Open / Menonjol / Kritis */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <h2 className="font-bold text-sm text-white">KEJADIAN OPEN & TINGGI / KRITIS</h2>
+              </div>
+              <button
+                onClick={() => onNavigateTab('incidents')}
+                className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-0.5"
+              >
+                <span>Kelola</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {panels.criticalIncidents.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Tidak ada insiden open atau berkategori kritis.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {panels.criticalIncidents.map((i) => (
+                  <div
+                    key={i.id}
+                    className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-start justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                            i.severity === 'KRITIS'
+                              ? 'bg-red-600 text-white'
+                              : i.severity === 'TINGGI'
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-yellow-600/30 text-yellow-300'
+                          }`}
+                        >
+                          {i.severity}
+                        </span>
+                        <span className="font-bold text-xs text-white">{i.title}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">{i.chronology}</p>
+                    </div>
+
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 shrink-0">
+                      {i.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Panel: Serah Terima Terbaru */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <h2 className="font-bold text-sm text-white">SERAH TERIMA JAGA TERBARU</h2>
+              </div>
+              <button
+                onClick={() => onNavigateTab('handovers')}
+                className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-0.5"
+              >
+                <span>Kelola</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {panels.recentHandovers.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Belum ada serah terima yang tercatat hari ini.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {panels.recentHandovers.map((h) => (
+                  <div
+                    key={h.id}
+                    className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <div className="font-bold text-white">{h.handoverType}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        {h.shiftCode} • Kondisi: {h.conditionStatus}
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                        h.status === 'ACKNOWLEDGED'
+                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                          : 'bg-amber-950 text-amber-400 border border-amber-800'
+                      }`}
+                    >
+                      {h.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dokumentasi Lapangan Terbaru Carousel */}
+        {panels.recentMedia.length > 0 && (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-sm text-white">DOKUMENTASI MEDIA LAPANGAN TERBARU</h2>
+              <button
+                onClick={() => onNavigateTab('gallery')}
+                className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-0.5"
+              >
+                <span>Lihat Semua Galeri</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              {panels.recentMedia.map((m) => (
+                <div
+                  key={m.id}
+                  className="rounded-xl overflow-hidden border border-slate-800 bg-black aspect-video relative group"
+                >
+                  <img
+                    src={m.photoUrl}
+                    alt={m.caption}
+                    className="w-full h-full object-cover group-hover:scale-105 transition"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2">
+                    <span className="text-[10px] text-white font-mono truncate">{m.caption}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Persistent Global Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-bold text-white text-sm">Filter Global Command Center</h3>
+              <button onClick={() => setShowFilterModal(false)} className="text-slate-400 hover:text-white">
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              {/* Filter 1: Site */}
+              <div>
+                <label className="font-semibold text-slate-300 block mb-1">Site / Lokasi:</label>
+                <select
+                  value={selectedSite}
+                  onChange={(e) => setSelectedSite(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                >
+                  <option value="">Semua Site (Global)</option>
+                  {options.sites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filter 2: Shift */}
+              <div>
+                <label className="font-semibold text-slate-300 block mb-1">Shift:</label>
+                <select
+                  value={selectedShift}
+                  onChange={(e) => setSelectedShift(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                >
+                  <option value="">Semua Shift</option>
+                  {options.shifts.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filter 3: Anggota */}
+              <div>
+                <label className="font-semibold text-slate-300 block mb-1">Anggota Security:</label>
+                <select
+                  value={selectedMember}
+                  onChange={(e) => setSelectedMember(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                >
+                  <option value="">Semua Anggota</option>
+                  {options.users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} (NPK: {u.npk})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                onClick={handleResetFilter}
+                className="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition"
+              >
+                Reset Semua
+              </button>
+              <button
+                onClick={handleApplyFilter}
+                className="py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition"
+              >
+                Terapkan Filter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
