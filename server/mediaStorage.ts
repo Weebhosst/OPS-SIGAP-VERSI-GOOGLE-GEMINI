@@ -291,6 +291,29 @@ export async function prepareMedia(input: PrepareMediaInput): Promise<PreparedMe
   };
 }
 
+export async function prepareMediaBatch(inputs: PrepareMediaInput[]): Promise<PreparedMedia[]> {
+  const prepared: PreparedMedia[] = [];
+  try {
+    for (const input of inputs) prepared.push(await prepareMedia(input));
+    return prepared;
+  } catch (error) {
+    await Promise.all(
+      prepared
+        .filter((item) => item.storageProvider === 'railway_s3')
+        .map((item) => deleteMediaObject(item.storageKey)),
+    );
+    throw error;
+  }
+}
+
+export async function cleanupPreparedMedia(items: PreparedMedia[]): Promise<void> {
+  await Promise.all(
+    items
+      .filter((item) => item.storageProvider === 'railway_s3')
+      .map((item) => deleteMediaObject(item.storageKey)),
+  );
+}
+
 export async function readMediaObject(ref: MediaObjectRef): Promise<{ body: Buffer; mimeType: string; fileName: string }> {
   if (ref.storageProvider === 'external_url') {
     throw new RepositoryError('MEDIA_EXTERNAL_REDIRECT', ref.storageKey, 302);
