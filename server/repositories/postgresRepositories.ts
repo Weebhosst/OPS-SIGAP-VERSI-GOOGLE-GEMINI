@@ -246,6 +246,32 @@ const mapAlert = (row: any): ValidationAlert => ({
   createdAt: iso(row.created_at)!,
 });
 
+const mapAdminFilterState = (row: any) => ({
+  id: row.id,
+  userId: row.user_id,
+  siteId: row.site_id,
+  shiftCode: row.shift_code,
+  memberUserId: row.member_user_id,
+  updatedAt: iso(row.updated_at)!,
+});
+
+const mapRadiusCalibration = (row: any) => ({
+  id: row.id,
+  siteId: row.site_id,
+  checkpointId: row.checkpoint_id,
+  testedByUserId: row.tested_by_user_id,
+  testedAt: iso(row.tested_at)!,
+  latitude: Number(row.latitude),
+  longitude: Number(row.longitude),
+  gpsAccuracyM: row.gps_accuracy == null ? null : Number(row.gps_accuracy),
+  calculatedDistanceM: Number(row.calculated_distance_meter),
+  configuredRadiusM: Number(row.configured_radius_meter),
+  verdict: row.verdict,
+  deviceModel: row.device_model,
+  notes: row.notes,
+  createdAt: iso(row.created_at)!,
+});
+
 const mapMedia = (row: any): MediaGalleryItem => {
   const reference = String(row.reference_type || '').toUpperCase();
   const sourceModule: MediaGalleryItem['sourceModule'] =
@@ -652,6 +678,20 @@ export const postgresRepositories: RepositoryBundle = {
         [sessionId],
       )
     ).rows.map(mapLog),
+    overrideValidation: async (id, newStatus, reason) => {
+      try {
+        const result=await query(
+          "UPDATE patrol_logs SET validation_status=$2,rejection_reason=CASE WHEN $2='VALID' THEN NULL ELSE rejection_reason END,rejection_message=CASE WHEN $2='VALID' THEN $3 ELSE rejection_message END WHERE id=$1 RETURNING *",
+          [id,newStatus,newStatus==='VALID'?`Status diubah menjadi VALID oleh Administrator (${reason})`:null],
+        );
+        if(!result.rows[0]) return undefined;
+        const round=await query('SELECT round_number FROM patrol_rounds WHERE id=$1',[result.rows[0].round_id]);
+        return mapLog({...result.rows[0],round_number:round.rows[0]?.round_number||1});
+      } catch(error:any) {
+        if(error?.code==='23505') throw new RepositoryError('DUPLICATE_CHECKPOINT','Override VALID akan menduplikasi checkpoint valid pada ronde yang sama.',409);
+        throw error;
+      }
+    },
   },
 
   handovers: {
@@ -750,6 +790,40 @@ export const postgresRepositories: RepositoryBundle = {
       }
       return mapAlert(result.rows[0]);
     }),
+  },
+
+  adminState: {
+    get: async (userId) => {
+      const result=await query('SELECT * FROM admin_filter_state WHERE user_id=$1',[userId]);
+      return result.rows[0]?mapAdminFilterState(result.rows[0]):undefined;
+    },
+    set: async (userId, updates) => {
+      const current=await query('SELECT * FROM admin_filter_state WHERE user_id=$1',[userId]);
+      const previous=current.rows[0]||{};
+      const siteId=updates.siteId!==undefined?updates.siteId:previous.site_id||null;
+      const shiftCode=updates.shiftCode!==undefined?updates.shiftCode:previous.shift_code||null;
+      const memberUserId=updates.memberUserId!==undefined?updates.memberUserId:previous.member_user_id||null;
+      const id=previous.id||`AFS-${userId}`;
+      const result=await query(
+        'INSERT INTO admin_filter_state(id,user_id,site_id,shift_code,member_user_id,updated_at) VALUES($1,$2,$3,$4,$5,now()) ON CONFLICT(user_id) DO UPDATE SET site_id=EXCLUDED.site_id,shift_code=EXCLUDED.shift_code,member_user_id=EXCLUDED.member_user_id,updated_at=now() RETURNING *',
+        [id,userId,siteId,shiftCode,memberUserId],
+      );
+      return mapAdminFilterState(result.rows[0]);
+    },
+  },
+
+  radiusCalibrations: {
+    list: async (request) => {
+      const {rows,total,page}=await pageQuery('SELECT * FROM radius_calibrations ORDER BY tested_at DESC','SELECT count(*) FROM radius_calibrations',[],request);
+      return toPage(rows.map(mapRadiusCalibration),total,page);
+    },
+    create: async (entry) => {
+      const result=await query(
+        'INSERT INTO radius_calibrations(id,site_id,checkpoint_id,tested_by_user_id,tested_at,latitude,longitude,gps_accuracy,calculated_distance_meter,configured_radius_meter,verdict,device_model,notes,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
+        [entry.id,entry.siteId,entry.checkpointId,entry.testedByUserId,entry.testedAt,entry.latitude,entry.longitude,entry.gpsAccuracyM||null,entry.calculatedDistanceM,entry.configuredRadiusM,entry.verdict,entry.deviceModel||null,entry.notes||null,entry.createdAt],
+      );
+      return mapRadiusCalibration(result.rows[0]);
+    },
   },
 
   media: {
