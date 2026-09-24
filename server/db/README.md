@@ -151,3 +151,37 @@ npm run build
 CI always uses an isolated JSON fixture for the JSON job and a temporary PostgreSQL 16 service for the
 PostgreSQL integration job. Railway object-storage live verification is a separate deployment gate
 because bucket credentials are intentionally not stored in GitHub.
+
+
+## Round 5A production security
+
+Production authentication no longer returns bearer tokens to the browser or stores them in
+`localStorage`. Login creates a cryptographically random opaque session token, stores only its
+SHA-256 hash server-side, and delivers the token through an `HttpOnly`, `Secure`,
+`SameSite=Strict` cookie.
+
+PostgreSQL auth sessions are persisted in migration `004_auth_sessions.sql`, which allows logout,
+expiry, password-reset revocation, and deployment restarts without falling back to browser-managed
+bearer tokens.
+
+New accounts and accounts reset to NPK are marked `mustChangePassword=true`. Their workspace is
+blocked until they choose a password of at least eight characters containing letters and numbers.
+Embedded demo credentials were removed from the production login UI.
+
+Production startup fails closed unless PostgreSQL, HTTPS APP_URL, strong session/checkpoint secrets,
+and private Railway object storage are configured. The server also applies security headers,
+cross-site mutation protection, strict cookies, login throttling, and a minimal public health
+response. Detailed health diagnostics are available only to authenticated administrators.
+
+Recommended production variables:
+
+```text
+NODE_ENV=production
+APP_URL=https://<ops-sigap-host>
+ALLOWED_ORIGINS=https://<ops-sigap-host>
+SESSION_TTL_HOURS=12
+LOGIN_MAX_ATTEMPTS=5
+LOGIN_LOCK_MINUTES=15
+DATABASE_PROVIDER=postgres
+MEDIA_PROVIDER=railway_s3
+```
