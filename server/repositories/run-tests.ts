@@ -218,6 +218,7 @@ try {
   const patrolServiceSource = fs.readFileSync(path.resolve('server/patrolService.ts'), 'utf8');
   const mediaServiceSource = fs.readFileSync(path.resolve('server/mediaService.ts'), 'utf8');
   const tokenCryptoSource = fs.readFileSync(path.resolve('server/security/checkpointTokenCrypto.ts'), 'utf8');
+  const mediaStorageSource = fs.readFileSync(path.resolve('server/mediaStorage.ts'), 'utf8');
   const routeSource = fs.readFileSync(path.resolve('server/routes.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
@@ -235,7 +236,11 @@ try {
   assert.doesNotMatch(patrolServiceSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.doesNotMatch(routeSource, /from ['"]\.\/db['"]|\bdb\./);
-  assert.match(patrolServiceSource, /MEDIA_STORAGE_NOT_READY/);
+  assert.match(patrolServiceSource, /prepareMedia/);
+  assert.match(mediaStorageSource, /AWS4-HMAC-SHA256/);
+  assert.match(mediaStorageSource, /railway_s3/);
+  assert.match(routeSource, /\/media\/:id\/content/);
+  assert.doesNotMatch(postgresSource, /storage_provider[^\n]+external_url[^\n]+item\.photoUrl/);
 
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
@@ -248,6 +253,7 @@ try {
   console.log('PASS operational/master repositories, admin state, radius calibration, and media relations');
   console.log('PASS routes/services contain no direct legacy JSON db access');
   console.log('PASS checkpoint tokens are hashed plus AES-GCM encrypted at rest');
+  console.log('PASS Round 4B media storage is provider-neutral and uses private delivery routes');
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
