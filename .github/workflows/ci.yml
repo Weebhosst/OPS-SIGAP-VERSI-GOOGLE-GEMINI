@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "round4*"
+      - "round5*"
   pull_request:
     branches:
       - main
