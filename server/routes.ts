@@ -4,10 +4,8 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import { db } from './db';
 import { validateAndProcessScan, getMemberShiftProgress } from './patrolService';
 import { getOperationalMedia, getOperationalMediaCounts } from './mediaService';
-import { requireLegacyJsonProvider } from './providerGuard';
 import { repositories } from './repositories';
 import { RepositoryError } from './repositories/contracts';
 import {
@@ -1704,75 +1702,71 @@ apiRouter.post('/admin/checkpoints/:id/regenerate-qr', authMiddleware, requireAd
 });
 
 // Admin Radius Calibration
-apiRouter.get('/admin/radius-calibrations', authMiddleware, requireLegacyJsonProvider, (_req: Request, res: Response) => {
-  const calibrations = db.getRadiusCalibrations();
-  res.json({ success: true, calibrations });
+apiRouter.get('/admin/radius-calibrations', authMiddleware, async (_req: Request, res: Response) => {
+  const page = await repositories.radiusCalibrations.list({ limit: 500, offset: 0 });
+  res.json({ success: true, calibrations: page.items });
 });
 
-apiRouter.post('/admin/radius-calibrations', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/radius-calibrations', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { checkpointId, latitude, longitude, gpsAccuracyM, calculatedDistanceM, verdict, notes } = req.body;
-  const cp = db.findCheckpointById(checkpointId);
-  if (!cp) {
-    return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
-  }
+  const checkpoint = await repositories.checkpoints.findById(checkpointId);
+  if (!checkpoint) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
 
   const now = new Date().toISOString();
-  const cal = db.addRadiusCalibration({
+  const calibration = await repositories.radiusCalibrations.create({
     id: `CAL-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    siteId: cp.siteId,
-    checkpointId: cp.id,
+    siteId: checkpoint.siteId,
+    checkpointId: checkpoint.id,
     testedByUserId: req.user!.id,
     testedAt: now,
     latitude: Number(latitude),
     longitude: Number(longitude),
     gpsAccuracyM: gpsAccuracyM ? Number(gpsAccuracyM) : null,
     calculatedDistanceM: Number(calculatedDistanceM),
-    configuredRadiusM: cp.radiusMeters,
+    configuredRadiusM: checkpoint.radiusMeters,
     verdict: verdict || 'VALID',
     deviceModel: req.headers['user-agent'] || 'Field Unit',
     notes: notes || 'Uji kalibrasi lapangan',
     createdAt: now,
   });
-
-  res.json({ success: true, calibration: cal });
+  res.json({ success: true, calibration });
 });
 
 // Admin Audit Logs
-apiRouter.get('/admin/audit-logs', authMiddleware, requireAdmin, requireLegacyJsonProvider, (_req: Request, res: Response) => {
-  const logs = db.getAuditLogs().slice(0, 100);
-  res.json({ success: true, logs });
+apiRouter.get('/admin/audit-logs', authMiddleware, requireAdmin, async (_req: Request, res: Response) => {
+  const page = await repositories.audit.list({ limit: 100, offset: 0 });
+  res.json({ success: true, logs: page.items });
 });
 
 // Admin Override Validation
-apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { logId, newStatus, reason } = req.body;
   if (!logId || !newStatus || !reason) {
     return res.status(400).json({ success: false, error: 'Log ID, Status Baru, dan Alasan Koreksi wajib diisi.' });
   }
-
-  const log = db.findPatrolLogById(logId);
-  if (!log) {
-    return res.status(404).json({ success: false, error: 'Patrol Log tidak ditemukan.' });
+  if (!['VALID', 'REVIEW', 'REJECTED'].includes(String(newStatus))) {
+    return res.status(400).json({ success: false, error: 'Status validasi tidak valid.' });
   }
 
-  const oldStatus = log.validationStatus;
-  log.validationStatus = newStatus;
-  if (newStatus === 'VALID') {
-    log.rejectionReason = null;
-    log.rejectionMessage = `Status diubah menjadi VALID oleh Super Admin (${reason})`;
+  const previous = await repositories.patrol.findById(logId);
+  if (!previous) return res.status(404).json({ success: false, error: 'Patrol Log tidak ditemukan.' });
+
+  try {
+    const updated = await repositories.patrol.overrideValidation(logId, newStatus, String(reason));
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'VALIDATION_OVERRIDE',
+      entityType: 'patrol_log',
+      entityId: logId,
+      oldValue: { validationStatus: previous.validationStatus },
+      newValue: { validationStatus: newStatus },
+      reason: String(reason),
+    });
+    res.json({ success: true, log: updated });
+  } catch (error:any) {
+    if (error instanceof RepositoryError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    throw error;
   }
-
-  db.addAuditLog({
-    actorUserId: req.user!.id,
-    action: 'VALIDATION_OVERRIDE',
-    entityType: 'patrol_log',
-    entityId: log.id,
-    oldValue: { validationStatus: oldStatus },
-    newValue: { validationStatus: newStatus },
-    reason,
-  });
-
-  res.json({ success: true, log });
 });
 
 // -------------------------------------------------------------
@@ -1838,6 +1832,30 @@ apiRouter.get('/health', async (_req: Request, res: Response) => {
   const shift = resolveShift();
   const repositoryHealth = await repositories.health();
   const connected = repositoryHealth.database === 'connected';
+
+  let databaseDetails:any = { status: repositoryHealth.database.toUpperCase() };
+  if (connected) {
+    try {
+      const [users, sites, checkpoints, sessions, patrolLogsCount] = await Promise.all([
+        repositories.users.list({ limit: 1, offset: 0 }),
+        repositories.sites.list({ limit: 1, offset: 0 }),
+        repositories.checkpoints.list({ limit: 1, offset: 0 }),
+        repositories.sessions.list({ limit: 1, offset: 0 }),
+        repositories.patrol.countAll(),
+      ]);
+      databaseDetails = {
+        ...databaseDetails,
+        usersCount: users.total,
+        sitesCount: sites.total,
+        checkpointsCount: checkpoints.total,
+        patrolSessionsCount: sessions.total,
+        patrolLogsCount,
+      };
+    } catch (error) {
+      console.error('[health] Count query failed:', error instanceof Error ? error.message : 'unknown');
+    }
+  }
+
   res.status(connected ? 200 : 503).json({
     status: connected ? 'ok' : 'degraded',
     provider: repositoryHealth.provider,
@@ -1846,15 +1864,6 @@ apiRouter.get('/health', async (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     serverTimeJakarta: `${dateString} ${timeString} WIB`,
     activeShift: shift,
-    databaseDetails: {
-      status: repositoryHealth.database.toUpperCase(),
-      ...(repositoryHealth.provider === 'json' ? {
-        usersCount: db.getUsers().length,
-        sitesCount: db.getSites().length,
-        checkpointsCount: db.getCheckpoints().length,
-        patrolSessionsCount: db.getPatrolSessions().length,
-        patrolLogsCount: db.getPatrolLogs().length,
-      } : {}),
-    },
+    databaseDetails,
   });
 });
