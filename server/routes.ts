@@ -1752,6 +1752,7 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
     }] : [],
     status: 'ACTIVE',
     passwordHash: bcrypt.hashSync(cleanNpk, 10),
+    mustChangePassword: true,
     createdAt: now,
     updatedAt: now,
   };
