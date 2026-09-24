@@ -550,9 +550,16 @@ export const postgresRepositories: RepositoryBundle = {
       return counts;
     },
     add: async (item, sessionId = null, customerId = null) => {
+      if (item.photoUrl.startsWith('data:')) {
+        throw new RepositoryError(
+          'MEDIA_STORAGE_NOT_READY',
+          'Media base64 belum boleh disimpan ke PostgreSQL. Aktifkan storage provider Round 4B terlebih dahulu.',
+          503,
+        );
+      }
       const documentType = item.documentType || normalizeDocumentType(item);
       await query(
-        "INSERT INTO media(id,document_type,user_id,session_id,customer_id,site_id,reference_type,reference_id,storage_provider,storage_key,mime_type,file_name,file_size,captured_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'local',$9,$10,$11,NULL,$12,$13) ON CONFLICT(id) DO NOTHING",
+        "INSERT INTO media(id,document_type,user_id,session_id,customer_id,site_id,reference_type,reference_id,storage_provider,storage_key,mime_type,file_name,file_size,captured_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'external_url',$9,$10,$11,NULL,$12,$13) ON CONFLICT(id) DO NOTHING",
         [
           item.id,
           documentType,
@@ -563,7 +570,7 @@ export const postgresRepositories: RepositoryBundle = {
           item.sourceModule,
           item.sourceId,
           item.photoUrl,
-          item.photoUrl.startsWith('data:image/png') ? 'image/png' : 'image/jpeg',
+          item.photoUrl.endsWith('.png') ? 'image/png' : 'image/jpeg',
           item.caption || `${item.id}.jpg`,
           item.eventAt,
           item.createdAt,
