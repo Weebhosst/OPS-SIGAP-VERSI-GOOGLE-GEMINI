@@ -74,6 +74,23 @@ export const api = {
       body: JSON.stringify({ userId }),
     }),
 
+  // Private media / Cloudflare R2
+  createMediaUpload: (payload: {
+    purpose: 'PATROL' | 'SERTIGAS' | 'HANDOVER' | 'TARUNA' | 'INCIDENT' | 'ATTENDANCE' | 'DOCUMENT' | 'TEMP';
+    contentType: string;
+    sizeBytes: number;
+  }) =>
+    request<{
+      success: boolean;
+      uploadUrl: string;
+      objectKey: string;
+      mediaUrl: string;
+      expiresIn: number;
+    }>('/media/presign-upload', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   // Patrol
   getShiftProgress: () =>
     request<{
