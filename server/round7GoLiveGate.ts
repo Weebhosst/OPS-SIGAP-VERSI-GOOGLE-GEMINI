@@ -20,8 +20,14 @@ async function main() {
   try {
     await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
 
-    const q = async (sql: string, params: unknown[] = []) =>
-      (await client.query(sql, params)).rows as Row[];
+    let queryQueue: Promise<void> = Promise.resolve();
+    const q = (sql: string, params: unknown[] = []) => {
+      const run = queryQueue.then(async () =>
+        (await client.query(sql, params)).rows as Row[],
+      );
+      queryQueue = run.then(() => undefined, () => undefined);
+      return run;
+    };
 
     const [
       master,
