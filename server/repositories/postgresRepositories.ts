@@ -1025,13 +1025,15 @@ export const postgresRepositories: RepositoryBundle = {
     },
     findObjectRef: async (id) => {
       const result = await query(
-        'SELECT id,storage_provider,storage_key,mime_type,file_name,file_size FROM media WHERE id=$1',
+        'SELECT id,site_id,user_id,storage_provider,storage_key,mime_type,file_name,file_size FROM media WHERE id=$1',
         [id],
       );
       const row = result.rows[0];
       if (!row) return undefined;
       return {
         id: row.id,
+        siteId: row.site_id,
+        userId: row.user_id,
         storageProvider: row.storage_provider,
         storageKey: row.storage_key,
         mimeType: row.mime_type,
