@@ -134,6 +134,75 @@ try {
   const mediaCounts = await jsonRepositories.media.counts({ siteId: site.id });
   assert.ok((mediaCounts.PATROLI_QR || 0) >= 1, 'Media counter PATROLI_QR harus tersedia.');
 
+  const filterState = await jsonRepositories.adminState.set(user.id, { siteId: site.id, shiftCode: 'SHIFT_1' });
+  assert.equal((await jsonRepositories.adminState.get(user.id))?.siteId, site.id);
+  assert.equal(filterState.shiftCode, 'SHIFT_1');
+
+  const handoverId = `TEST-HANDOVER-${Date.now()}`;
+  const handover = await jsonRepositories.handovers.create({
+    id: handoverId,
+    sessionId: active.id,
+    siteId: site.id,
+    shiftDate: active.shiftDate,
+    shiftCode: active.shiftCode,
+    handoverType: 'SERAH_TERIMA',
+    fromUserId: user.id,
+    eventAt: new Date().toISOString(),
+    conditionStatus: 'BAIK',
+    personnelStatus: 'Lengkap',
+    equipmentStatus: 'Baik',
+    keysStatus: 'Baik',
+    vehicleStatus: 'Baik',
+    ackFrom: true,
+    ackTo: false,
+    status: 'SUBMITTED',
+    createdBy: user.id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  assert.equal((await jsonRepositories.handovers.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === handover.id), true);
+  assert.equal((await jsonRepositories.handovers.update(handover.id, { ackTo: true, status: 'ACKNOWLEDGED', toUserId: user.id }))?.ackTo, true);
+
+  const incidentId = `TEST-INCIDENT-${Date.now()}`;
+  const incident = await jsonRepositories.incidents.create({
+    id: incidentId,
+    sessionId: active.id,
+    customerId: site.customerId,
+    siteId: site.id,
+    userId: user.id,
+    incidentAt: new Date().toISOString(),
+    shiftCode: active.shiftCode,
+    shiftDate: active.shiftDate,
+    category: 'INSIDENTIL',
+    severity: 'RENDAH',
+    title: 'Repository test',
+    locationText: 'Test area',
+    chronology: 'Test chronology',
+    initialAction: 'Test action',
+    status: 'OPEN',
+    escalated: false,
+    createdBy: user.id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  assert.equal((await jsonRepositories.incidents.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === incident.id), true);
+  assert.equal((await jsonRepositories.incidents.update(incident.id, { status: 'CLOSED', closedAt: new Date().toISOString() }))?.status, 'CLOSED');
+
+  const calibration = await jsonRepositories.radiusCalibrations.create({
+    id: `TEST-CAL-${Date.now()}`,
+    siteId: site.id,
+    checkpointId: checkpoint.id,
+    testedByUserId: user.id,
+    testedAt: new Date().toISOString(),
+    latitude: checkpoint.latitude,
+    longitude: checkpoint.longitude,
+    calculatedDistanceM: 0,
+    configuredRadiusM: checkpoint.radiusMeters,
+    verdict: 'VALID',
+    createdAt: new Date().toISOString(),
+  });
+  assert.equal((await jsonRepositories.radiusCalibrations.list({ limit: 100, offset: 0 })).items.some((item) => item.id === calibration.id), true);
+
   const beforeDryRun = fs.readFileSync(temporaryDatabase);
   execFileSync(process.execPath, ['--import', 'tsx', 'server/db/importJson.ts', '--dry-run'], {
     cwd: process.cwd(),
@@ -143,33 +212,30 @@ try {
   assert.deepEqual(fs.readFileSync(temporaryDatabase), beforeDryRun);
 
   const schemaSql = fs.readFileSync(path.resolve('server/db/migrations/001_initial_schema.sql'), 'utf8');
+  const runtimeSchemaSql = fs.readFileSync(path.resolve('server/db/migrations/003_admin_runtime.sql'), 'utf8');
   const postgresSource = fs.readFileSync(path.resolve('server/repositories/postgresRepositories.ts'), 'utf8');
   const importerSource = fs.readFileSync(path.resolve('server/db/importJson.ts'), 'utf8');
   const patrolServiceSource = fs.readFileSync(path.resolve('server/patrolService.ts'), 'utf8');
   const mediaServiceSource = fs.readFileSync(path.resolve('server/mediaService.ts'), 'utf8');
-  const providerGuardSource = fs.readFileSync(path.resolve('server/providerGuard.ts'), 'utf8');
+  const tokenCryptoSource = fs.readFileSync(path.resolve('server/security/checkpointTokenCrypto.ts'), 'utf8');
   const routeSource = fs.readFileSync(path.resolve('server/routes.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
   assert.match(importerSource, /ON CONFLICT\(id\) DO NOTHING/);
   assert.match(importerSource, /legacy-json:/);
+  assert.match(importerSource, /token_ciphertext/);
+  assert.match(importerSource, /incident_media/);
+  assert.match(importerSource, /handover_media/);
+  assert.match(runtimeSchemaSql, /token_ciphertext/);
+  assert.match(runtimeSchemaSql, /CREATE TABLE admin_filter_state/);
+  assert.match(runtimeSchemaSql, /CREATE TABLE radius_calibrations/);
+  assert.match(postgresSource, /encryptCheckpointToken/);
+  assert.match(tokenCryptoSource, /aes-256-gcm/);
   assert.doesNotMatch(patrolServiceSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
+  assert.doesNotMatch(routeSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.match(patrolServiceSource, /MEDIA_STORAGE_NOT_READY/);
-  assert.match(providerGuardSource, /POSTGRES_ROUTE_NOT_MIGRATED/);
-
-  let currentRoute = '';
-  for (const line of routeSource.split('\n')) {
-    if (/apiRouter\.(get|post|patch|put|delete)\('/.test(line)) currentRoute = line.trim();
-    if (/\bdb\./.test(line) && !currentRoute.includes("'/health'")) {
-      assert.match(
-        currentRoute,
-        /requireLegacyJsonProvider/,
-        `Direct JSON db access tanpa provider guard: ${currentRoute}`,
-      );
-    }
-  }
 
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
@@ -178,8 +244,10 @@ try {
   console.log('PASS valid-checkpoint uniqueness and alert workflow persistence');
   console.log('PASS migration dry-run leaves JSON source unchanged');
   console.log('PASS PostgreSQL constraints, capacity lock, and idempotent import strategy');
-  console.log('PASS provider-safe patrol/media service cutover and split-brain guard');
-  console.log('PASS every remaining direct JSON route is fail-closed in PostgreSQL mode');
+  console.log('PASS provider-safe patrol/media service cutover');
+  console.log('PASS operational/master repositories, admin state, radius calibration, and media relations');
+  console.log('PASS routes/services contain no direct legacy JSON db access');
+  console.log('PASS checkpoint tokens are hashed plus AES-GCM encrypted at rest');
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
