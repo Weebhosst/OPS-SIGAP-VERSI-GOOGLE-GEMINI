@@ -151,6 +151,8 @@ export type PersistableMediaItem = MediaGalleryItem & {
 
 export interface MediaObjectRef {
   id: string;
+  siteId: string;
+  userId: string;
   storageProvider: string;
   storageKey: string;
   mimeType?: string | null;
