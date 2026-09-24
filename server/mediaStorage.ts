@@ -161,7 +161,7 @@ function canonicalQuery(url: URL): string {
     .join('&');
 }
 
-function signedHeaders(method: string, url: URL, body: Buffer, date = new Date()): Record<string, string> {
+function signedHeaders(method: string, url: URL, body: Uint8Array, date = new Date()): Record<string, string> {
   const s3 = requireS3Config();
   const payloadHash = sha256Hex(body);
   const { amzDate, dateStamp } = amzTimestamp(date);
