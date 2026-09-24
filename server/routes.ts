@@ -1569,138 +1569,152 @@ apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: Au
 });
 
 // Admin Checkpoint Management
-apiRouter.get('/admin/checkpoints', authMiddleware, requireLegacyJsonProvider, (_req: Request, res: Response) => {
-  const checkpoints = db.getCheckpoints();
-  res.json({ success: true, checkpoints });
+apiRouter.get('/admin/checkpoints', authMiddleware, async (_req: Request, res: Response) => {
+  const page = await repositories.checkpoints.list({ limit: 500, offset: 0 });
+  res.json({ success: true, checkpoints: page.items });
 });
 
-apiRouter.post('/admin/checkpoints', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/checkpoints', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { siteId, code, name, latitude, longitude, radiusMeters, coordinateMethod, accuracy, capturedAt } = req.body;
   if (!code || !name || latitude === undefined || longitude === undefined) {
     return res.status(400).json({ success: false, error: 'Semua data checkpoint wajib diisi.' });
   }
-  const checkpointSite = db.findSiteById(siteId || '');
+
+  const checkpointSite = await repositories.sites.findById(siteId || '');
   if (!checkpointSite) return res.status(400).json({ success: false, error: 'Checkpoint wajib terhubung ke Site yang valid.' });
-  if (db.findCheckpointById(`${checkpointSite.id}-${code.toUpperCase()}`)) return res.status(409).json({ success: false, error: 'Kode checkpoint sudah digunakan pada site ini.' });
+
+  const normalizedCode = String(code).trim().toUpperCase();
+  const checkpointId = `${checkpointSite.id}-${normalizedCode}`;
+  if (await repositories.checkpoints.findById(checkpointId)) {
+    return res.status(409).json({ success: false, error: 'Kode checkpoint sudah digunakan pada site ini.' });
+  }
+
   const numericLatitude = Number(latitude);
   const numericLongitude = Number(longitude);
-  if (!Number.isFinite(numericLatitude) || numericLatitude < -90 || numericLatitude > 90 || !Number.isFinite(numericLongitude) || numericLongitude < -180 || numericLongitude > 180) return res.status(400).json({ success: false, error: 'Latitude atau Longitude tidak valid.' });
-  if (coordinateMethod === 'GPS' && (!Number.isFinite(Number(accuracy)) || Number(accuracy) > 25 || !capturedAt)) return res.status(400).json({ success: false, error: 'Akurasi GPS rendah atau data capture belum lengkap. Ambil GPS kembali.' });
+  if (!Number.isFinite(numericLatitude) || numericLatitude < -90 || numericLatitude > 90 || !Number.isFinite(numericLongitude) || numericLongitude < -180 || numericLongitude > 180) {
+    return res.status(400).json({ success: false, error: 'Latitude atau Longitude tidak valid.' });
+  }
+  if (coordinateMethod === 'GPS' && (!Number.isFinite(Number(accuracy)) || Number(accuracy) > 25 || !capturedAt)) {
+    return res.status(400).json({ success: false, error: 'Akurasi GPS rendah atau data capture belum lengkap. Ambil GPS kembali.' });
+  }
 
   const now = new Date().toISOString();
-  const cp = db.addCheckpoint({
-    id: `${checkpointSite.id}-${code.toUpperCase()}`,
-    siteId: checkpointSite.id,
-    code: code.toUpperCase(),
-    name: name.trim(),
-    latitude: numericLatitude,
-    longitude: numericLongitude,
-    radiusMeters: Number(radiusMeters) || 15,
-    coordinateMethod: coordinateMethod === 'GPS' ? 'GPS' : 'MANUAL',
-    gpsAccuracyM: coordinateMethod === 'GPS' && accuracy !== null ? Number(accuracy) : null,
-    gpsCapturedAt: coordinateMethod === 'GPS' ? capturedAt || now : null,
-    qrToken: '',
-    status: 'ACTIVE',
-    qrStatus: 'INACTIVE',
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  db.addAuditLog({
-    actorUserId: req.user!.id,
-    action: 'CHECKPOINT_CREATE',
-    entityType: 'checkpoint',
-    entityId: cp.id,
-    newValue: cp,
-    reason: `Tambah checkpoint baru ${cp.code}`,
-  });
-
-  res.json({ success: true, checkpoint: cp });
+  try {
+    const checkpoint = await repositories.checkpoints.create({
+      id: checkpointId,
+      siteId: checkpointSite.id,
+      code: normalizedCode,
+      name: String(name).trim(),
+      latitude: numericLatitude,
+      longitude: numericLongitude,
+      radiusMeters: Number(radiusMeters) || 15,
+      coordinateMethod: coordinateMethod === 'GPS' ? 'GPS' : 'MANUAL',
+      gpsAccuracyM: coordinateMethod === 'GPS' && accuracy !== null ? Number(accuracy) : null,
+      gpsCapturedAt: coordinateMethod === 'GPS' ? capturedAt || now : null,
+      qrToken: '',
+      status: 'ACTIVE',
+      qrStatus: 'INACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'CHECKPOINT_CREATE',
+      entityType: 'checkpoint',
+      entityId: checkpoint.id,
+      newValue: checkpoint,
+      reason: `Tambah checkpoint baru ${checkpoint.code}`,
+    });
+    res.json({ success: true, checkpoint });
+  } catch (error:any) {
+    if (error instanceof RepositoryError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    throw error;
+  }
 });
 
-apiRouter.post('/admin/checkpoints/:id/generate-token', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const cp = db.findCheckpointById(req.params.id);
-  if (!cp) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
-  if (!Number.isFinite(cp.latitude) || !Number.isFinite(cp.longitude) || !Number.isFinite(cp.radiusMeters) || cp.radiusMeters < 1) return res.status(409).json({ success: false, error: 'Lengkapi koordinat dan radius checkpoint sebelum generate token.' });
-  let token = '';
-  do {
-    token = `CP-${cp.siteId}-${cp.code.replace(/\D/g, '').padStart(3, '0')}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-  } while (db.findCheckpointByToken(token));
-  const updated = db.updateCheckpoint(cp.id, { qrToken: token, qrStatus: 'INACTIVE' });
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'CHECKPOINT_TOKEN_GENERATE', entityType: 'checkpoint', entityId: cp.id, oldValue: { qrToken: cp.qrToken }, newValue: { qrToken: token }, reason: `Generate secure token ${cp.code}` });
+apiRouter.post('/admin/checkpoints/:id/generate-token', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const checkpoint = await repositories.checkpoints.findById(req.params.id);
+  if (!checkpoint) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
+  if (!Number.isFinite(checkpoint.latitude) || !Number.isFinite(checkpoint.longitude) || !Number.isFinite(checkpoint.radiusMeters) || checkpoint.radiusMeters < 1) {
+    return res.status(409).json({ success: false, error: 'Lengkapi koordinat dan radius checkpoint sebelum generate token.' });
+  }
+
+  const token = `CP-${checkpoint.siteId}-${checkpoint.code.replace(/\D/g, '').padStart(3, '0')}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+  const updated = await repositories.checkpoints.replaceToken(checkpoint.id, token, req.user!.id, false);
+  await repositories.audit.append({
+    actorUserId: req.user!.id,
+    action: 'CHECKPOINT_TOKEN_GENERATE',
+    entityType: 'checkpoint',
+    entityId: checkpoint.id,
+    newValue: { tokenGenerated: true, qrStatus: 'INACTIVE' },
+    reason: `Generate secure token ${checkpoint.code}`,
+  });
   res.json({ success: true, checkpoint: updated, token });
 });
 
-apiRouter.post('/admin/checkpoints/:id/generate-qr', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const cp = db.findCheckpointById(req.params.id);
-  if (!cp) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
-  if (!cp.qrToken) return res.status(409).json({ success: false, error: 'Generate token terlebih dahulu.' });
-  if (!Number.isFinite(cp.latitude) || !Number.isFinite(cp.longitude) || !Number.isFinite(cp.radiusMeters) || cp.radiusMeters < 1) return res.status(409).json({ success: false, error: 'Koordinat dan radius checkpoint belum valid.' });
-  const qrPayload = JSON.stringify({ checkpointId: cp.id, token: cp.qrToken });
-  const updated = db.updateCheckpoint(cp.id, { qrStatus: 'ACTIVE' });
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'CHECKPOINT_QR_GENERATE', entityType: 'checkpoint', entityId: cp.id, newValue: { qrPayload }, reason: `Generate QR ${cp.code}` });
+apiRouter.post('/admin/checkpoints/:id/generate-qr', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const checkpoint = await repositories.checkpoints.findById(req.params.id);
+  if (!checkpoint) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
+  if (!Number.isFinite(checkpoint.latitude) || !Number.isFinite(checkpoint.longitude) || !Number.isFinite(checkpoint.radiusMeters) || checkpoint.radiusMeters < 1) {
+    return res.status(409).json({ success: false, error: 'Koordinat dan radius checkpoint belum valid.' });
+  }
+
+  const token = `CP-${checkpoint.siteId}-${checkpoint.code.replace(/\D/g, '').padStart(3, '0')}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+  const updated = await repositories.checkpoints.replaceToken(checkpoint.id, token, req.user!.id, true);
+  const qrPayload = JSON.stringify({ checkpointId: checkpoint.id, token });
+  await repositories.audit.append({
+    actorUserId: req.user!.id,
+    action: 'CHECKPOINT_QR_GENERATE',
+    entityType: 'checkpoint',
+    entityId: checkpoint.id,
+    newValue: { qrGenerated: true, qrStatus: 'ACTIVE' },
+    reason: `Generate QR ${checkpoint.code}`,
+  });
   res.json({ success: true, checkpoint: updated, qrPayload });
 });
 
-apiRouter.patch('/admin/checkpoints/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const cp = db.findCheckpointById(req.params.id);
-  if (!cp) {
-    return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
-  }
+apiRouter.patch('/admin/checkpoints/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const checkpoint = await repositories.checkpoints.findById(req.params.id);
+  if (!checkpoint) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
 
   const { name, latitude, longitude, radiusMeters, status, qrStatus } = req.body;
   const updates: any = {};
-  if (name !== undefined) updates.name = name.trim();
+  if (name !== undefined) updates.name = String(name).trim();
   if (latitude !== undefined) updates.latitude = Number(latitude);
   if (longitude !== undefined) updates.longitude = Number(longitude);
   if (radiusMeters !== undefined) updates.radiusMeters = Number(radiusMeters);
   if (status !== undefined) updates.status = status;
   if (qrStatus !== undefined) updates.qrStatus = qrStatus;
 
-  const updated = db.updateCheckpoint(cp.id, updates);
-
-  db.addAuditLog({
+  const updated = await repositories.checkpoints.update(checkpoint.id, updates);
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'CHECKPOINT_UPDATE',
     entityType: 'checkpoint',
-    entityId: cp.id,
-    oldValue: cp,
+    entityId: checkpoint.id,
+    oldValue: checkpoint,
     newValue: updates,
-    reason: `Perubahan parameter checkpoint ${cp.code}`,
+    reason: `Perubahan parameter checkpoint ${checkpoint.code}`,
   });
-
   res.json({ success: true, checkpoint: updated });
 });
 
-apiRouter.post('/admin/checkpoints/:id/regenerate-qr', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const cp = db.findCheckpointById(req.params.id);
-  if (!cp) {
-    return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
-  }
+apiRouter.post('/admin/checkpoints/:id/regenerate-qr', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const checkpoint = await repositories.checkpoints.findById(req.params.id);
+  if (!checkpoint) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
 
-  const oldToken = cp.qrToken;
-  const newToken = `${cp.siteId}-${Math.random().toString(36).substring(2, 12).toUpperCase()}`;
-
-  db.updateCheckpoint(cp.id, {
-    qrToken: newToken,
-    qrStatus: 'ACTIVE',
-  });
-
-  db.addAuditLog({
+  const newToken = `${checkpoint.siteId}-${Math.random().toString(36).substring(2, 14).toUpperCase()}`;
+  await repositories.checkpoints.replaceToken(checkpoint.id, newToken, req.user!.id, true);
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'QR_REGENERATE',
     entityType: 'checkpoint',
-    entityId: cp.id,
-    oldValue: { qrToken: oldToken },
-    newValue: { qrToken: newToken },
-    reason: `Regenerasi QR token untuk ${cp.code} (${cp.name})`,
+    entityId: checkpoint.id,
+    oldValue: { qrStatus: checkpoint.qrStatus },
+    newValue: { qrStatus: 'ACTIVE', tokenRegenerated: true },
+    reason: `Regenerasi QR token untuk ${checkpoint.code} (${checkpoint.name})`,
   });
-
-  res.json({
-    success: true,
-    message: `QR Token baru untuk ${cp.code} berhasil dibuat.`,
-    newToken,
-  });
+  res.json({ success: true, message: `QR Token baru untuk ${checkpoint.code} berhasil dibuat.`, newToken });
 });
 
 // Admin Radius Calibration
