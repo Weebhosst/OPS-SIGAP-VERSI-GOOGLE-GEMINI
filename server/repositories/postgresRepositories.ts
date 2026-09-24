@@ -428,9 +428,55 @@ export const postgresRepositories: RepositoryBundle = {
       return result.rows[0]?mapUser(result.rows[0]):undefined;
     }),
     resetPassword: async (id, passwordHash, changedAt) => {
+      const result=await query('UPDATE users SET password_hash=$2,must_change_password=true,password_changed_at=$3,updated_at=now() WHERE id=$1 RETURNING id',[id,passwordHash,changedAt]);
+      if(!result.rows[0]) return undefined;
+      return postgresRepositories.users.findById(id);
+    },
+    changePassword: async (id, passwordHash, changedAt) => {
       const result=await query('UPDATE users SET password_hash=$2,must_change_password=false,password_changed_at=$3,updated_at=now() WHERE id=$1 RETURNING id',[id,passwordHash,changedAt]);
       if(!result.rows[0]) return undefined;
       return postgresRepositories.users.findById(id);
+    },
+  },
+
+  authSessions: {
+    create: async (session) => {
+      const result = await query(
+        'INSERT INTO auth_sessions(id,token_hash,user_id,expires_at,created_at,last_seen_at,revoked_at,ip_address,user_agent) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+        [session.id,session.tokenHash,session.userId,session.expiresAt,session.createdAt,session.lastSeenAt,session.revokedAt||null,session.ipAddress||null,session.userAgent||null],
+      );
+      const row=result.rows[0];
+      return {
+        id:row.id, tokenHash:row.token_hash, userId:row.user_id,
+        expiresAt:iso(row.expires_at)!, createdAt:iso(row.created_at)!, lastSeenAt:iso(row.last_seen_at)!,
+        revokedAt:iso(row.revoked_at), ipAddress:row.ip_address, userAgent:row.user_agent,
+      };
+    },
+    findActiveByTokenHash: async (tokenHash, now) => {
+      const result=await query(
+        'SELECT * FROM auth_sessions WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>$2',
+        [tokenHash,now],
+      );
+      const row=result.rows[0];
+      if(!row) return undefined;
+      return {
+        id:row.id, tokenHash:row.token_hash, userId:row.user_id,
+        expiresAt:iso(row.expires_at)!, createdAt:iso(row.created_at)!, lastSeenAt:iso(row.last_seen_at)!,
+        revokedAt:iso(row.revoked_at), ipAddress:row.ip_address, userAgent:row.user_agent,
+      };
+    },
+    touch: async (id, at) => {
+      await query('UPDATE auth_sessions SET last_seen_at=$2 WHERE id=$1 AND revoked_at IS NULL',[id,at]);
+    },
+    revokeByTokenHash: async (tokenHash, revokedAt) => {
+      await query('UPDATE auth_sessions SET revoked_at=$2 WHERE token_hash=$1 AND revoked_at IS NULL',[tokenHash,revokedAt]);
+    },
+    revokeAllForUser: async (userId, revokedAt, exceptTokenHash) => {
+      if (exceptTokenHash) {
+        await query('UPDATE auth_sessions SET revoked_at=$2 WHERE user_id=$1 AND revoked_at IS NULL AND token_hash<>$3',[userId,revokedAt,exceptTokenHash]);
+      } else {
+        await query('UPDATE auth_sessions SET revoked_at=$2 WHERE user_id=$1 AND revoked_at IS NULL',[userId,revokedAt]);
+      }
     },
   },
 

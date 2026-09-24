@@ -4,11 +4,13 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
+import { createHash, randomBytes } from 'crypto';
 import { validateAndProcessScan, getMemberShiftProgress } from './patrolService';
 import { getOperationalMedia, getOperationalMediaCounts } from './mediaService';
 import { checkMediaStorage, cleanupPreparedMedia, prepareMedia, prepareMediaBatch, readMediaObject } from './mediaStorage';
 import { repositories } from './repositories';
 import { RepositoryError } from './repositories/contracts';
+import { config } from './config';
 import {
   User,
   resolveShift,
@@ -22,54 +24,102 @@ import {
 
 export const apiRouter = Router();
 
-// Simple in-memory session store (or token resolver)
-// Using signed / encrypted tokens or ID references
-const activeSessions = new Map<string, { userId: string; expiresAt: number }>();
+const COOKIE_NAME = 'sigap_session';
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('OPS-SIGAP-invalid-password-placeholder', 10);
 
-function createSessionToken(userId: string): string {
-  const token = `SIGAP-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-  activeSessions.set(token, {
-    userId,
-    expiresAt: Date.now() + 30 * 24 * 3600 * 1000, // 30 days
+function hashSessionToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function clearSessionCookie(res: Response) {
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: config.isProduction,
+    sameSite: 'strict',
+    path: '/api',
   });
-  return token;
+}
+
+async function issueSession(user: User, req: Request, res: Response): Promise<string> {
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = hashSessionToken(token);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + config.sessionTtlHours * 3600 * 1000);
+
+  await repositories.authSessions.create({
+    id: `AUTH-${randomBytes(16).toString('hex')}`,
+    tokenHash,
+    userId: user.id,
+    expiresAt: expiresAt.toISOString(),
+    createdAt: now.toISOString(),
+    lastSeenAt: now.toISOString(),
+    revokedAt: null,
+    ipAddress: req.ip || null,
+    userAgent: req.headers['user-agent'] || null,
+  });
+
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: config.isProduction,
+    sameSite: 'strict',
+    path: '/api',
+    maxAge: config.sessionTtlHours * 3600 * 1000,
+  });
+
+  return tokenHash;
 }
 
 // Authentication Middleware
 export interface AuthenticatedRequest extends Request {
   user?: User;
+  authTokenHash?: string;
+  authSessionId?: string;
 }
 
 async function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  // Extract token from Authorization header or cookie
-  const authHeader = req.headers.authorization;
-  let token: string | undefined;
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7);
-  } else if (req.cookies && req.cookies.sigap_session) {
-    token = req.cookies.sigap_session;
-  }
-
-  if (!token) {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token || typeof token !== 'string') {
     return res.status(401).json({ success: false, error: 'Unauthorized. Sesi login tidak ditemukan.' });
   }
 
-  const session = activeSessions.get(token);
-  if (!session || session.expiresAt < Date.now()) {
-    return res.status(401).json({ success: false, error: 'Unauthorized. Sesi login telah berakhir.' });
-  }
+  const tokenHash = hashSessionToken(token);
+  const now = new Date().toISOString();
 
   try {
+    const session = await repositories.authSessions.findActiveByTokenHash(tokenHash, now);
+    if (!session) {
+      clearSessionCookie(res);
+      return res.status(401).json({ success: false, error: 'Unauthorized. Sesi login telah berakhir.' });
+    }
+
     const user = await repositories.users.findById(session.userId);
     if (!user || user.status !== 'ACTIVE') {
+      await repositories.authSessions.revokeByTokenHash(tokenHash, now);
+      clearSessionCookie(res);
       return res.status(401).json({ success: false, error: 'Akun dinonaktifkan atau tidak ditemukan.' });
     }
+
     req.user = user;
+    req.authTokenHash = tokenHash;
+    req.authSessionId = session.id;
+
+    const lastSeen = new Date(session.lastSeenAt).getTime();
+    if (!Number.isFinite(lastSeen) || Date.now() - lastSeen > 5 * 60 * 1000) {
+      void repositories.authSessions.touch(session.id, now).catch(() => undefined);
+    }
+
+    if (user.mustChangePassword && !['/auth/me', '/auth/logout', '/auth/change-password'].includes(req.path)) {
+      return res.status(403).json({
+        success: false,
+        code: 'PASSWORD_CHANGE_REQUIRED',
+        error: 'Password sementara wajib diganti sebelum menggunakan OPS SIGAP.',
+      });
+    }
+
     next();
   } catch (error) {
     console.error('[auth] Repository lookup failed:', error instanceof Error ? error.message : 'unknown');
-    return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE', error: 'Layanan database sedang tidak tersedia.' });
+    return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE', error: 'Layanan autentikasi sedang tidak tersedia.' });
   }
 }
 
@@ -128,27 +178,36 @@ function sendRepositoryError(res: Response, error: unknown): boolean {
 // AUTH ROUTES
 // -------------------------------------------------------------
 
-// Simple rate limiter tracking for brute-force defense
 const loginAttempts = new Map<string, { count: number; blockedUntil?: number }>();
+
+function registerLoginFailure(key: string, record?: { count: number; blockedUntil?: number }) {
+  const count = (record?.count || 0) + 1;
+  loginAttempts.set(key, {
+    count,
+    blockedUntil: count >= config.loginMaxAttempts
+      ? Date.now() + config.loginLockMinutes * 60 * 1000
+      : undefined,
+  });
+}
 
 apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   const { npk, password } = req.body;
-
   if (!npk || !password) {
     return res.status(400).json({ success: false, error: 'NPK dan Password wajib diisi.' });
   }
 
   const cleanNpk = String(npk).trim();
-  const attemptKey = `npk:${cleanNpk}`;
+  const attemptKey = `${req.ip || 'unknown'}:${cleanNpk}`;
   const record = loginAttempts.get(attemptKey);
-
-  if (record && record.blockedUntil && record.blockedUntil > Date.now()) {
+  if (record?.blockedUntil && record.blockedUntil > Date.now()) {
     const waitSec = Math.ceil((record.blockedUntil - Date.now()) / 1000);
+    res.setHeader('Retry-After', String(waitSec));
     return res.status(429).json({
       success: false,
       error: `Terlalu banyak percobaan gagal. Silakan coba lagi dalam ${waitSec} detik.`,
     });
   }
+  if (record?.blockedUntil && record.blockedUntil <= Date.now()) loginAttempts.delete(attemptKey);
 
   let user: User | undefined;
   try {
@@ -157,56 +216,43 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
     console.error('[auth] Login repository lookup failed:', error instanceof Error ? error.message : 'unknown');
     return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE', error: 'Layanan database sedang tidak tersedia.' });
   }
+
   if (!user) {
-    // Record failed attempt
-    const count = (record?.count || 0) + 1;
-    loginAttempts.set(attemptKey, {
-      count,
-      blockedUntil: count >= 5 ? Date.now() + 60000 : undefined,
-    });
+    bcrypt.compareSync(String(password), DUMMY_PASSWORD_HASH);
+    registerLoginFailure(attemptKey, record);
     return res.status(401).json({ success: false, error: 'NPK atau Password salah.' });
   }
 
   const validPassword = bcrypt.compareSync(String(password), user.passwordHash);
   if (!validPassword) {
-    const count = (record?.count || 0) + 1;
-    loginAttempts.set(attemptKey, {
-      count,
-      blockedUntil: count >= 5 ? Date.now() + 60000 : undefined,
-    });
+    registerLoginFailure(attemptKey, record);
     return res.status(401).json({ success: false, error: 'NPK atau Password salah.' });
   }
+  if (user.status !== 'ACTIVE') {
+    return res.status(403).json({ success: false, error: 'Akun tidak aktif.' });
+  }
 
-  // Reset login attempt counter on success
+  const defaultPasswordStillUsed = bcrypt.compareSync(user.npk, user.passwordHash);
+  let authenticatedUser = user;
+  if ((!user.passwordChangedAt || defaultPasswordStillUsed) && !user.mustChangePassword) {
+    authenticatedUser = await repositories.users.update(user.id, { mustChangePassword: true }) || user;
+  }
+
   loginAttempts.delete(attemptKey);
+  await issueSession(authenticatedUser, req, res);
 
-  // Generate session
-  const token = createSessionToken(user.id);
-
-  // Set HTTP-only cookie
-  res.cookie('sigap_session', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 30 * 24 * 3600 * 1000,
-  });
-
-  // Audit login
   await repositories.audit.append({
-    actorUserId: user.id,
+    actorUserId: authenticatedUser.id,
     action: 'LOGIN_SUCCESS',
     entityType: 'user',
-    entityId: user.id,
+    entityId: authenticatedUser.id,
     ipAddress: req.ip,
     userAgent: req.headers['user-agent'],
+    metadata: { passwordRotationRequired: !!authenticatedUser.mustChangePassword },
   });
 
-  const { passwordHash, ...safeUser } = user;
-  res.json({
-    success: true,
-    user: safeUser,
-    token,
-  });
+  const { passwordHash, ...safeUser } = authenticatedUser;
+  res.json({ success: true, user: safeUser });
 });
 
 apiRouter.get('/auth/me', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
@@ -214,20 +260,48 @@ apiRouter.get('/auth/me', authMiddleware, (req: AuthenticatedRequest, res: Respo
   res.json({ success: true, user: safeUser });
 });
 
-apiRouter.post('/auth/logout', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
-  const authHeader = req.headers.authorization;
-  let token: string | undefined;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7);
-  } else if (req.cookies && req.cookies.sigap_session) {
-    token = req.cookies.sigap_session;
+apiRouter.post('/auth/logout', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.authTokenHash) {
+    await repositories.authSessions.revokeByTokenHash(req.authTokenHash, new Date().toISOString());
+  }
+  clearSessionCookie(res);
+  res.json({ success: true, message: 'Berhasil logout.' });
+});
+
+apiRouter.post('/auth/change-password', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const currentPassword = String(req.body.currentPassword || '');
+  const newPassword = String(req.body.newPassword || '');
+
+  if (!bcrypt.compareSync(currentPassword, req.user!.passwordHash)) {
+    return res.status(400).json({ success: false, error: 'Password saat ini tidak sesuai.' });
+  }
+  if (newPassword.length < 8 || newPassword.length > 72 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+    return res.status(400).json({ success: false, error: 'Password baru minimal 8 karakter dan harus mengandung huruf serta angka.' });
+  }
+  if (newPassword === req.user!.npk) {
+    return res.status(400).json({ success: false, error: 'Password baru tidak boleh sama dengan NPK.' });
+  }
+  if (bcrypt.compareSync(newPassword, req.user!.passwordHash)) {
+    return res.status(400).json({ success: false, error: 'Password baru harus berbeda dari password lama.' });
   }
 
-  if (token) {
-    activeSessions.delete(token);
-  }
-  res.clearCookie('sigap_session');
-  res.json({ success: true, message: 'Berhasil logout.' });
+  const changedAt = new Date().toISOString();
+  const updated = await repositories.users.changePassword(req.user!.id, bcrypt.hashSync(newPassword, 10), changedAt);
+  if (!updated) return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
+
+  await repositories.authSessions.revokeAllForUser(req.user!.id, changedAt, req.authTokenHash);
+  await repositories.audit.append({
+    actorUserId: req.user!.id,
+    action: 'PASSWORD_CHANGED',
+    entityType: 'user',
+    entityId: req.user!.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+    reason: 'Pengguna mengganti password operasional.',
+  });
+
+  const { passwordHash, ...safeUser } = updated;
+  res.json({ success: true, user: safeUser });
 });
 
 apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
@@ -240,15 +314,19 @@ apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, async (
   const changedAt = new Date().toISOString();
   const newHash = bcrypt.hashSync(targetUser.npk, 10);
   await repositories.users.resetPassword(targetUser.id, newHash, changedAt);
+  await repositories.authSessions.revokeAllForUser(targetUser.id, changedAt);
   await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'RESET_PASSWORD_TO_NPK',
     entityType: 'user',
     entityId: targetUser.id,
-    reason: `Reset password pengguna ${targetUser.name} (NPK ${targetUser.npk}) kembali ke NPK.`,
+    reason: `Reset password pengguna ${targetUser.name}; password sementara wajib diganti saat login berikutnya.`,
   });
 
-  res.json({ success: true, message: `Password ${targetUser.name} berhasil direset ke NPK (${targetUser.npk}).` });
+  res.json({
+    success: true,
+    message: `Password ${targetUser.name} berhasil direset ke NPK. Pengguna wajib mengganti password saat login berikutnya.`,
+  });
 });
 
 // -------------------------------------------------------------
@@ -1681,6 +1759,7 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
     }] : [],
     status: 'ACTIVE',
     passwordHash: bcrypt.hashSync(cleanNpk, 10),
+    mustChangePassword: true,
     createdAt: now,
     updatedAt: now,
   };
@@ -2028,6 +2107,23 @@ apiRouter.post('/sync', authMiddleware, async (req: AuthenticatedRequest, res: R
 // -------------------------------------------------------------
 
 apiRouter.get('/health', async (_req: Request, res: Response) => {
+  const [repositoryHealth, mediaStorage] = await Promise.all([
+    repositories.health(),
+    checkMediaStorage(),
+  ]);
+  const databaseConnected = repositoryHealth.database === 'connected';
+  const mediaRequired = config.databaseProvider === 'postgres';
+  const mediaConnected = !mediaRequired || mediaStorage.connected;
+  const healthy = databaseConnected && mediaConnected;
+
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'ok' : 'degraded',
+    service: 'OPS SIGAP',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+apiRouter.get('/admin/health/details', authMiddleware, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   const { dateString, timeString } = getJakartaDateParts();
   const shift = resolveShift();
   const [repositoryHealth, mediaStorage] = await Promise.all([
@@ -2038,36 +2134,35 @@ apiRouter.get('/health', async (_req: Request, res: Response) => {
 
   let databaseDetails:any = { status: repositoryHealth.database.toUpperCase() };
   if (connected) {
-    try {
-      const [users, sites, checkpoints, sessions, patrolLogsCount] = await Promise.all([
-        repositories.users.list({ limit: 1, offset: 0 }),
-        repositories.sites.list({ limit: 1, offset: 0 }),
-        repositories.checkpoints.list({ limit: 1, offset: 0 }),
-        repositories.sessions.list({ limit: 1, offset: 0 }),
-        repositories.patrol.countAll(),
-      ]);
-      databaseDetails = {
-        ...databaseDetails,
-        usersCount: users.total,
-        sitesCount: sites.total,
-        checkpointsCount: checkpoints.total,
-        patrolSessionsCount: sessions.total,
-        patrolLogsCount,
-      };
-    } catch (error) {
-      console.error('[health] Count query failed:', error instanceof Error ? error.message : 'unknown');
-    }
+    const [users, sites, checkpoints, sessions, patrolLogsCount] = await Promise.all([
+      repositories.users.list({ limit: 1, offset: 0 }),
+      repositories.sites.list({ limit: 1, offset: 0 }),
+      repositories.checkpoints.list({ limit: 1, offset: 0 }),
+      repositories.sessions.list({ limit: 1, offset: 0 }),
+      repositories.patrol.countAll(),
+    ]);
+    databaseDetails = {
+      ...databaseDetails,
+      usersCount: users.total,
+      sitesCount: sites.total,
+      checkpointsCount: checkpoints.total,
+      patrolSessionsCount: sessions.total,
+      patrolLogsCount,
+    };
   }
 
-  res.status(connected ? 200 : 503).json({
-    status: connected ? 'ok' : 'degraded',
+  res.json({
+    success: true,
     provider: repositoryHealth.provider,
     database: repositoryHealth.database,
-    service: 'OPS SIGAP Security Operations System',
-    timestamp: new Date().toISOString(),
     serverTimeJakarta: `${dateString} ${timeString} WIB`,
     activeShift: shift,
     databaseDetails,
     mediaStorage,
+    security: {
+      cookieOnlyAuth: true,
+      sessionTtlHours: config.sessionTtlHours,
+      productionMode: config.isProduction,
+    },
   });
 });

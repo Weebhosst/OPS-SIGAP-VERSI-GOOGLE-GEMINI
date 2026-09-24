@@ -24,6 +24,23 @@ try {
   const source = JSON.parse(fs.readFileSync(temporaryDatabase, 'utf8'));
   assert.deepEqual(validateJsonImport(normalizeLegacyJson(source)), []);
 
+  const authNow = new Date();
+  const authRecord = await jsonRepositories.authSessions.create({
+    id: `AUTH-TEST-${Date.now()}`,
+    tokenHash: `HASH-${Date.now()}`,
+    userId: users.items[0].id,
+    createdAt: authNow.toISOString(),
+    lastSeenAt: authNow.toISOString(),
+    expiresAt: new Date(authNow.getTime() + 60_000).toISOString(),
+    revokedAt: null,
+    ipAddress: '127.0.0.1',
+    userAgent: 'repository-test',
+  });
+  assert.equal((await jsonRepositories.authSessions.findActiveByTokenHash(authRecord.tokenHash, authNow.toISOString()))?.id, authRecord.id);
+  await jsonRepositories.authSessions.touch(authRecord.id, new Date(authNow.getTime() + 1000).toISOString());
+  await jsonRepositories.authSessions.revokeByTokenHash(authRecord.tokenHash, new Date(authNow.getTime() + 2000).toISOString());
+  assert.equal(await jsonRepositories.authSessions.findActiveByTokenHash(authRecord.tokenHash, new Date(authNow.getTime() + 3000).toISOString()), undefined);
+
   const user = users.items.find((item) => item.siteId) || users.items[0];
   const sites = await jsonRepositories.sites.list({ limit: 1, offset: 0 });
   const site = (user?.siteId && await jsonRepositories.sites.findById(user.siteId)) || sites.items[0];
@@ -213,13 +230,19 @@ try {
 
   const schemaSql = fs.readFileSync(path.resolve('server/db/migrations/001_initial_schema.sql'), 'utf8');
   const runtimeSchemaSql = fs.readFileSync(path.resolve('server/db/migrations/003_admin_runtime.sql'), 'utf8');
+  const authSchemaSql = fs.readFileSync(path.resolve('server/db/migrations/004_auth_sessions.sql'), 'utf8');
   const postgresSource = fs.readFileSync(path.resolve('server/repositories/postgresRepositories.ts'), 'utf8');
+  const postgresPoolSource = fs.readFileSync(path.resolve('server/db/postgres.ts'), 'utf8');
+  const configSource = fs.readFileSync(path.resolve('server/config.ts'), 'utf8');
   const importerSource = fs.readFileSync(path.resolve('server/db/importJson.ts'), 'utf8');
   const patrolServiceSource = fs.readFileSync(path.resolve('server/patrolService.ts'), 'utf8');
   const mediaServiceSource = fs.readFileSync(path.resolve('server/mediaService.ts'), 'utf8');
   const tokenCryptoSource = fs.readFileSync(path.resolve('server/security/checkpointTokenCrypto.ts'), 'utf8');
   const mediaStorageSource = fs.readFileSync(path.resolve('server/mediaStorage.ts'), 'utf8');
   const routeSource = fs.readFileSync(path.resolve('server/routes.ts'), 'utf8');
+  const apiClientSource = fs.readFileSync(path.resolve('src/lib/api.ts'), 'utf8');
+  const authContextSource = fs.readFileSync(path.resolve('src/context/AuthContext.tsx'), 'utf8');
+  const loginViewSource = fs.readFileSync(path.resolve('src/views/LoginView.tsx'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -231,7 +254,19 @@ try {
   assert.match(runtimeSchemaSql, /token_ciphertext/);
   assert.match(runtimeSchemaSql, /CREATE TABLE admin_filter_state/);
   assert.match(runtimeSchemaSql, /CREATE TABLE radius_calibrations/);
+  assert.match(authSchemaSql, /CREATE TABLE auth_sessions/);
+  assert.match(authSchemaSql, /token_hash text NOT NULL UNIQUE/);
+  assert.match(routeSource, /randomBytes\(32\)/);
+  assert.match(routeSource, /sameSite: 'strict'/);
+  assert.match(routeSource, /PASSWORD_CHANGE_REQUIRED/);
+  assert.doesNotMatch(routeSource, /res\.json\(\{\s*success:\s*true,\s*user:\s*safeUser,\s*token/);
+  assert.doesNotMatch(apiClientSource, /localStorage\.getItem\(['"]sigap_token/);
+  assert.doesNotMatch(authContextSource, /localStorage\.(setItem|removeItem)\(['"]sigap_token/);
+  assert.doesNotMatch(loginViewSource, /Akun Demo Pengujian|SUPER ADMIN \(Demo\)/);
   assert.match(postgresSource, /encryptCheckpointToken/);
+  assert.match(configSource, /PG_SSL_REJECT_UNAUTHORIZED/);
+  assert.match(postgresPoolSource, /postgresSslRejectUnauthorized/);
+  assert.doesNotMatch(postgresPoolSource, /NODE_TLS_REJECT_UNAUTHORIZED/);
   assert.match(tokenCryptoSource, /aes-256-gcm/);
   assert.doesNotMatch(patrolServiceSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
@@ -254,6 +289,8 @@ try {
   console.log('PASS routes/services contain no direct legacy JSON db access');
   console.log('PASS checkpoint tokens are hashed plus AES-GCM encrypted at rest');
   console.log('PASS Round 4B media storage is provider-neutral and uses private delivery routes');
+  console.log('PASS HttpOnly auth sessions, forced password rotation, and production credential hygiene');
+  console.log('PASS production PostgreSQL TLS verification is explicit and scoped to the DB client');
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }

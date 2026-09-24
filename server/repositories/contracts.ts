@@ -34,6 +34,27 @@ export interface UserRepository {
   create(user: User): Promise<User>;
   update(id: string, updates: Partial<User>, assignment?: UserAssignmentChange): Promise<User | undefined>;
   resetPassword(id: string, passwordHash: string, changedAt: string): Promise<User | undefined>;
+  changePassword(id: string, passwordHash: string, changedAt: string): Promise<User | undefined>;
+}
+
+export interface AuthSessionRecord {
+  id: string;
+  tokenHash: string;
+  userId: string;
+  expiresAt: string;
+  createdAt: string;
+  lastSeenAt: string;
+  revokedAt?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+export interface AuthSessionRepository {
+  create(session: AuthSessionRecord): Promise<AuthSessionRecord>;
+  findActiveByTokenHash(tokenHash: string, now: string): Promise<AuthSessionRecord | undefined>;
+  touch(id: string, at: string): Promise<void>;
+  revokeByTokenHash(tokenHash: string, revokedAt: string): Promise<void>;
+  revokeAllForUser(userId: string, revokedAt: string, exceptTokenHash?: string): Promise<void>;
 }
 
 export interface CustomerRepository {
@@ -176,6 +197,7 @@ export interface RepositoryBundle {
   provider: 'json' | 'postgres';
   health(): Promise<RepositoryHealth>;
   users: UserRepository;
+  authSessions: AuthSessionRepository;
   customers: CustomerRepository;
   sites: SiteRepository;
   checkpoints: CheckpointRepository;

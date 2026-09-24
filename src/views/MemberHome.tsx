@@ -29,7 +29,7 @@ interface MemberHomeProps {
 }
 
 export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
-  const { user, logout, quickLogin } = useAuth();
+  const { user, logout } = useAuth();
   const [shiftInfo, setShiftInfo] = useState<ShiftInfo | null>(null);
   const [completedRounds, setCompletedRounds] = useState(0);
   const [targetRounds, setTargetRounds] = useState(1);
@@ -350,38 +350,6 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
           </div>
         )}
 
-        {/* Switch Account Quick Helper (Ahmad Sopyan, Arif, Ayo, Deni, Super Admin) */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 text-xs text-slate-400">
-          <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-2">
-            Ganti Cepat Petugas (Demo Evaluasi)
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              onClick={() => quickLogin('234378', '234378')}
-              className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 text-left font-mono truncate"
-            >
-              Ahmad (234378)
-            </button>
-            <button
-              onClick={() => quickLogin('305464', '305464')}
-              className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 text-left font-mono truncate"
-            >
-              Arif (305464)
-            </button>
-            <button
-              onClick={() => quickLogin('237129', '237129')}
-              className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 text-left font-mono truncate"
-            >
-              Ayo (237129)
-            </button>
-            <button
-              onClick={() => quickLogin('230557', '230557')}
-              className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 text-left font-mono truncate"
-            >
-              Deni (230557)
-            </button>
-          </div>
-        </div>
       </main>
     </div>
   );

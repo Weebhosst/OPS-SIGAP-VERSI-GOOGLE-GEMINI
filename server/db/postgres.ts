@@ -11,7 +11,7 @@ export function getPostgresPool(): Pool {
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
       application_name: 'ops-sigap',
-      ssl: config.nodeEnv === 'production' ? { rejectUnauthorized: true } : undefined,
+      ssl: config.nodeEnv === 'production' ? { rejectUnauthorized: config.postgresSslRejectUnauthorized } : undefined,
     });
     pool.on('error', (error) => console.error('[database] PostgreSQL pool error:', error.message));
   }

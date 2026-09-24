@@ -84,7 +84,7 @@ assert.equal(downloaded.body[0], 0x89);
 const health = await checkMediaStorage();
 assert.equal(health.configured, true);
 assert.equal(health.connected, true);
-assert.ok(requests.some((item) => item.method === 'HEAD'));
+assert.ok(requests.some((item) => item.method === 'GET' && item.url.includes('ops-sigap/.healthcheck-missing-object')));
 
 const external = await prepareMedia({
   mediaId: 'MED-EXT-01',
