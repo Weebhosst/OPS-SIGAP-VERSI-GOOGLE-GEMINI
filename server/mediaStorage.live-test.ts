@@ -21,10 +21,8 @@ const mediaId = `MEDIA-PROBE-${Date.now()}`;
 let storageKey = '';
 
 try {
-  const health = await checkMediaStorage();
-  assert.equal(health.configured, true, `Object storage belum terkonfigurasi: ${health.error || 'unknown'}`);
-  assert.equal(health.connected, true, `Object storage tidak terhubung: ${health.error || 'unknown'}`);
-
+  // Perform the real object round trip first. This gives a precise S3 error
+  // if signing/routing is wrong instead of hiding it behind a generic health probe.
   const prepared = await prepareMedia({
     mediaId,
     sourceModule: 'PATROL',
@@ -50,9 +48,13 @@ try {
   assert.equal(downloaded.mimeType, 'image/png');
   assert.deepEqual(downloaded.body, parsed.buffer);
 
-  console.log('PASS Railway S3 signed object GET connectivity probe');
+  const health = await checkMediaStorage();
+  assert.equal(health.configured, true, `Object storage belum terkonfigurasi: ${health.error || 'unknown'}`);
+  assert.equal(health.connected, true, `Object storage tidak terhubung: ${health.error || 'unknown'}`);
+
   console.log('PASS Railway S3 object PUT');
   console.log('PASS Railway S3 object GET');
+  console.log('PASS Railway S3 signed readiness probe');
 } finally {
   if (storageKey) {
     await deleteMediaObject(storageKey);
