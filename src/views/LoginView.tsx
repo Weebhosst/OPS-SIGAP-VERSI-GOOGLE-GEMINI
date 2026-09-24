@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { Shield, Lock, User, ArrowRight, AlertCircle, KeyRound, Sparkles } from 'lucide-react';
+import { Shield, Lock, User, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
@@ -30,12 +30,6 @@ export const LoginView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickSelect = (quickNpk: string, quickPass: string) => {
-    setNpk(quickNpk);
-    setPassword(quickPass);
-    setError(null);
   };
 
   return (
@@ -114,90 +108,7 @@ export const LoginView: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Demo Credentials Helpers */}
-          <div className="pt-3 border-t border-slate-800/80 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Pilih Akun Demo Pengujian:
-              </span>
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('234378', '234378')}
-                className="p-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl text-left text-slate-200 transition"
-              >
-                <div className="font-bold text-white">Ahmad Sopyan</div>
-                <div className="text-[10px] text-slate-400 font-mono">NPK: 234378</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('305464', '305464')}
-                className="p-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl text-left text-slate-200 transition"
-              >
-                <div className="font-bold text-white">Arif Janwaripin</div>
-                <div className="text-[10px] text-slate-400 font-mono">NPK: 305464</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('237129', '237129')}
-                className="p-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl text-left text-slate-200 transition"
-              >
-                <div className="font-bold text-white">Ayo Sunaryo</div>
-                <div className="text-[10px] text-slate-400 font-mono">NPK: 237129</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('230557', '230557')}
-                className="p-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl text-left text-slate-200 transition"
-              >
-                <div className="font-bold text-white">Deni Winarya</div>
-                <div className="text-[10px] text-slate-400 font-mono">NPK: 230557</div>
-              </button>
-            </div>
-
-            {/* Super Admin Quick Buttons */}
-            <div className="grid grid-cols-2 gap-1.5 pt-1">
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('200001', '200001')}
-                className="p-2 bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-800/60 rounded-xl text-left text-emerald-200 transition"
-              >
-                <div className="font-bold text-white text-[11px]">ADMIN</div>
-                <div className="text-[9px] text-emerald-300 font-mono">200001 • 200001</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('300001', '300001')}
-                className="p-2 bg-amber-950/40 hover:bg-amber-950/70 border border-amber-800/60 rounded-xl text-left text-amber-200 transition"
-              >
-                <div className="font-bold text-white text-[11px]">CHIEF</div>
-                <div className="text-[9px] text-amber-300 font-mono">300001 • 300001</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('999999', 'admin123')}
-                className="p-2 bg-purple-950/40 hover:bg-purple-950/70 border border-purple-800/60 rounded-xl text-left text-purple-200 transition"
-              >
-                <div className="font-bold text-white text-[11px]">SUPER ADMIN (Demo)</div>
-                <div className="text-[9px] text-purple-300 font-mono">999999 • admin123</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSelect('999001', '999001')}
-                className="p-2 bg-purple-950/40 hover:bg-purple-950/70 border border-purple-800/60 rounded-xl text-left text-purple-200 transition"
-              >
-                <div className="font-bold text-white text-[11px]">SUPER ADMIN (Official)</div>
-                <div className="text-[9px] text-purple-300 font-mono">999001 • 999001</div>
-              </button>
-            </div>
-          </div>
-        </div>
+        
 
         {/* PWA Install Button */}
         <div className="px-2">
