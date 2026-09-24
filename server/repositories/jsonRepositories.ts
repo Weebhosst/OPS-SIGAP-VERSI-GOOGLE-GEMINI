@@ -274,6 +274,18 @@ export const jsonRepositories: RepositoryBundle = {
       }
       return result;
     },
+    findObjectRef: async (id) => {
+      const item = db.getMedia().find((media) => media.id === id);
+      if (!item) return undefined;
+      return {
+        id: item.id,
+        storageProvider: item.photoUrl.startsWith('data:') ? 'inline_json' : 'external_url',
+        storageKey: item.photoUrl,
+        mimeType: item.photoUrl.startsWith('data:image/png') ? 'image/png' : item.photoUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg',
+        fileName: `${item.id}.jpg`,
+        fileSize: null,
+      };
+    },
     add: async (item) => db.addMedia(item),
   },
 
