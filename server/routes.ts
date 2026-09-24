@@ -1085,12 +1085,22 @@ apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res:
   });
 });
 
-apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (_req: AuthenticatedRequest, res: Response) => {
-  const sites = db.getSites().map((site) => {
-    const sessions = db.getActiveSessionsForSite(site.id).map((session) => {
-      const user = db.findUserById(session.userId);
-      return { ...session, memberName: user?.name || 'Petugas', npk: user?.npk || session.npk || '-' };
-    });
+apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, async (_req: AuthenticatedRequest, res: Response) => {
+  const [sitePage, activeSessions] = await Promise.all([
+    repositories.sites.list({ limit: 500, offset: 0 }),
+    repositories.sessions.listFiltered({ status: 'ACTIVE' }, { limit: 500, offset: 0 }),
+  ]);
+  const uniqueUserIds = [...new Set(activeSessions.items.map((session) => session.userId))];
+  const userEntries = await Promise.all(uniqueUserIds.map(async (id) => [id, await repositories.users.findById(id)] as const));
+  const users = new Map(userEntries);
+
+  const sites = sitePage.items.map((site) => {
+    const sessions = activeSessions.items
+      .filter((session) => session.siteId === site.id)
+      .map((session) => {
+        const user = users.get(session.userId);
+        return { ...session, memberName: user?.name || 'Petugas', npk: user?.npk || session.npk || '-' };
+      });
     return {
       ...site,
       activeCount: sessions.length,
@@ -1101,32 +1111,29 @@ apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, 
   res.json({ success: true, sites });
 });
 
-apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const reason = String(req.body.reason || '').trim();
   if (!reason) return res.status(400).json({ success: false, error: 'Alasan Force Close wajib diisi.' });
-  const session = db.findSessionById(req.params.id);
-  if (!session) return res.status(404).json({ success: false, error: 'Shift session tidak ditemukan.' });
-  if (session.status !== 'ACTIVE') return res.status(409).json({ success: false, error: 'Hanya session ACTIVE yang dapat di-force close.' });
-  const now = new Date().toISOString();
-  const updated = db.updatePatrolSession(session.id, {
-    status: 'FORCE_CLOSED',
-    endedAt: now,
-    forceClosed: true,
-    forceCloseBy: req.user!.id,
-    forceCloseRole: req.user!.role,
-    forceCloseReason: reason,
-    forceCloseAt: now,
-  });
-  db.addAuditLog({
-    actorUserId: req.user!.id,
-    action: 'SHIFT_SESSION_FORCE_CLOSED',
-    entityType: 'patrol_session',
-    entityId: session.id,
-    oldValue: { status: 'ACTIVE', totalValid: session.totalValid, totalRequired: session.totalRequired },
-    newValue: { status: 'FORCE_CLOSED', forceCloseReason: reason, forceCloseRole: req.user!.role },
-    reason,
-  });
-  res.json({ success: true, session: updated });
+
+  const previous = await repositories.sessions.findById(req.params.id);
+  if (!previous) return res.status(404).json({ success: false, error: 'Shift session tidak ditemukan.' });
+
+  try {
+    const updated = await repositories.sessions.forceCloseAtomic(req.params.id, req.user!.id, req.user!.role, reason);
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'SHIFT_SESSION_FORCE_CLOSED',
+      entityType: 'patrol_session',
+      entityId: previous.id,
+      oldValue: { status: previous.status, totalValid: previous.totalValid, totalRequired: previous.totalRequired },
+      newValue: { status: 'FORCE_CLOSED', forceCloseReason: reason, forceCloseRole: req.user!.role },
+      reason,
+    });
+    res.json({ success: true, session: updated });
+  } catch (error:any) {
+    if (error instanceof RepositoryError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    throw error;
+  }
 });
 
 // -------------------------------------------------------------
