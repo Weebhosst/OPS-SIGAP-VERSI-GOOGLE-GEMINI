@@ -279,6 +279,8 @@ export const jsonRepositories: RepositoryBundle = {
       if (!item) return undefined;
       return {
         id: item.id,
+        siteId: item.siteId,
+        userId: item.userId,
         storageProvider: item.photoUrl.startsWith('data:') ? 'inline_json' : 'external_url',
         storageKey: item.photoUrl,
         mimeType: item.photoUrl.startsWith('data:image/png') ? 'image/png' : item.photoUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg',
