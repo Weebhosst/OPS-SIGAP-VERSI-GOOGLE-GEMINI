@@ -119,6 +119,17 @@ function requireFieldMember(req: AuthenticatedRequest, res: Response, next: Next
   next();
 }
 
+function rejectUnstoredBase64Media(res: Response, urls: string[]): boolean {
+  if (repositories.provider !== 'postgres') return false;
+  if (!urls.some((url) => url.startsWith('data:'))) return false;
+  res.status(503).json({
+    success: false,
+    code: 'MEDIA_STORAGE_NOT_READY',
+    error: 'Penyimpanan foto produksi belum aktif. Data tidak disimpan agar bukti dokumentasi tidak hilang.',
+  });
+  return true;
+}
+
 // -------------------------------------------------------------
 // AUTH ROUTES
 // -------------------------------------------------------------
@@ -225,25 +236,17 @@ apiRouter.post('/auth/logout', authMiddleware, (req: AuthenticatedRequest, res: 
   res.json({ success: true, message: 'Berhasil logout.' });
 });
 
-apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ success: false, error: 'User ID wajib diisi.' });
-  }
+  if (!userId) return res.status(400).json({ success: false, error: 'User ID wajib diisi.' });
 
-  const targetUser = db.findUserById(userId);
-  if (!targetUser) {
-    return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
-  }
+  const targetUser = await repositories.users.findById(userId);
+  if (!targetUser) return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
 
+  const changedAt = new Date().toISOString();
   const newHash = bcrypt.hashSync(targetUser.npk, 10);
-  db.updateUser(targetUser.id, {
-    passwordHash: newHash,
-    mustChangePassword: false,
-    passwordChangedAt: new Date().toISOString(),
-  });
-
-  db.addAuditLog({
+  await repositories.users.resetPassword(targetUser.id, newHash, changedAt);
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'RESET_PASSWORD_TO_NPK',
     entityType: 'user',
