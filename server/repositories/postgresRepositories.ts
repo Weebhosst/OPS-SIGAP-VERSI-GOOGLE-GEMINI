@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import type { PoolClient, QueryResultRow } from 'pg';
 import { postgresHealth, query, transaction } from '../db/postgres';
 import { normalizeDocumentType } from '../mediaTypes';
+import { decryptCheckpointToken, encryptCheckpointToken } from '../security/checkpointTokenCrypto';
 import {
   RepositoryBundle,
   RepositoryError,
@@ -96,7 +97,7 @@ const mapCheckpoint = (row: any): Checkpoint => ({
   coordinateMethod: row.coordinate_method,
   gpsAccuracyM: row.gps_accuracy == null ? null : Number(row.gps_accuracy),
   gpsCapturedAt: iso(row.gps_captured_at),
-  qrToken: '',
+  qrToken: decryptCheckpointToken(row.token_ciphertext),
   qrStatus: row.qr_status,
   status: row.status,
   createdAt: iso(row.created_at)!,
@@ -460,43 +461,143 @@ export const postgresRepositories: RepositoryBundle = {
 
   checkpoints: {
     findById: async (id) => {
-      const result = await query('SELECT * FROM checkpoints WHERE id=$1', [id]);
+      const result = await query(
+        `SELECT c.*,t.token_ciphertext
+         FROM checkpoints c
+         LEFT JOIN LATERAL (
+           SELECT token_ciphertext
+           FROM checkpoint_tokens
+           WHERE checkpoint_id=c.id
+           ORDER BY generated_at DESC
+           LIMIT 1
+         ) t ON true
+         WHERE c.id=$1`,
+        [id],
+      );
       return result.rows[0] ? mapCheckpoint(result.rows[0]) : undefined;
     },
     findByToken: async (token) => {
       const hash = createHash('sha256').update(token).digest('hex');
       const result = await query(
-        "SELECT c.* FROM checkpoints c JOIN checkpoint_tokens t ON t.checkpoint_id=c.id AND t.status='ACTIVE' WHERE t.token_hash=$1",
+        `SELECT c.*,t.token_ciphertext
+         FROM checkpoints c
+         JOIN checkpoint_tokens t ON t.checkpoint_id=c.id AND t.status='ACTIVE'
+         WHERE t.token_hash=$1`,
         [hash],
       );
       if (!result.rows[0]) return undefined;
       return { ...mapCheckpoint(result.rows[0]), qrToken: token };
     },
     list: async (request) => {
-      const {rows,total,page}=await pageQuery('SELECT * FROM checkpoints ORDER BY site_id,code','SELECT count(*) FROM checkpoints',[],request);
-      return toPage(rows.map(mapCheckpoint),total,page);
+      const { rows, total, page } = await pageQuery(
+        `SELECT c.*,t.token_ciphertext
+         FROM checkpoints c
+         LEFT JOIN LATERAL (
+           SELECT token_ciphertext
+           FROM checkpoint_tokens
+           WHERE checkpoint_id=c.id
+           ORDER BY generated_at DESC
+           LIMIT 1
+         ) t ON true
+         ORDER BY c.site_id,c.code`,
+        'SELECT count(*) FROM checkpoints',
+        [],
+        request,
+      );
+      return toPage(rows.map(mapCheckpoint), total, page);
     },
-    listBySite: async (siteId) => (await query('SELECT * FROM checkpoints WHERE site_id=$1 ORDER BY code', [siteId])).rows.map(mapCheckpoint),
+    listBySite: async (siteId) => (
+      await query(
+        `SELECT c.*,t.token_ciphertext
+         FROM checkpoints c
+         LEFT JOIN LATERAL (
+           SELECT token_ciphertext
+           FROM checkpoint_tokens
+           WHERE checkpoint_id=c.id
+           ORDER BY generated_at DESC
+           LIMIT 1
+         ) t ON true
+         WHERE c.site_id=$1
+         ORDER BY c.code`,
+        [siteId],
+      )
+    ).rows.map(mapCheckpoint),
     create: async (checkpoint) => {
       try {
-        const result=await query('INSERT INTO checkpoints(id,site_id,code,name,latitude,longitude,coordinate_method,gps_accuracy,gps_captured_at,radius_meter,status,qr_status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',[checkpoint.id,checkpoint.siteId,checkpoint.code,checkpoint.name,checkpoint.latitude,checkpoint.longitude,checkpoint.coordinateMethod||'MANUAL',checkpoint.gpsAccuracyM||null,checkpoint.gpsCapturedAt||null,checkpoint.radiusMeters,checkpoint.status,checkpoint.qrStatus,checkpoint.createdAt,checkpoint.updatedAt]);
+        const result = await query(
+          'INSERT INTO checkpoints(id,site_id,code,name,latitude,longitude,coordinate_method,gps_accuracy,gps_captured_at,radius_meter,status,qr_status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
+          [checkpoint.id,checkpoint.siteId,checkpoint.code,checkpoint.name,checkpoint.latitude,checkpoint.longitude,checkpoint.coordinateMethod||'MANUAL',checkpoint.gpsAccuracyM||null,checkpoint.gpsCapturedAt||null,checkpoint.radiusMeters,checkpoint.status,checkpoint.qrStatus,checkpoint.createdAt,checkpoint.updatedAt],
+        );
         return mapCheckpoint(result.rows[0]);
-      } catch(error:any){if(error?.code==='23505') throw new RepositoryError('CHECKPOINT_CONFLICT','Kode checkpoint sudah digunakan pada site ini.',409);throw error;}
+      } catch (error:any) {
+        if (error?.code === '23505') throw new RepositoryError('CHECKPOINT_CONFLICT','Kode checkpoint sudah digunakan pada site ini.',409);
+        throw error;
+      }
     },
     update: async (id, updates) => {
-      const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={name:'name',latitude:'latitude',longitude:'longitude',radiusMeters:'radius_meter',status:'status',qrStatus:'qr_status',coordinateMethod:'coordinate_method',gpsAccuracyM:'gps_accuracy',gpsCapturedAt:'gps_captured_at'};
-      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
-      if(!fields.length) return postgresRepositories.checkpoints.findById(id);
-      values.push(id); const result=await query(`UPDATE checkpoints SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
-      return result.rows[0]?mapCheckpoint(result.rows[0]):undefined;
+      const fields:string[]=[]; const values:unknown[]=[];
+      const columns:Record<string,string>={name:'name',latitude:'latitude',longitude:'longitude',radiusMeters:'radius_meter',status:'status',qrStatus:'qr_status',coordinateMethod:'coordinate_method',gpsAccuracyM:'gps_accuracy',gpsCapturedAt:'gps_captured_at'};
+      for (const [key,column] of Object.entries(columns)) {
+        if ((updates as any)[key] !== undefined) {
+          values.push((updates as any)[key]);
+          fields.push(`${column}=${values.length}`);
+        }
+      }
+      if (fields.length) {
+        values.push(id);
+        await query(`UPDATE checkpoints SET ${fields.join(',')},updated_at=now() WHERE id=${values.length}`, values);
+      }
+      return postgresRepositories.checkpoints.findById(id);
     },
     replaceToken: async (id, token, actorUserId, activate) => transaction(async (client) => {
-      const cp=await client.query('SELECT * FROM checkpoints WHERE id=$1 FOR UPDATE',[id]); if(!cp.rows[0]) return undefined;
-      await client.query("UPDATE checkpoint_tokens SET status='REVOKED',revoked_at=now() WHERE checkpoint_id=$1 AND status='ACTIVE'",[id]);
-      const tokenHash=createHash('sha256').update(token).digest('hex');
-      await client.query('INSERT INTO checkpoint_tokens(id,checkpoint_id,token_hash,token_version,status,generated_at,created_by) VALUES($1,$2,$3,COALESCE((SELECT max(token_version)+1 FROM checkpoint_tokens WHERE checkpoint_id=$2),1),$4,now(),$5)',[`TOK-${id}-${Date.now()}`,id,tokenHash,activate?'ACTIVE':'REVOKED',actorUserId]);
-      const result=await client.query('UPDATE checkpoints SET qr_status=$2,updated_at=now() WHERE id=$1 RETURNING *',[id,activate?'ACTIVE':'INACTIVE']);
-      return {...mapCheckpoint(result.rows[0]),qrToken:token};
+      const checkpoint = await client.query('SELECT * FROM checkpoints WHERE id=$1 FOR UPDATE', [id]);
+      if (!checkpoint.rows[0]) return undefined;
+
+      await client.query(
+        "UPDATE checkpoint_tokens SET status='REVOKED',revoked_at=now() WHERE checkpoint_id=$1 AND status='ACTIVE'",
+        [id],
+      );
+
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const tokenCiphertext = encryptCheckpointToken(token);
+      await client.query(
+        `INSERT INTO checkpoint_tokens(
+          id,checkpoint_id,token_hash,token_ciphertext,token_version,status,generated_at,revoked_at,created_by
+        ) VALUES(
+          $1,$2,$3,$4,
+          COALESCE((SELECT max(token_version)+1 FROM checkpoint_tokens WHERE checkpoint_id=$2),1),
+          $5,now(),$6,$7
+        )`,
+        [
+          `TOK-${id}-${Date.now()}`,
+          id,
+          tokenHash,
+          tokenCiphertext,
+          activate ? 'ACTIVE' : 'REVOKED',
+          activate ? null : new Date().toISOString(),
+          actorUserId,
+        ],
+      );
+
+      await client.query(
+        'UPDATE checkpoints SET qr_status=$2,updated_at=now() WHERE id=$1',
+        [id, activate ? 'ACTIVE' : 'INACTIVE'],
+      );
+
+      const current = await client.query(
+        `SELECT c.*,t.token_ciphertext
+         FROM checkpoints c
+         LEFT JOIN LATERAL (
+           SELECT token_ciphertext
+           FROM checkpoint_tokens
+           WHERE checkpoint_id=c.id
+           ORDER BY generated_at DESC
+           LIMIT 1
+         ) t ON true
+         WHERE c.id=$1`,
+        [id],
+      );
+      return current.rows[0] ? mapCheckpoint(current.rows[0]) : undefined;
     }),
   },
 
