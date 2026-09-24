@@ -153,9 +153,10 @@ try {
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
   assert.match(importerSource, /ON CONFLICT\(id\) DO NOTHING/);
-  assert.match(importerSource, /item\.sourceModule,item\.sourceId,item\.photoUrl/);
+  assert.match(importerSource, /legacy-json:/);
   assert.doesNotMatch(patrolServiceSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
+  assert.match(patrolServiceSource, /MEDIA_STORAGE_NOT_READY/);
   assert.match(providerGuardSource, /POSTGRES_ROUTE_NOT_MIGRATED/);
 
   let currentRoute = '';
