@@ -805,7 +805,16 @@ export const postgresRepositories: RepositoryBundle = {
       const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
       if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=$${values.length} OR h.to_user_id=$${values.length})`);}
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
-      const {rows,total,page}=await pageQuery(`SELECT h.* FROM handovers h${where} ORDER BY h.created_at DESC`,`SELECT count(*) FROM handovers h${where}`,values,request);
+      const select = `SELECT h.*,med.media_urls,med.primary_media_url
+        FROM handovers h
+        LEFT JOIN LATERAL (
+          SELECT array_agg(m.storage_key ORDER BY m.captured_at) AS media_urls,
+                 min(m.storage_key) AS primary_media_url
+          FROM handover_media hm
+          JOIN media m ON m.id=hm.media_id
+          WHERE hm.handover_id=h.id
+        ) med ON true`;
+      const {rows,total,page}=await pageQuery(`${select}${where} ORDER BY h.created_at DESC`,`SELECT count(*) FROM handovers h${where}`,values,request);
       return toPage(rows.map(mapHandover),total,page);
     },
     create: async (h) => {
@@ -830,7 +839,16 @@ export const postgresRepositories: RepositoryBundle = {
       const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
       if(filter.siteId)add('i.site_id=',filter.siteId); if(filter.shiftCode)add('i.shift_code=',filter.shiftCode); if(filter.userId)add('i.user_id=',filter.userId); if(filter.status)add('i.status=',filter.status);
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
-      const {rows,total,page}=await pageQuery(`SELECT i.* FROM incident_reports i${where} ORDER BY i.incident_at DESC`,`SELECT count(*) FROM incident_reports i${where}`,values,request);
+      const select = `SELECT i.*,med.media_urls,med.primary_media_url
+        FROM incident_reports i
+        LEFT JOIN LATERAL (
+          SELECT array_agg(m.storage_key ORDER BY m.captured_at) AS media_urls,
+                 min(m.storage_key) AS primary_media_url
+          FROM incident_media im
+          JOIN media m ON m.id=im.media_id
+          WHERE im.incident_id=i.id
+        ) med ON true`;
+      const {rows,total,page}=await pageQuery(`${select}${where} ORDER BY i.incident_at DESC`,`SELECT count(*) FROM incident_reports i${where}`,values,request);
       return toPage(rows.map(mapIncident),total,page);
     },
     create: async (i) => {
