@@ -122,16 +122,14 @@ async function main() {
       q(`
         SELECT
           s.id, s.code, s.name, s.personnel_capacity,
-          count(DISTINCT CASE WHEN u.status='ACTIVE' AND a.is_current THEN u.id END)::int AS active_assigned_users,
+          count(DISTINCT ss.id) FILTER (WHERE ss.status='ACTIVE')::int AS active_sessions,
           CASE
-            WHEN count(DISTINCT CASE WHEN u.status='ACTIVE' AND a.is_current THEN u.id END) > s.personnel_capacity THEN 'OVER_CAPACITY'
+            WHEN count(DISTINCT ss.id) FILTER (WHERE ss.status='ACTIVE') > s.personnel_capacity THEN 'OVER_CAPACITY'
             WHEN s.personnel_capacity < 1 THEN 'INVALID_CAPACITY'
-            WHEN s.personnel_capacity <= 2 THEN 'REVIEW_LOW_CAPACITY'
             ELSE 'OK'
           END AS flag
         FROM sites s
-        LEFT JOIN user_assignments a ON a.site_id=s.id AND a.is_current
-        LEFT JOIN users u ON u.id=a.user_id
+        LEFT JOIN shift_sessions ss ON ss.site_id=s.id
         GROUP BY s.id
         ORDER BY s.code
       `),
