@@ -7,6 +7,8 @@ import bcrypt from 'bcryptjs';
 import { db } from './db';
 import { validateAndProcessScan, getMemberShiftProgress } from './patrolService';
 import { getOperationalMedia } from './mediaService';
+import { repositories } from './repositories';
+import { RepositoryError } from './repositories/contracts';
 import {
   User,
   resolveShift,
@@ -16,7 +18,6 @@ import {
   PatrolSession,
   Role,
   isAdministrator,
-  evaluateShiftStart,
 } from '../src/types/ops';
 
 export const apiRouter = Router();
@@ -39,7 +40,7 @@ export interface AuthenticatedRequest extends Request {
   user?: User;
 }
 
-function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+async function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   // Extract token from Authorization header or cookie
   const authHeader = req.headers.authorization;
   let token: string | undefined;
@@ -59,13 +60,17 @@ function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunc
     return res.status(401).json({ success: false, error: 'Unauthorized. Sesi login telah berakhir.' });
   }
 
-  const user = db.findUserById(session.userId);
-  if (!user || user.status !== 'ACTIVE') {
-    return res.status(401).json({ success: false, error: 'Akun dinonaktifkan atau tidak ditemukan.' });
+  try {
+    const user = await repositories.users.findById(session.userId);
+    if (!user || user.status !== 'ACTIVE') {
+      return res.status(401).json({ success: false, error: 'Akun dinonaktifkan atau tidak ditemukan.' });
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('[auth] Repository lookup failed:', error instanceof Error ? error.message : 'unknown');
+    return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE', error: 'Layanan database sedang tidak tersedia.' });
   }
-
-  req.user = user;
-  next();
 }
 
 function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -120,7 +125,7 @@ function requireFieldMember(req: AuthenticatedRequest, res: Response, next: Next
 // Simple rate limiter tracking for brute-force defense
 const loginAttempts = new Map<string, { count: number; blockedUntil?: number }>();
 
-apiRouter.post('/auth/login', (req: Request, res: Response) => {
+apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   const { npk, password } = req.body;
 
   if (!npk || !password) {
@@ -139,7 +144,13 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
     });
   }
 
-  const user = db.findUserByNpk(cleanNpk);
+  let user: User | undefined;
+  try {
+    user = await repositories.users.findByNpk(cleanNpk);
+  } catch (error) {
+    console.error('[auth] Login repository lookup failed:', error instanceof Error ? error.message : 'unknown');
+    return res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE', error: 'Layanan database sedang tidak tersedia.' });
+  }
   if (!user) {
     // Record failed attempt
     const count = (record?.count || 0) + 1;
@@ -175,7 +186,7 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
   });
 
   // Audit login
-  db.addAuditLog({
+  await repositories.audit.append({
     actorUserId: user.id,
     action: 'LOGIN_SUCCESS',
     entityType: 'user',
@@ -310,49 +321,25 @@ apiRouter.get('/patrol/current', authMiddleware, (req: AuthenticatedRequest, res
   });
 });
 
-apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
   const siteId = req.user!.siteId || 'BB92';
-  const existingOpen = db.getActiveSessionForUser(req.user!.id);
-
-  const site = db.findSiteById(siteId);
-  const activeSiteSessions = db.getActiveSessionsForSite(siteId);
-  const decision = evaluateShiftStart(!!existingOpen, activeSiteSessions.length, site?.personnelCapacity || 0);
-
-  if (!decision.allowed && decision.reason === 'USER_ALREADY_HAS_ACTIVE_SESSION') {
+  const existingOpen = await repositories.sessions.getActiveByUser(req.user!.id);
+  if (existingOpen) {
     return res.status(400).json({
       success: false,
+      code: 'USER_ALREADY_HAS_ACTIVE_SESSION',
       error: 'Anda masih memiliki sesi patroli yang sedang berjalan. Lanjutkan sesi tersebut.',
       session: existingOpen,
     });
   }
 
+  const site = await repositories.sites.findById(siteId);
   if (!site || site.status !== 'ACTIVE') {
     return res.status(400).json({ success: false, code: 'SITE_UNAVAILABLE', error: 'Site penugasan tidak aktif atau tidak ditemukan.' });
   }
 
-  if (!decision.allowed && decision.reason === 'SITE_CAPACITY_FULL') {
-    const occupants = activeSiteSessions.map((session) => {
-      const member = db.findUserById(session.userId);
-      return {
-        sessionId: session.id,
-        name: member?.name || 'Petugas tidak dikenal',
-        npk: member?.npk || session.npk || '-',
-        shiftCode: session.shiftCode,
-        startedAt: session.startedAt,
-      };
-    });
-    const first = occupants[0];
-    return res.status(409).json({
-      success: false,
-      code: 'SITE_CAPACITY_FULL',
-      error: `SHIFT TIDAK DAPAT DIMULAI. Site ${site.code || site.id} penuh (${activeSiteSessions.length}/${site.personnelCapacity}). Sesi aktif: ${first.name} (NPK ${first.npk}), ${first.shiftCode}, mulai ${new Date(first.startedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB. Silakan hubungi Admin apabila sesi sebelumnya seharusnya sudah selesai.`,
-      site: { id: site.id, name: site.name, capacity: site.personnelCapacity },
-      activeSessions: occupants,
-    });
-  }
-
   const shift = resolveShift();
-  const activeCheckpoints = db.getCheckpoints(siteId).filter((c) => c.status === 'ACTIVE');
+  const activeCheckpoints = (await repositories.checkpoints.listBySite(siteId)).filter((c) => c.status === 'ACTIVE');
   const now = new Date().toISOString();
 
   const roundNumber = 1;
@@ -380,24 +367,24 @@ apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, (req
     updatedAt: now,
   };
 
-  db.createPatrolSession(newSession);
-
-  db.addAuditLog({
-    actorUserId: req.user!.id,
-    action: 'PATROL_SESSION_START',
-    entityType: 'patrol_session',
-    entityId: newSession.id,
-    newValue: {
-      siteId,
-      shiftCode: shift.code,
-      shiftDate: shift.operationalDate,
-      roundNumber,
-      totalRequired: activeCheckpoints.length,
-    },
-    reason: `Mulai shift patroli dengan target ${Math.max(1, site.targetRoundsPerShift || 1)} ronde (${shift.name})`,
-  });
-
-  res.json({ success: true, session: newSession });
+  try {
+    const created = await repositories.sessions.startAtomic({ session: newSession, personnelCapacity: site.personnelCapacity });
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'PATROL_SESSION_START',
+      entityType: 'patrol_session',
+      entityId: created.id,
+      newValue: { siteId, shiftCode: shift.code, shiftDate: shift.operationalDate, roundNumber, totalRequired: activeCheckpoints.length },
+      reason: `Mulai shift patroli dengan target ${Math.max(1, site.targetRoundsPerShift || 1)} ronde (${shift.name})`,
+    });
+    res.json({ success: true, session: created });
+  } catch (error: any) {
+    const controlled = error instanceof RepositoryError;
+    const code = controlled ? error.code : 'DATABASE_OPERATION_FAILED';
+    const status = Number(error?.status) || (code === 'SITE_CAPACITY_FULL' ? 409 : 400);
+    console.error('[session] Start shift failed:', error instanceof Error ? error.message : 'unknown');
+    res.status(controlled ? status : 500).json({ success: false, code, error: controlled ? error.message : 'Shift tidak dapat dimulai karena gangguan database.' });
+  }
 });
 
 apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
@@ -1078,33 +1065,23 @@ apiRouter.post('/admin/filter-state/reset', authMiddleware, requireMonitoring, (
   res.json({ success: true, filterState: updated });
 });
 
-apiRouter.patch('/admin/validation-alerts/:id', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
-  const alert = db.findValidationAlertById(req.params.id);
-  if (!alert) return res.status(404).json({ success: false, error: 'Validation alert tidak ditemukan.' });
+apiRouter.patch('/admin/validation-alerts/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const action = String(req.body.action || '').toUpperCase();
-  const now = new Date().toISOString();
-  let updates: any;
-  let auditAction = '';
-  if (action === 'REVIEW') {
-    if (alert.status !== 'OPEN') return res.status(409).json({ success: false, error: 'Hanya alert OPEN yang dapat ditandai ditinjau.' });
-    updates = { status: 'UNDER_REVIEW', reviewedBy: req.user!.id, reviewedAt: now };
-    auditAction = 'VALIDATION_ALERT_REVIEWED';
-  } else if (action === 'CLOSE') {
-    const closeNote = String(req.body.closeNote || '').trim();
-    if (!closeNote) return res.status(400).json({ success: false, error: 'Catatan penyelesaian wajib diisi.' });
-    if (alert.status === 'CLOSED') return res.status(409).json({ success: false, error: 'Alert sudah ditutup.' });
-    updates = { status: 'CLOSED', closedBy: req.user!.id, closedAt: now, closeNote };
-    auditAction = 'VALIDATION_ALERT_CLOSED';
-  } else if (action === 'REOPEN') {
-    if (alert.status !== 'CLOSED') return res.status(409).json({ success: false, error: 'Hanya alert CLOSED yang dapat dibuka kembali.' });
-    updates = { status: 'OPEN', reopenedBy: req.user!.id, reopenedAt: now, closedBy: null, closedAt: null, closeNote: null };
-    auditAction = 'VALIDATION_ALERT_REOPENED';
-  } else {
+  if (!['REVIEW', 'CLOSE', 'REOPEN'].includes(action)) {
     return res.status(400).json({ success: false, error: 'Action alert tidak valid.' });
   }
-  const updated = db.updateValidationAlert(alert.id, updates);
-  db.addAuditLog({ actorUserId: req.user!.id, action: auditAction, entityType: 'validation_alert', entityId: alert.id, oldValue: { status: alert.status }, newValue: updates, reason: updates.closeNote || `Workflow alert ${action}` });
-  res.json({ success: true, alert: updated });
+  try {
+    const previous = await repositories.alerts.findById(req.params.id);
+    if (!previous) return res.status(404).json({ success: false, error: 'Validation alert tidak ditemukan.' });
+    const updated = await repositories.alerts.transition(req.params.id, action as 'REVIEW' | 'CLOSE' | 'REOPEN', req.user!.id, String(req.body.closeNote || ''));
+    await repositories.audit.append({ actorUserId: req.user!.id, action: `VALIDATION_ALERT_${action}`, entityType: 'validation_alert', entityId: previous.id, oldValue: { status: previous.status }, newValue: { status: updated.status }, reason: updated.closeNote || `Workflow alert ${action}` });
+    res.json({ success: true, alert: updated });
+  } catch (error: any) {
+    const controlled = error instanceof RepositoryError;
+    const code = controlled ? error.code : 'DATABASE_OPERATION_FAILED';
+    console.error('[alert] Workflow failed:', error instanceof Error ? error.message : 'unknown');
+    res.status(controlled ? error.status : 500).json({ success: false, code, error: controlled ? error.message : 'Workflow alert gagal diproses karena gangguan database.' });
+  }
 });
 
 // Admin User Management
@@ -1537,22 +1514,28 @@ apiRouter.post('/sync', authMiddleware, (req: AuthenticatedRequest, res: Respons
 // HEALTH CHECK
 // -------------------------------------------------------------
 
-apiRouter.get('/health', (_req: Request, res: Response) => {
+apiRouter.get('/health', async (_req: Request, res: Response) => {
   const { dateString, timeString } = getJakartaDateParts();
   const shift = resolveShift();
-  res.json({
-    status: 'OK',
+  const repositoryHealth = await repositories.health();
+  const connected = repositoryHealth.database === 'connected';
+  res.status(connected ? 200 : 503).json({
+    status: connected ? 'ok' : 'degraded',
+    provider: repositoryHealth.provider,
+    database: repositoryHealth.database,
     service: 'OPS SIGAP Security Operations System',
     timestamp: new Date().toISOString(),
     serverTimeJakarta: `${dateString} ${timeString} WIB`,
     activeShift: shift,
-    database: {
-      status: 'CONNECTED',
-      usersCount: db.getUsers().length,
-      sitesCount: db.getSites().length,
-      checkpointsCount: db.getCheckpoints().length,
-      patrolSessionsCount: db.getPatrolSessions().length,
-      patrolLogsCount: db.getPatrolLogs().length,
+    databaseDetails: {
+      status: repositoryHealth.database.toUpperCase(),
+      ...(repositoryHealth.provider === 'json' ? {
+        usersCount: db.getUsers().length,
+        sitesCount: db.getSites().length,
+        checkpointsCount: db.getCheckpoints().length,
+        patrolSessionsCount: db.getPatrolSessions().length,
+        patrolLogsCount: db.getPatrolLogs().length,
+      } : {}),
     },
   });
 });

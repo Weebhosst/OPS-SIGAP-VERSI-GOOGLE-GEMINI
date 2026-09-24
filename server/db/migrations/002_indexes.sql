@@ -1,0 +1,14 @@
+CREATE INDEX sites_customer_id_idx ON sites(customer_id);
+CREATE INDEX checkpoints_site_status_idx ON checkpoints(site_id, status);
+CREATE INDEX shift_sessions_user_idx ON shift_sessions(user_id);
+CREATE INDEX shift_sessions_site_status_idx ON shift_sessions(site_id, status);
+CREATE INDEX shift_sessions_operational_date_idx ON shift_sessions(operational_date DESC);
+CREATE INDEX patrol_logs_session_created_idx ON patrol_logs(session_id, created_at DESC);
+CREATE INDEX patrol_logs_checkpoint_idx ON patrol_logs(checkpoint_id);
+CREATE INDEX validation_alerts_status_site_idx ON validation_alerts(status, site_id);
+CREATE INDEX incident_reports_site_date_idx ON incident_reports(site_id, operational_date DESC);
+CREATE INDEX handovers_site_date_idx ON handovers(site_id, operational_date DESC);
+CREATE INDEX media_operational_lookup_idx ON media(site_id, document_type, captured_at DESC);
+CREATE INDEX media_session_idx ON media(session_id);
+CREATE INDEX audit_logs_created_at_idx ON audit_logs(created_at DESC);
+CREATE INDEX audit_logs_entity_idx ON audit_logs(entity_type, entity_id);

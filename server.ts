@@ -7,10 +7,11 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { apiRouter } from './server/routes';
+import { config } from './server/config';
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const PORT = config.port;
 
   // Support JSON and urlencoded payloads (sufficient for base64 photo capture evidence)
   app.use(express.json({ limit: '25mb' }));
