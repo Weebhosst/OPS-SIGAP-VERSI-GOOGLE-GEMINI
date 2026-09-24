@@ -64,7 +64,7 @@ Audit coverage:
 - duplicate email candidate counts
 - DEMO/TEST/UAT/SEED user-ID flags
 - forced-password-change counts
-- site capacity versus active assigned users
+- site capacity versus concurrent ACTIVE shift sessions
 - checkpoint totals/status/QR status/radius
 - QR checkpoint/token consistency
 - operational table counts
@@ -90,9 +90,57 @@ This record must be checked against the current PostgreSQL database before any d
 6. Cleanup is applied with audit logging and post-cleanup verification.
 7. Production master-data baseline is frozen.
 
+## Production PostgreSQL audit findings
+
+Validated with a temporary PostgreSQL 17 audit runner using `REPEATABLE READ READ ONLY` and explicit `ROLLBACK`.
+
+### CLEAN
+
+- customers: 1 total, 1 ACTIVE, 0 INACTIVE
+- checkpoint geometry/radius: no invalid records
+- checkpoint QR/token integrity: no ACTIVE QR without an ACTIVE token
+- assignment customer/site consistency: no mismatch
+- target-round bounds: no values below 1 or above 20
+- concurrent site capacity:
+  - AIS capacity 1, ACTIVE sessions 0
+  - BB92 capacity 1, ACTIVE sessions 1
+
+### REVIEW
+
+- one ACTIVE demo account exists: `USR-SUPER-999` / `SUPER ADMIN (DEMO)`
+- the demo account has no operational usage and no auth sessions; only one historical audit-log reference exists
+- site `AIS` / `SG, MO SUBANG` is ACTIVE with one CHIEF assignment, target rounds 5, and zero checkpoints
+- two SUPER_ADMIN users intentionally have no site assignment
+- seven users currently have `must_change_password=false`
+- existing operational/UAT records:
+  - shift sessions: 2, including 1 ACTIVE and 1 FORCE_CLOSED
+  - patrol logs: 1 REJECTED
+  - handovers: 2
+  - media: 2
+  - validation alerts: 1 OPEN
+  - radius calibrations: 3
+  - auth sessions: 14 total
+
+### Current assignments
+
+- AIS: one CHIEF
+- BB92: four ANGGOTA
+
+### Cleanup blockers
+
+Before production master data can be frozen:
+
+1. decide whether the demo Super Admin should be removed from both seed and PostgreSQL
+2. resolve the ACTIVE UAT shift session and OPEN validation alert
+3. decide whether UAT operational history should be retained or purged before go-live
+4. confirm site AIS with zero checkpoints is intentional
+
 ## Status
 
 - deployed seed audit: COMPLETE
-- read-only PostgreSQL audit tooling: IN PROGRESS
-- production PostgreSQL audit: PENDING
-- cleanup: NOT STARTED
+- read-only PostgreSQL audit tooling: COMPLETE
+- production PostgreSQL audit: COMPLETE
+- findings classification: COMPLETE
+- cleanup plan: COMPLETE
+- production cleanup: PENDING EXPLICIT APPROVAL
+- production master-data freeze: PENDING
