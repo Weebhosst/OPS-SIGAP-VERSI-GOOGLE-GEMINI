@@ -3,6 +3,7 @@ import type { PoolClient, QueryResultRow } from 'pg';
 import { postgresHealth, query, transaction } from '../db/postgres';
 import { normalizeDocumentType } from '../mediaTypes';
 import { decryptCheckpointToken, encryptCheckpointToken } from '../security/checkpointTokenCrypto';
+import { mediaDeliveryUrl } from '../mediaStorage';
 import {
   RepositoryBundle,
   RepositoryError,
@@ -299,7 +300,7 @@ const mapMedia = (row: any): MediaGalleryItem => {
     shiftCode: row.shift_code || 'SHIFT_1',
     category: documentType,
     documentType,
-    photoUrl: row.storage_key,
+    photoUrl: row.storage_provider === 'external_url' ? row.storage_key : mediaDeliveryUrl(row.id),
     caption: row.file_name || documentType,
     eventAt: iso(row.captured_at)!,
     status: 'ACTIVE',
@@ -847,7 +848,7 @@ export const postgresRepositories: RepositoryBundle = {
 
   handovers: {
     findById: async (id) => {
-      const result=await query("SELECT h.*,array_remove(array_agg(m.storage_key ORDER BY m.captured_at),NULL) AS media_urls,min(m.storage_key) AS primary_media_url FROM handovers h LEFT JOIN handover_media hm ON hm.handover_id=h.id LEFT JOIN media m ON m.id=hm.media_id WHERE h.id=$1 GROUP BY h.id",[id]);
+      const result=await query("SELECT h.*,array_remove(array_agg(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END ORDER BY m.captured_at),NULL) AS media_urls,min(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END) AS primary_media_url FROM handovers h LEFT JOIN handover_media hm ON hm.handover_id=h.id LEFT JOIN media m ON m.id=hm.media_id WHERE h.id=$1 GROUP BY h.id",[id]);
       return result.rows[0]?mapHandover(result.rows[0]):undefined;
     },
     list: async (filter, request) => {
@@ -857,8 +858,8 @@ export const postgresRepositories: RepositoryBundle = {
       const select = `SELECT h.*,med.media_urls,med.primary_media_url
         FROM handovers h
         LEFT JOIN LATERAL (
-          SELECT array_agg(m.storage_key ORDER BY m.captured_at) AS media_urls,
-                 min(m.storage_key) AS primary_media_url
+          SELECT array_agg(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END ORDER BY m.captured_at) AS media_urls,
+                 min(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END) AS primary_media_url
           FROM handover_media hm
           JOIN media m ON m.id=hm.media_id
           WHERE hm.handover_id=h.id
@@ -881,7 +882,7 @@ export const postgresRepositories: RepositoryBundle = {
 
   incidents: {
     findById: async (id) => {
-      const result=await query("SELECT i.*,array_remove(array_agg(m.storage_key ORDER BY m.captured_at),NULL) AS media_urls,min(m.storage_key) AS primary_media_url FROM incident_reports i LEFT JOIN incident_media im ON im.incident_id=i.id LEFT JOIN media m ON m.id=im.media_id WHERE i.id=$1 GROUP BY i.id",[id]);
+      const result=await query("SELECT i.*,array_remove(array_agg(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END ORDER BY m.captured_at),NULL) AS media_urls,min(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END) AS primary_media_url FROM incident_reports i LEFT JOIN incident_media im ON im.incident_id=i.id LEFT JOIN media m ON m.id=im.media_id WHERE i.id=$1 GROUP BY i.id",[id]);
       return result.rows[0]?mapIncident(result.rows[0]):undefined;
     },
     list: async (filter, request) => {
@@ -1022,18 +1023,39 @@ export const postgresRepositories: RepositoryBundle = {
       }
       return counts;
     },
+    findObjectRef: async (id) => {
+      const result = await query(
+        'SELECT id,storage_provider,storage_key,mime_type,file_name,file_size FROM media WHERE id=$1',
+        [id],
+      );
+      const row = result.rows[0];
+      if (!row) return undefined;
+      return {
+        id: row.id,
+        storageProvider: row.storage_provider,
+        storageKey: row.storage_key,
+        mimeType: row.mime_type,
+        fileName: row.file_name,
+        fileSize: row.file_size == null ? null : Number(row.file_size),
+      };
+    },
     add: async (item, sessionId = null, customerId = null) => {
-      if (item.photoUrl.startsWith('data:')) {
+      if (item.photoUrl.startsWith('data:') || item.storageProvider === 'inline_json') {
         throw new RepositoryError(
           'MEDIA_STORAGE_NOT_READY',
-          'Media base64 belum boleh disimpan ke PostgreSQL. Aktifkan storage provider Round 4B terlebih dahulu.',
+          'Media base64 tidak boleh disimpan ke PostgreSQL. Upload object storage wajib selesai terlebih dahulu.',
           503,
         );
       }
       const documentType = item.documentType || normalizeDocumentType(item);
+      const storageProvider = item.storageProvider || 'external_url';
+      const storageKey = item.storageKey || item.photoUrl;
+      const mimeType = item.mimeType || (item.photoUrl.endsWith('.png') ? 'image/png' : item.photoUrl.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
+      const fileName = item.fileName || item.caption || `${item.id}.jpg`;
+      const fileSize = item.fileSize ?? null;
       await transaction(async (client) => {
         await client.query(
-          "INSERT INTO media(id,document_type,user_id,session_id,customer_id,site_id,reference_type,reference_id,storage_provider,storage_key,mime_type,file_name,file_size,captured_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'external_url',$9,$10,$11,NULL,$12,$13) ON CONFLICT(id) DO NOTHING",
+          "INSERT INTO media(id,document_type,user_id,session_id,customer_id,site_id,reference_type,reference_id,storage_provider,storage_key,mime_type,file_name,file_size,captured_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(id) DO NOTHING",
           [
             item.id,
             documentType,
@@ -1043,9 +1065,11 @@ export const postgresRepositories: RepositoryBundle = {
             item.siteId,
             item.sourceModule,
             item.sourceId,
-            item.photoUrl,
-            item.photoUrl.endsWith('.png') ? 'image/png' : 'image/jpeg',
-            item.caption || `${item.id}.jpg`,
+            storageProvider,
+            storageKey,
+            mimeType,
+            fileName,
+            fileSize,
             item.eventAt,
             item.createdAt,
           ],
@@ -1063,7 +1087,7 @@ export const postgresRepositories: RepositoryBundle = {
           );
         }
       });
-      return { ...item, documentType };
+      return { ...item, photoUrl: storageProvider === 'external_url' ? storageKey : mediaDeliveryUrl(item.id), documentType };
     },
   },
 
