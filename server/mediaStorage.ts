@@ -33,7 +33,7 @@ export interface PrepareMediaInput {
   photoUrl: string;
 }
 
-function sha256Hex(value: Buffer | string): string {
+function sha256Hex(value: Buffer | Uint8Array | string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
@@ -202,7 +202,7 @@ function signedHeaders(method: string, url: URL, body: Buffer, date = new Date()
   };
 }
 
-async function s3Request(method: 'GET' | 'PUT' | 'DELETE' | 'HEAD', key: string, body = Buffer.alloc(0), contentType?: string): Promise<Response> {
+async function s3Request(method: 'GET' | 'PUT' | 'DELETE' | 'HEAD', key: string, body: Uint8Array = new Uint8Array(), contentType?: string): Promise<Response> {
   const url = objectUrl(key);
   const headers: Record<string, string> = signedHeaders(method, url, body);
   if (contentType) headers['content-type'] = contentType;
@@ -213,7 +213,7 @@ async function s3Request(method: 'GET' | 'PUT' | 'DELETE' | 'HEAD', key: string,
     const response = await fetch(url, {
       method,
       headers,
-      body: method === 'PUT' ? body : undefined,
+      body: method === 'PUT' ? (body as unknown as BodyInit) : undefined,
       signal: controller.signal,
     });
     return response;
