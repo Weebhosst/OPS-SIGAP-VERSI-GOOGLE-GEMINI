@@ -19,7 +19,8 @@
     "test:security": "tsx server/security.run-tests.ts",
     "audit:master-data": "tsx server/masterDataAudit.ts",
     "cleanup:round6b": "tsx server/round6bCleanup.ts",
-    "gate:round7": "tsx server/round7GoLiveGate.ts"
+    "gate:round7": "tsx server/round7GoLiveGate.ts",
+    "enforce:password-rotation": "tsx server/round7SecurityFix.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
