@@ -44,3 +44,42 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  postgres-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ops_sigap
+          POSTGRES_PASSWORD: ops_sigap_ci
+          POSTGRES_DB: ops_sigap_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ops_sigap -d ops_sigap_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_PROVIDER: postgres
+      DATABASE_URL: postgresql://ops_sigap:ops_sigap_ci@127.0.0.1:5432/ops_sigap_ci
+      NODE_ENV: test
+      CHECKPOINT_TOKEN_SECRET: ops-sigap-ci-checkpoint-secret-do-not-use-in-production
+      OPS_SIGAP_IMPORT_FILE: data/ops-sigap.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Live PostgreSQL migrations, import, and repository integration
+        run: npm run test:postgres
