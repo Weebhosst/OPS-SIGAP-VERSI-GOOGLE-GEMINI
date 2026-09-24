@@ -62,6 +62,12 @@ try {
 
   assert.equal((await jsonRepositories.sessions.findById(active.id))?.shiftDate, active.shiftDate);
 
+  const filteredSessions = await jsonRepositories.sessions.listFiltered(
+    { userId: active.userId, siteId: active.siteId, status: 'ACTIVE', operationalDate: active.shiftDate },
+    { limit: 20, offset: 0 },
+  );
+  assert.ok(filteredSessions.items.some((item) => item.id === active!.id), 'Filtered session repository harus mengembalikan sesi aktif yang sama.');
+
   const otherUser = users.items.find((item) => item.id !== user.id && item.siteId === site.id);
   if (otherUser) {
     await assert.rejects(
@@ -103,6 +109,31 @@ try {
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'CLOSE', user.id, 'Sudah diverifikasi')).status, 'CLOSED');
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'REOPEN', user.id)).status, 'OPEN');
 
+  const mediaId = `TEST-MEDIA-${Date.now()}`;
+  await jsonRepositories.media.add({
+    id: mediaId,
+    sourceModule: 'PATROL',
+    sourceTable: 'patrol_logs',
+    sourceId: logBase.id,
+    siteId: site.id,
+    userId: user.id,
+    shiftDate: active.shiftDate,
+    shiftCode: active.shiftCode,
+    category: 'PATROLI_QR',
+    documentType: 'PATROLI_QR',
+    photoUrl: 'data:image/jpeg;base64,TEST',
+    caption: 'Repository media test',
+    eventAt: new Date().toISOString(),
+    checkpointId: checkpoint.id,
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    createdBy: user.id,
+  }, active.id, active.customerId);
+  const mediaPage = await jsonRepositories.media.list({ siteId: site.id, documentType: 'PATROLI_QR' }, { limit: 100, offset: 0 });
+  assert.ok(mediaPage.items.some((item) => item.id === mediaId), 'Media repository harus mengembalikan media yang baru disimpan.');
+  const mediaCounts = await jsonRepositories.media.counts({ siteId: site.id });
+  assert.ok((mediaCounts.PATROLI_QR || 0) >= 1, 'Media counter PATROLI_QR harus tersedia.');
+
   const beforeDryRun = fs.readFileSync(temporaryDatabase);
   execFileSync(process.execPath, ['--import', 'tsx', 'server/db/importJson.ts', '--dry-run'], {
     cwd: process.cwd(),
@@ -114,10 +145,17 @@ try {
   const schemaSql = fs.readFileSync(path.resolve('server/db/migrations/001_initial_schema.sql'), 'utf8');
   const postgresSource = fs.readFileSync(path.resolve('server/repositories/postgresRepositories.ts'), 'utf8');
   const importerSource = fs.readFileSync(path.resolve('server/db/importJson.ts'), 'utf8');
+  const patrolServiceSource = fs.readFileSync(path.resolve('server/patrolService.ts'), 'utf8');
+  const mediaServiceSource = fs.readFileSync(path.resolve('server/mediaService.ts'), 'utf8');
+  const providerGuardSource = fs.readFileSync(path.resolve('server/providerGuard.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
   assert.match(importerSource, /ON CONFLICT\(id\) DO NOTHING/);
+  assert.match(importerSource, /item\.sourceModule,item\.sourceId,item\.photoUrl/);
+  assert.doesNotMatch(patrolServiceSource, /from ['"]\.\/db['"]|\bdb\./);
+  assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
+  assert.match(providerGuardSource, /POSTGRES_ROUTE_NOT_MIGRATED/);
 
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
@@ -126,6 +164,7 @@ try {
   console.log('PASS valid-checkpoint uniqueness and alert workflow persistence');
   console.log('PASS migration dry-run leaves JSON source unchanged');
   console.log('PASS PostgreSQL constraints, capacity lock, and idempotent import strategy');
+  console.log('PASS provider-safe patrol/media service cutover and split-brain guard');
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
