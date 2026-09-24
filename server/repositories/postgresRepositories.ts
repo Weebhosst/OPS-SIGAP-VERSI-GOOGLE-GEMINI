@@ -472,13 +472,40 @@ export const postgresRepositories: RepositoryBundle = {
         return mapSite(result.rows[0]);
       } catch(error:any){if(error?.code==='23505') throw new RepositoryError('SITE_CONFLICT','Kode Site sudah digunakan.',409);throw error;}
     },
-    update: async (id, updates) => {
-      const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={name:'name',status:'status',personnelCapacity:'personnel_capacity',targetRoundsPerShift:'target_rounds_per_shift'};
-      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
-      if(!fields.length) return postgresRepositories.sites.findById(id);
-      values.push(id); const result=await query(`UPDATE sites SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
+    update: async (id, updates) => transaction(async (client) => {
+      const current = await client.query('SELECT * FROM sites WHERE id=$1 FOR UPDATE', [id]);
+      if (!current.rows[0]) return undefined;
+
+      if (updates.personnelCapacity !== undefined) {
+        const active = await client.query<{ count: string }>(
+          "SELECT count(*) FROM shift_sessions WHERE site_id=$1 AND status='ACTIVE'",
+          [id],
+        );
+        if (Number(updates.personnelCapacity) < Number(active.rows[0]?.count || 0)) {
+          throw new RepositoryError(
+            'SITE_CAPACITY_BELOW_ACTIVE',
+            'Capacity tidak boleh lebih kecil dari jumlah session aktif.',
+            409,
+          );
+        }
+      }
+
+      const fields:string[]=[]; const values:unknown[]=[];
+      const columns:Record<string,string>={name:'name',status:'status',personnelCapacity:'personnel_capacity',targetRoundsPerShift:'target_rounds_per_shift'};
+      for(const [key,column] of Object.entries(columns)) {
+        if((updates as any)[key]!==undefined){
+          values.push((updates as any)[key]);
+          fields.push(`${column}=${values.length}`);
+        }
+      }
+      if(!fields.length) return mapSite(current.rows[0]);
+      values.push(id);
+      const result=await client.query(
+        `UPDATE sites SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,
+        values,
+      );
       return result.rows[0]?mapSite(result.rows[0]):undefined;
-    },
+    }),
   },
 
   checkpoints: {
