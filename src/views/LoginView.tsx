@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { Shield, Lock, User, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
+import { Shield, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
@@ -107,8 +107,7 @@ export const LoginView: React.FC = () => {
               )}
             </button>
           </form>
-
-        
+        </div>
 
         {/* PWA Install Button */}
         <div className="px-2">
