@@ -545,7 +545,7 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
   const specialId = hasSpecialHandover ? `HND-TARUNA-${Date.now()}` : null;
   const endId = `HND-TURUN-${Date.now()}`;
   const prepareInputs = [
-    ...(specialId ? specialPhotoUrls.map((photoUrl, index) => ({
+    ...(specialId ? specialPhotoUrls.map((photoUrl: string, index: number) => ({
       mediaId: `MED-${specialId}-${index + 1}`,
       sourceModule: 'HANDOVER' as const,
       siteId: session.siteId,
