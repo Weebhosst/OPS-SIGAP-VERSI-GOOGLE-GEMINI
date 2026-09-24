@@ -178,6 +178,16 @@ export const jsonRepositories: RepositoryBundle = {
     },
     listBySession: async (sessionId, page) => paginate(db.getPatrolLogs(sessionId), page),
     listAllBySession: async (sessionId) => db.getPatrolLogs(sessionId),
+    overrideValidation: async (id, newStatus, reason) => {
+      const log = db.findPatrolLogById(id);
+      if (!log) return undefined;
+      log.validationStatus = newStatus;
+      if (newStatus === 'VALID') {
+        log.rejectionReason = null;
+        log.rejectionMessage = `Status diubah menjadi VALID oleh Administrator (${reason})`;
+      }
+      return log;
+    },
   },
 
   handovers: {
@@ -235,6 +245,16 @@ export const jsonRepositories: RepositoryBundle = {
       }
       return db.updateValidationAlert(id, updates)!;
     },
+  },
+
+  adminState: {
+    get: async (userId) => db.getAdminFilterState(userId),
+    set: async (userId, updates) => db.setAdminFilterState(userId, updates),
+  },
+
+  radiusCalibrations: {
+    list: async (page) => paginate(db.getRadiusCalibrations(), page),
+    create: async (entry) => db.addRadiusCalibration(entry),
   },
 
   media: {
