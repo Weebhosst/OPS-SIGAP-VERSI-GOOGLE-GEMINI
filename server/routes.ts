@@ -1180,6 +1180,44 @@ apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, async (re
 });
 
 // -------------------------------------------------------------
+// PRIVATE MEDIA DELIVERY
+// -------------------------------------------------------------
+
+apiRouter.get('/media/:id/content', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const ref = await repositories.media.findObjectRef(req.params.id);
+  if (!ref) return res.status(404).json({ success: false, error: 'Media tidak ditemukan.' });
+
+  const canViewGlobal = isAdministrator(req.user!.role) || req.user!.role === 'CHIEF';
+  if (!canViewGlobal && (ref.userId !== req.user!.id || ref.siteId !== req.user!.siteId)) {
+    return res.status(403).json({ success: false, error: 'Anda tidak memiliki akses ke media ini.' });
+  }
+
+  if (ref.storageProvider === 'external_url') {
+    if (!/^https?:\/\//i.test(ref.storageKey)) {
+      return res.status(404).json({ success: false, error: 'Referensi media eksternal tidak valid.' });
+    }
+    return res.redirect(302, ref.storageKey);
+  }
+
+  try {
+    const object = await readMediaObject(ref);
+    res.setHeader('Content-Type', object.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${String(object.fileName).replace(/["\\\r\n]/g, '_')}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(object.body);
+  } catch (error) {
+    if (sendRepositoryError(res, error)) return;
+    throw error;
+  }
+});
+
+apiRouter.get('/admin/media-storage/health', authMiddleware, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
+  const health = await checkMediaStorage();
+  res.status(health.connected ? 200 : 503).json({ success: health.connected, ...health });
+});
+
+// -------------------------------------------------------------
 // UNIFIED MEDIA GALLERY
 // -------------------------------------------------------------
 
@@ -1992,7 +2030,10 @@ apiRouter.post('/sync', authMiddleware, async (req: AuthenticatedRequest, res: R
 apiRouter.get('/health', async (_req: Request, res: Response) => {
   const { dateString, timeString } = getJakartaDateParts();
   const shift = resolveShift();
-  const repositoryHealth = await repositories.health();
+  const [repositoryHealth, mediaStorage] = await Promise.all([
+    repositories.health(),
+    checkMediaStorage(),
+  ]);
   const connected = repositoryHealth.database === 'connected';
 
   let databaseDetails:any = { status: repositoryHealth.database.toUpperCase() };
@@ -2027,5 +2068,6 @@ apiRouter.get('/health', async (_req: Request, res: Response) => {
     serverTimeJakarta: `${dateString} ${timeString} WIB`,
     activeShift: shift,
     databaseDetails,
+    mediaStorage,
   });
 });
