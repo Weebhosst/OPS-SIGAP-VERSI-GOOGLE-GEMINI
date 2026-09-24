@@ -15,9 +15,11 @@ import type {
   AuditLog,
   Checkpoint,
   Customer,
+  IncidentReport,
   MediaGalleryItem,
   PatrolLog,
   PatrolSession,
+  ShiftHandover,
   Site,
   User,
   ValidationAlert,
@@ -153,6 +155,77 @@ const mapLog = (row: any): PatrolLog => ({
   createdAt: iso(row.created_at)!,
 });
 
+const mapHandover = (row: any): ShiftHandover => ({
+  id: row.id,
+  sessionId: row.session_id,
+  siteId: row.site_id,
+  shiftDate: dateOnly(row.operational_date),
+  shiftCode: row.shift_code,
+  handoverType: row.handover_type,
+  fromUserId: row.from_user_id,
+  toUserId: row.to_user_id,
+  eventAt: iso(row.event_at)!,
+  latitude: row.latitude == null ? null : Number(row.latitude),
+  longitude: row.longitude == null ? null : Number(row.longitude),
+  photoUrl: row.primary_media_url || null,
+  photoUrls: row.media_urls || [],
+  itemName: row.item_name,
+  itemQuantity: row.item_quantity,
+  itemCondition: row.item_condition,
+  handedFrom: row.handed_from,
+  handedTo: row.handed_to,
+  isTaruna: row.is_taruna,
+  conditionStatus: row.condition_status,
+  personnelStatus: row.personnel_status,
+  equipmentStatus: row.equipment_status,
+  keysStatus: row.keys_status,
+  vehicleStatus: row.vehicle_status,
+  outstandingIssues: row.outstanding_issues,
+  handoverNotes: row.handover_notes,
+  ackFrom: row.ack_from,
+  ackTo: row.ack_to,
+  status: row.status,
+  createdBy: row.created_by,
+  createdAt: iso(row.created_at)!,
+  updatedAt: iso(row.updated_at)!,
+});
+
+const mapIncident = (row: any): IncidentReport => ({
+  id: row.id,
+  sessionId: row.session_id,
+  customerId: row.customer_id,
+  siteId: row.site_id,
+  userId: row.user_id,
+  incidentAt: iso(row.incident_at)!,
+  shiftCode: row.shift_code,
+  shiftDate: dateOnly(row.operational_date),
+  category: row.category,
+  severity: row.severity,
+  title: row.title,
+  locationText: row.location_text,
+  latitude: row.latitude == null ? null : Number(row.latitude),
+  longitude: row.longitude == null ? null : Number(row.longitude),
+  photoUrl: row.primary_media_url || null,
+  photoUrls: row.media_urls || [],
+  notes: row.notes,
+  chronology: row.chronology,
+  initialAction: row.initial_action,
+  followUp: row.follow_up,
+  personInvolved: row.person_involved,
+  witness: row.witness,
+  vehicleInvolved: row.vehicle_involved,
+  assetInvolved: row.asset_involved,
+  policeReportNo: row.police_report_no,
+  externalParty: row.external_party,
+  status: row.status,
+  escalated: row.escalated,
+  escalatedTo: row.escalated_to,
+  closedAt: iso(row.closed_at),
+  createdBy: row.created_by,
+  createdAt: iso(row.created_at)!,
+  updatedAt: iso(row.updated_at)!,
+});
+
 const mapAlert = (row: any): ValidationAlert => ({
   id: row.id,
   patrolLogId: row.patrol_log_id,
@@ -270,6 +343,45 @@ export const postgresRepositories: RepositoryBundle = {
       );
       return toPage(rows.map(mapUser), total, page);
     },
+    create: async (user) => transaction(async (client) => {
+      try {
+        const result = await client.query(
+          'INSERT INTO users(id,npk,name,email,password_hash,role,position,status,must_change_password,password_changed_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
+          [user.id,user.npk,user.name,user.email,user.passwordHash,user.role,user.position||null,user.status,!!user.mustChangePassword,user.passwordChangedAt||null,user.createdAt,user.updatedAt],
+        );
+        if (user.siteId || user.customerId) {
+          await client.query(
+            'INSERT INTO user_assignments(id,user_id,customer_id,site_id,effective_from,is_current,changed_by,created_at) VALUES($1,$2,$3,$4,$5,true,$6,$5)',
+            [`ASN-${user.id}-${Date.now()}`,user.id,user.customerId||null,user.siteId||null,user.assignmentHistory?.at(-1)?.effectiveAt||user.createdAt,user.assignmentHistory?.at(-1)?.changedBy||null],
+          );
+        }
+        return mapUser({ ...result.rows[0], customer_id:user.customerId||null, site_id:user.siteId||null });
+      } catch (error:any) {
+        if (error?.code === '23505') throw new RepositoryError('USER_CONFLICT','NPK atau identitas pengguna sudah digunakan.',409);
+        throw error;
+      }
+    }),
+    update: async (id, updates, assignment) => transaction(async (client) => {
+      const fields:string[]=[]; const values:unknown[]=[];
+      const columns:Record<string,string>={name:'name',email:'email',role:'role',position:'position',status:'status',mustChangePassword:'must_change_password',passwordChangedAt:'password_changed_at'};
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      if(fields.length){values.push(id);await client.query(`UPDATE users SET ${fields.join(',')},updated_at=now() WHERE id=${values.length}`,values);}
+      if(assignment){
+        await client.query('UPDATE user_assignments SET is_current=false,effective_until=$2 WHERE user_id=$1 AND is_current',[id,assignment.effectiveAt]);
+        await client.query(
+          'INSERT INTO user_assignments(id,user_id,customer_id,site_id,effective_from,is_current,changed_by,created_at) VALUES($1,$2,$3,$4,$5,true,$6,$5)',
+          [`ASN-${id}-${Date.now()}`,id,assignment.customerId,assignment.siteId,assignment.effectiveAt,assignment.changedBy],
+        );
+      }
+      const result=await client.query('SELECT u.*,a.customer_id,a.site_id FROM users u LEFT JOIN user_assignments a ON a.user_id=u.id AND a.is_current WHERE u.id=$1',[id]);
+      return result.rows[0]?mapUser(result.rows[0]):undefined;
+    }),
+    resetPassword: async (id, passwordHash, changedAt) => {
+      const result=await query('UPDATE users SET password_hash=$2,must_change_password=false,password_changed_at=$3,updated_at=now() WHERE id=$1 RETURNING *',[id,passwordHash,changedAt]);
+      if(!result.rows[0]) return undefined;
+      const assignment=await query('SELECT customer_id,site_id FROM user_assignments WHERE user_id=$1 AND is_current',[id]);
+      return mapUser({...result.rows[0],...assignment.rows[0]});
+    },
   },
 
   customers: {
@@ -281,6 +393,19 @@ export const postgresRepositories: RepositoryBundle = {
       const { rows, total, page } = await pageQuery('SELECT * FROM customers ORDER BY name', 'SELECT count(*) FROM customers', [], request);
       return toPage(rows.map(mapCustomer), total, page);
     },
+    create: async (customer) => {
+      try {
+        const result=await query('INSERT INTO customers(id,code,name,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[customer.id,customer.code,customer.name,customer.status,customer.createdAt,customer.updatedAt]);
+        return mapCustomer(result.rows[0]);
+      } catch(error:any){if(error?.code==='23505') throw new RepositoryError('CUSTOMER_CONFLICT','Kode Customer sudah digunakan.',409);throw error;}
+    },
+    update: async (id, updates) => {
+      const fields:string[]=[]; const values:unknown[]=[];
+      for(const [key,column] of [['name','name'],['status','status']] as const) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      if(!fields.length) return postgresRepositories.customers.findById(id);
+      values.push(id); const result=await query(`UPDATE customers SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      return result.rows[0]?mapCustomer(result.rows[0]):undefined;
+    },
   },
 
   sites: {
@@ -291,6 +416,19 @@ export const postgresRepositories: RepositoryBundle = {
     list: async (request) => {
       const { rows, total, page } = await pageQuery('SELECT * FROM sites ORDER BY name', 'SELECT count(*) FROM sites', [], request);
       return toPage(rows.map(mapSite), total, page);
+    },
+    create: async (site) => {
+      try {
+        const result=await query('INSERT INTO sites(id,customer_id,code,name,personnel_capacity,target_rounds_per_shift,timezone,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',[site.id,site.customerId,site.code||site.id,site.name,site.personnelCapacity,site.targetRoundsPerShift||1,site.timezone,site.status,site.createdAt,site.updatedAt]);
+        return mapSite(result.rows[0]);
+      } catch(error:any){if(error?.code==='23505') throw new RepositoryError('SITE_CONFLICT','Kode Site sudah digunakan.',409);throw error;}
+    },
+    update: async (id, updates) => {
+      const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={name:'name',status:'status',personnelCapacity:'personnel_capacity',targetRoundsPerShift:'target_rounds_per_shift'};
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      if(!fields.length) return postgresRepositories.sites.findById(id);
+      values.push(id); const result=await query(`UPDATE sites SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      return result.rows[0]?mapSite(result.rows[0]):undefined;
     },
   },
 
@@ -308,7 +446,32 @@ export const postgresRepositories: RepositoryBundle = {
       if (!result.rows[0]) return undefined;
       return { ...mapCheckpoint(result.rows[0]), qrToken: token };
     },
+    list: async (request) => {
+      const {rows,total,page}=await pageQuery('SELECT * FROM checkpoints ORDER BY site_id,code','SELECT count(*) FROM checkpoints',[],request);
+      return toPage(rows.map(mapCheckpoint),total,page);
+    },
     listBySite: async (siteId) => (await query('SELECT * FROM checkpoints WHERE site_id=$1 ORDER BY code', [siteId])).rows.map(mapCheckpoint),
+    create: async (checkpoint) => {
+      try {
+        const result=await query('INSERT INTO checkpoints(id,site_id,code,name,latitude,longitude,coordinate_method,gps_accuracy,gps_captured_at,radius_meter,status,qr_status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',[checkpoint.id,checkpoint.siteId,checkpoint.code,checkpoint.name,checkpoint.latitude,checkpoint.longitude,checkpoint.coordinateMethod||'MANUAL',checkpoint.gpsAccuracyM||null,checkpoint.gpsCapturedAt||null,checkpoint.radiusMeters,checkpoint.status,checkpoint.qrStatus,checkpoint.createdAt,checkpoint.updatedAt]);
+        return mapCheckpoint(result.rows[0]);
+      } catch(error:any){if(error?.code==='23505') throw new RepositoryError('CHECKPOINT_CONFLICT','Kode checkpoint sudah digunakan pada site ini.',409);throw error;}
+    },
+    update: async (id, updates) => {
+      const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={name:'name',latitude:'latitude',longitude:'longitude',radiusMeters:'radius_meter',status:'status',qrStatus:'qr_status',coordinateMethod:'coordinate_method',gpsAccuracyM:'gps_accuracy',gpsCapturedAt:'gps_captured_at'};
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      if(!fields.length) return postgresRepositories.checkpoints.findById(id);
+      values.push(id); const result=await query(`UPDATE checkpoints SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      return result.rows[0]?mapCheckpoint(result.rows[0]):undefined;
+    },
+    replaceToken: async (id, token, actorUserId, activate) => transaction(async (client) => {
+      const cp=await client.query('SELECT * FROM checkpoints WHERE id=$1 FOR UPDATE',[id]); if(!cp.rows[0]) return undefined;
+      await client.query("UPDATE checkpoint_tokens SET status='REVOKED',revoked_at=now() WHERE checkpoint_id=$1 AND status='ACTIVE'",[id]);
+      const tokenHash=createHash('sha256').update(token).digest('hex');
+      await client.query('INSERT INTO checkpoint_tokens(id,checkpoint_id,token_hash,token_version,status,generated_at,created_by) VALUES($1,$2,$3,COALESCE((SELECT max(token_version)+1 FROM checkpoint_tokens WHERE checkpoint_id=$2),1),$4,now(),$5)',[`TOK-${id}-${Date.now()}`,id,tokenHash,activate?'ACTIVE':'REVOKED',actorUserId]);
+      const result=await client.query('UPDATE checkpoints SET qr_status=$2,updated_at=now() WHERE id=$1 RETURNING *',[id,activate?'ACTIVE':'INACTIVE']);
+      return {...mapCheckpoint(result.rows[0]),qrToken:token};
+    }),
   },
 
   sessions: {
@@ -364,6 +527,23 @@ export const postgresRepositories: RepositoryBundle = {
       const result = client ? await client.query(updateSql, values) : await query(updateSql, values);
       return result.rows[0] ? mapSession(result.rows[0]) : undefined;
     },
+    completeAtomic: async (id, userId, updates) => transaction(async (client) => {
+      const current=await client.query("SELECT * FROM shift_sessions WHERE id=$1 FOR UPDATE",[id]);
+      if(!current.rows[0]||current.rows[0].user_id!==userId) throw new RepositoryError('SESSION_NOT_FOUND','Active session milik Anda tidak ditemukan.',404);
+      if(current.rows[0].status!=='ACTIVE') throw new RepositoryError('SESSION_NOT_ACTIVE','Session sudah tidak aktif.',409);
+      const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={status:'status',endedAt:'ended_at',endDocumentationCompleted:'end_documentation_completed',endDocumentationAt:'end_documentation_at',startDocumentationCompleted:'start_documentation_completed',startDocumentationAt:'start_documentation_at',totalValid:'checkpoint_completed'};
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      values.push(id); const result=await client.query(`UPDATE shift_sessions SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      return mapSession(result.rows[0]);
+    }),
+    forceCloseAtomic: async (id, actorUserId, actorRole, reason) => transaction(async (client) => {
+      const current=await client.query('SELECT * FROM shift_sessions WHERE id=$1 FOR UPDATE',[id]);
+      if(!current.rows[0]) throw new RepositoryError('SESSION_NOT_FOUND','Session tidak ditemukan.',404);
+      if(current.rows[0].status!=='ACTIVE') throw new RepositoryError('SESSION_NOT_ACTIVE','Session sudah tidak aktif.',409);
+      const result=await client.query("UPDATE shift_sessions SET status='FORCE_CLOSED',ended_at=now(),force_closed=true,force_closed_by=$2,force_close_role=$3,force_close_reason=$4,force_closed_at=now(),updated_at=now() WHERE id=$1 RETURNING *",[id,actorUserId,actorRole,reason]);
+      return mapSession(result.rows[0]);
+    }),
+    countActiveBySite: async (siteId) => Number((await query<{count:string}>("SELECT count(*) FROM shift_sessions WHERE site_id=$1 AND status='ACTIVE'",[siteId])).rows[0]?.count||0),
     list: async (request) => {
       const { rows, total, page } = await pageQuery(
         'SELECT s.*,u.npk FROM shift_sessions s LEFT JOIN users u ON u.id=s.user_id ORDER BY s.created_at DESC',
@@ -472,6 +652,56 @@ export const postgresRepositories: RepositoryBundle = {
         [sessionId],
       )
     ).rows.map(mapLog),
+  },
+
+  handovers: {
+    findById: async (id) => {
+      const result=await query("SELECT h.*,array_remove(array_agg(m.storage_key ORDER BY m.captured_at),NULL) AS media_urls,min(m.storage_key) AS primary_media_url FROM handovers h LEFT JOIN handover_media hm ON hm.handover_id=h.id LEFT JOIN media m ON m.id=hm.media_id WHERE h.id=$1 GROUP BY h.id",[id]);
+      return result.rows[0]?mapHandover(result.rows[0]):undefined;
+    },
+    list: async (filter, request) => {
+      const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}${values.length}`);};
+      if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=${values.length} OR h.to_user_id=${values.length})`);}
+      const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
+      const {rows,total,page}=await pageQuery(`SELECT h.* FROM handovers h${where} ORDER BY h.created_at DESC`,`SELECT count(*) FROM handovers h${where}`,values,request);
+      return toPage(rows.map(mapHandover),total,page);
+    },
+    create: async (h) => {
+      const result=await query('INSERT INTO handovers(id,session_id,site_id,operational_date,shift_code,handover_type,from_user_id,to_user_id,event_at,latitude,longitude,condition_status,personnel_status,equipment_status,keys_status,vehicle_status,outstanding_issues,handover_notes,item_name,item_quantity,item_condition,handed_from,handed_to,is_taruna,ack_from,ack_to,status,created_by,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING *',[h.id,h.sessionId||null,h.siteId,h.shiftDate,h.shiftCode,h.handoverType,h.fromUserId,h.toUserId||null,h.eventAt,h.latitude||null,h.longitude||null,h.conditionStatus,h.personnelStatus,h.equipmentStatus,h.keysStatus,h.vehicleStatus,h.outstandingIssues||null,h.handoverNotes||null,h.itemName||null,h.itemQuantity||null,h.itemCondition||null,h.handedFrom||null,h.handedTo||null,!!h.isTaruna,h.ackFrom,h.ackTo,h.status,h.createdBy,h.createdAt,h.updatedAt]);
+      return mapHandover(result.rows[0]);
+    },
+    update: async (id, updates) => {
+      const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={toUserId:'to_user_id',ackTo:'ack_to',status:'status',handoverNotes:'handover_notes'};
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      if(!fields.length) return postgresRepositories.handovers.findById(id);
+      values.push(id); const result=await query(`UPDATE handovers SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      return result.rows[0]?mapHandover(result.rows[0]):undefined;
+    },
+  },
+
+  incidents: {
+    findById: async (id) => {
+      const result=await query("SELECT i.*,array_remove(array_agg(m.storage_key ORDER BY m.captured_at),NULL) AS media_urls,min(m.storage_key) AS primary_media_url FROM incident_reports i LEFT JOIN incident_media im ON im.incident_id=i.id LEFT JOIN media m ON m.id=im.media_id WHERE i.id=$1 GROUP BY i.id",[id]);
+      return result.rows[0]?mapIncident(result.rows[0]):undefined;
+    },
+    list: async (filter, request) => {
+      const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}${values.length}`);};
+      if(filter.siteId)add('i.site_id=',filter.siteId); if(filter.shiftCode)add('i.shift_code=',filter.shiftCode); if(filter.userId)add('i.user_id=',filter.userId); if(filter.status)add('i.status=',filter.status);
+      const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
+      const {rows,total,page}=await pageQuery(`SELECT i.* FROM incident_reports i${where} ORDER BY i.incident_at DESC`,`SELECT count(*) FROM incident_reports i${where}`,values,request);
+      return toPage(rows.map(mapIncident),total,page);
+    },
+    create: async (i) => {
+      const result=await query('INSERT INTO incident_reports(id,session_id,customer_id,site_id,user_id,incident_at,shift_code,operational_date,category,severity,title,location_text,latitude,longitude,notes,chronology,initial_action,follow_up,person_involved,witness,vehicle_involved,asset_involved,police_report_no,external_party,status,escalated,escalated_to,closed_at,created_by,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31) RETURNING *',[i.id,i.sessionId||null,i.customerId||null,i.siteId,i.userId,i.incidentAt,i.shiftCode,i.shiftDate,i.category,i.severity,i.title,i.locationText,i.latitude||null,i.longitude||null,i.notes||null,i.chronology,i.initialAction,i.followUp||null,i.personInvolved||null,i.witness||null,i.vehicleInvolved||null,i.assetInvolved||null,i.policeReportNo||null,i.externalParty||null,i.status,i.escalated,i.escalatedTo||null,i.closedAt||null,i.createdBy,i.createdAt,i.updatedAt]);
+      return mapIncident(result.rows[0]);
+    },
+    update: async (id, updates) => {
+      const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={status:'status',followUp:'follow_up',closedAt:'closed_at'};
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      if(!fields.length) return postgresRepositories.incidents.findById(id);
+      values.push(id); const result=await query(`UPDATE incident_reports SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      return result.rows[0]?mapIncident(result.rows[0]):undefined;
+    },
   },
 
   alerts: {
