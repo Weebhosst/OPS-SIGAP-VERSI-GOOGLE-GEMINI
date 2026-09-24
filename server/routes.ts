@@ -1140,9 +1140,10 @@ apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, 
 // SUPER ADMIN COMMAND CENTER & MANAGEMENT
 // -------------------------------------------------------------
 
-apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, requireLegacyJsonProvider, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
   const adminId = req.user!.id;
-  const filterState = db.getAdminFilterState(adminId) || {
+  const storedFilter = await repositories.adminState.get(adminId);
+  const filterState = storedFilter || {
     id: `AFS-${adminId}`,
     userId: adminId,
     siteId: null,
@@ -1152,98 +1153,83 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, requir
   };
 
   const { dateString: todayJakarta } = getJakartaDateParts();
+  const siteId = filterState.siteId || undefined;
+  const shiftCode = filterState.shiftCode || undefined;
+  const memberUserId = filterState.memberUserId || undefined;
 
-  // Filter conditions
-  const siteId = filterState.siteId || null;
-  const shiftCode = filterState.shiftCode || null;
-  const memberUserId = filterState.memberUserId || null;
+  const sessionFilter:any = { status: 'ACTIVE' };
+  if (siteId) sessionFilter.siteId = siteId;
+  if (shiftCode) sessionFilter.shiftCode = shiftCode;
+  if (memberUserId) sessionFilter.userId = memberUserId;
 
-  // 1. Patroli Aktif
-  const allSessions = db.getPatrolSessions();
-  const activePatrols = allSessions.filter((s) => {
-    if (s.status !== 'ACTIVE') return false;
-    if (siteId && s.siteId !== siteId) return false;
-    if (shiftCode && s.shiftCode !== shiftCode) return false;
-    if (memberUserId && s.userId !== memberUserId) return false;
-    return true;
-  });
+  const incidentFilter:any = {};
+  if (siteId) incidentFilter.siteId = siteId;
+  if (shiftCode) incidentFilter.shiftCode = shiftCode;
+  if (memberUserId) incidentFilter.userId = memberUserId;
 
-  // 2. Kejadian Open (Incidents with status != CLOSED)
-  const allIncidents = db.getIncidents();
-  const openIncidents = allIncidents.filter((i) => {
-    if (i.status === 'CLOSED') return false;
-    if (siteId && i.siteId !== siteId) return false;
-    if (shiftCode && i.shiftCode !== shiftCode) return false;
-    if (memberUserId && i.userId !== memberUserId) return false;
-    return true;
-  });
+  const handoverFilter:any = {};
+  if (siteId) handoverFilter.siteId = siteId;
+  if (shiftCode) handoverFilter.shiftCode = shiftCode;
+  if (memberUserId) handoverFilter.userId = memberUserId;
 
-  // 3. Rejected Hari Ini (Logs validationStatus == REJECTED today Jakarta time)
-  const allLogs = db.getPatrolLogs();
-  const rejectedTodayLogs = allLogs.filter((l) => {
-    if (l.validationStatus !== 'VALID') {
-      // Check date
-      const logDate = getJakartaDateParts(new Date(l.createdAt)).dateString;
-      if (logDate !== todayJakarta) return false;
-      if (siteId && l.siteId !== siteId) return false;
-      if (memberUserId && l.userId !== memberUserId) return false;
-      return true;
-    }
-    return false;
-  });
+  const [
+    activeSessionsPage,
+    incidentsPage,
+    handoversPage,
+    alertsPage,
+    mediaPage,
+    sitesPage,
+    usersPage,
+  ] = await Promise.all([
+    repositories.sessions.listFiltered(sessionFilter, { limit: 500, offset: 0 }),
+    repositories.incidents.list(incidentFilter, { limit: 500, offset: 0 }),
+    repositories.handovers.list(handoverFilter, { limit: 500, offset: 0 }),
+    repositories.alerts.list(undefined, { limit: 500, offset: 0 }),
+    getOperationalMedia({ siteId, userId: memberUserId, shiftCode }, { limit: 12, offset: 0 }),
+    repositories.sites.list({ limit: 500, offset: 0 }),
+    repositories.users.list({ limit: 500, offset: 0 }),
+  ]);
 
-  // 4. Serah Terima Hari Ini (Handovers with shiftDate or createdAt == today Jakarta)
-  const allHandovers = db.getHandovers();
-  const handoversToday = allHandovers.filter((h) => {
-    const hDate = h.shiftDate || getJakartaDateParts(new Date(h.createdAt)).dateString;
-    if (hDate !== todayJakarta) return false;
-    if (siteId && h.siteId !== siteId) return false;
-    if (shiftCode && h.shiftCode !== shiftCode) return false;
-    if (memberUserId && h.fromUserId !== memberUserId && h.toUserId !== memberUserId) return false;
-    return true;
-  });
-
-  // KPIs
-  const kpis = {
-    patroliAktif: activePatrols.length,
-    kejadianOpen: openIncidents.length,
-    rejectedHariIni: rejectedTodayLogs.length,
-    serahTerimaHariIni: handoversToday.length,
-  };
-
-  // Recent Validation Alerts (REJECTED and REVIEW)
-  const validationAlerts = db.getValidationAlerts()
+  const activePatrols = activeSessionsPage.items;
+  const openIncidents = incidentsPage.items.filter((incident) => incident.status !== 'CLOSED');
+  const handoversToday = handoversPage.items.filter((handover) => handover.shiftDate === todayJakarta);
+  const filteredAlerts = alertsPage.items
     .filter((alert) => (!siteId || alert.siteId === siteId) && (!memberUserId || alert.userId === memberUserId))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10)
-    .map((alert) => ({ ...alert, patrolLog: db.findPatrolLogById(alert.patrolLogId) || null }));
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const rejectedToday = filteredAlerts.filter((alert) => getJakartaDateParts(new Date(alert.createdAt)).dateString === todayJakarta);
 
-  // Critical Incidents
-  const criticalIncidents = allIncidents
-    .filter((i) => i.severity === 'TINGGI' || i.severity === 'KRITIS' || i.category === 'MENONJOL' || i.status !== 'CLOSED')
+  const recentAlerts = await Promise.all(filteredAlerts.slice(0, 10).map(async (alert) => ({
+    ...alert,
+    patrolLog: await repositories.patrol.findById(alert.patrolLogId) || null,
+  })));
+
+  const criticalIncidents = incidentsPage.items
+    .filter((incident) => incident.severity === 'TINGGI' || incident.severity === 'KRITIS' || incident.category === 'MENONJOL' || incident.status !== 'CLOSED')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 8);
 
-  // Recent Media
-  const recentMedia = (await getOperationalMedia({ siteId: siteId || undefined, userId: memberUserId || undefined, shiftCode: shiftCode || undefined }, { limit: 12, offset: 0 })).items;
-
-  // Master options for filter dropdowns
-  const sites = db.getSites();
-  const users = db.getUsers().filter((u) => u.role === 'ANGGOTA');
+  const users = usersPage.items
+    .filter((user) => user.role === 'ANGGOTA')
+    .map(({ passwordHash, ...user }) => user);
 
   res.json({
     success: true,
     filterState,
-    kpis,
+    kpis: {
+      patroliAktif: activePatrols.length,
+      kejadianOpen: openIncidents.length,
+      rejectedHariIni: rejectedToday.length,
+      serahTerimaHariIni: handoversToday.length,
+    },
     panels: {
       activePatrols: activePatrols.slice(0, 8),
-      validationAlerts,
+      validationAlerts: recentAlerts,
       recentHandovers: handoversToday.slice(0, 8),
       criticalIncidents,
-      recentMedia,
+      recentMedia: mediaPage.items,
     },
     options: {
-      sites,
+      sites: sitesPage.items,
       users,
       shifts: [
         { code: 'SHIFT_1', name: 'Shift 1 (07:00 - 15:00)' },
@@ -1254,9 +1240,9 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, requir
   });
 });
 
-apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
   const { siteId, shiftCode, memberUserId } = req.body;
-  const updated = db.setAdminFilterState(req.user!.id, {
+  const updated = await repositories.adminState.set(req.user!.id, {
     siteId: siteId === '' ? null : siteId,
     shiftCode: shiftCode === '' ? null : shiftCode,
     memberUserId: memberUserId === '' ? null : memberUserId,
@@ -1264,8 +1250,8 @@ apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, require
   res.json({ success: true, filterState: updated });
 });
 
-apiRouter.post('/admin/filter-state/reset', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const updated = db.setAdminFilterState(req.user!.id, {
+apiRouter.post('/admin/filter-state/reset', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const updated = await repositories.adminState.set(req.user!.id, {
     siteId: null,
     shiftCode: null,
     memberUserId: null,
