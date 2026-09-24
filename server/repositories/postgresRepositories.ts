@@ -80,6 +80,12 @@ const mapUser = (row: any): User => ({
   status: row.status,
   customerId: row.customer_id || null,
   siteId: row.site_id || null,
+  assignmentHistory: Array.isArray(row.assignment_history) ? row.assignment_history.map((item:any) => ({
+    customerId: item.customerId ?? null,
+    siteId: item.siteId ?? null,
+    effectiveAt: iso(item.effectiveAt) || String(item.effectiveAt),
+    changedBy: item.changedBy ?? null,
+  })) : undefined,
   mustChangePassword: row.must_change_password,
   passwordChangedAt: iso(row.password_changed_at),
   createdAt: iso(row.created_at)!,
@@ -302,6 +308,23 @@ const mapMedia = (row: any): MediaGalleryItem => {
   };
 };
 
+const USER_SELECT = `SELECT u.*,a.customer_id,a.site_id,
+  (
+    SELECT json_agg(
+      json_build_object(
+        'customerId',h.customer_id,
+        'siteId',h.site_id,
+        'effectiveAt',h.effective_from,
+        'changedBy',h.changed_by
+      )
+      ORDER BY h.effective_from
+    )
+    FROM user_assignments h
+    WHERE h.user_id=u.id
+  ) AS assignment_history
+  FROM users u
+  LEFT JOIN user_assignments a ON a.user_id=u.id AND a.is_current`;
+
 async function findSession(id: string, client?: PoolClient): Promise<PatrolSession | undefined> {
   const sql = 'SELECT s.*,u.npk FROM shift_sessions s LEFT JOIN users u ON u.id=s.user_id WHERE s.id=$1';
   const result = client ? await client.query(sql, [id]) : await query(sql, [id]);
@@ -354,16 +377,16 @@ export const postgresRepositories: RepositoryBundle = {
 
   users: {
     findById: async (id) => {
-      const result = await query('SELECT u.*,a.customer_id,a.site_id FROM users u LEFT JOIN user_assignments a ON a.user_id=u.id AND a.is_current WHERE u.id=$1', [id]);
+      const result = await query(`${USER_SELECT} WHERE u.id=$1`, [id]);
       return result.rows[0] ? mapUser(result.rows[0]) : undefined;
     },
     findByNpk: async (npk) => {
-      const result = await query('SELECT u.*,a.customer_id,a.site_id FROM users u LEFT JOIN user_assignments a ON a.user_id=u.id AND a.is_current WHERE u.npk=$1', [npk]);
+      const result = await query(`${USER_SELECT} WHERE u.npk=$1`, [npk]);
       return result.rows[0] ? mapUser(result.rows[0]) : undefined;
     },
     list: async (request) => {
       const { rows, total, page } = await pageQuery(
-        'SELECT u.*,a.customer_id,a.site_id FROM users u LEFT JOIN user_assignments a ON a.user_id=u.id AND a.is_current ORDER BY u.name',
+        `${USER_SELECT} ORDER BY u.name`,
         'SELECT count(*) FROM users',
         [],
         request,
@@ -382,7 +405,7 @@ export const postgresRepositories: RepositoryBundle = {
             [`ASN-${user.id}-${Date.now()}`,user.id,user.customerId||null,user.siteId||null,user.assignmentHistory?.at(-1)?.effectiveAt||user.createdAt,user.assignmentHistory?.at(-1)?.changedBy||null],
           );
         }
-        return mapUser({ ...result.rows[0], customer_id:user.customerId||null, site_id:user.siteId||null });
+        return mapUser({ ...result.rows[0], customer_id:user.customerId||null, site_id:user.siteId||null, assignment_history:user.assignmentHistory||[] });
       } catch (error:any) {
         if (error?.code === '23505') throw new RepositoryError('USER_CONFLICT','NPK atau identitas pengguna sudah digunakan.',409);
         throw error;
@@ -404,10 +427,9 @@ export const postgresRepositories: RepositoryBundle = {
       return result.rows[0]?mapUser(result.rows[0]):undefined;
     }),
     resetPassword: async (id, passwordHash, changedAt) => {
-      const result=await query('UPDATE users SET password_hash=$2,must_change_password=false,password_changed_at=$3,updated_at=now() WHERE id=$1 RETURNING *',[id,passwordHash,changedAt]);
+      const result=await query('UPDATE users SET password_hash=$2,must_change_password=false,password_changed_at=$3,updated_at=now() WHERE id=$1 RETURNING id',[id,passwordHash,changedAt]);
       if(!result.rows[0]) return undefined;
-      const assignment=await query('SELECT customer_id,site_id FROM user_assignments WHERE user_id=$1 AND is_current',[id]);
-      return mapUser({...result.rows[0],...assignment.rows[0]});
+      return postgresRepositories.users.findById(id);
     },
   },
 
