@@ -85,6 +85,7 @@ export interface PatrolRepository {
   addLogAtomic(log: PatrolLog): Promise<PatrolLog>;
   listBySession(sessionId: string, page: PageRequest): Promise<Page<PatrolLog>>;
   listAllBySession(sessionId: string): Promise<PatrolLog[]>;
+  countAll(): Promise<number>;
   overrideValidation(id: string, newStatus: PatrolLog['validationStatus'], reason: string): Promise<PatrolLog | undefined>;
 }
 
