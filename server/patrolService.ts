@@ -323,6 +323,24 @@ export async function validateAndProcessScan(input: ScanInput): Promise<Validati
     return resultFromLog(log, session, checkpoint);
   }
 
+  if (repositories.provider === 'postgres' && input.photoUrl.startsWith('data:')) {
+    const log = await persistRejected(
+      input,
+      session,
+      logId,
+      'MEDIA_STORAGE_NOT_READY',
+      'Penyimpanan foto produksi belum aktif. Scan tidak dihitung agar bukti foto tidak hilang.',
+      {
+        checkpointId: checkpoint.id,
+        calculatedDistanceM: distance,
+        validationStatus: 'REVIEW',
+        isLowGpsAccuracy,
+        roundNumber: currentRound,
+      },
+    );
+    return resultFromLog(log, session, checkpoint);
+  }
+
   const now = new Date().toISOString();
   const validLog = createLog(input, {
     id: logId,
