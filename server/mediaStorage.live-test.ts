@@ -50,7 +50,7 @@ try {
   assert.equal(downloaded.mimeType, 'image/png');
   assert.deepEqual(downloaded.body, parsed.buffer);
 
-  console.log('PASS Railway S3 bucket HEAD connectivity');
+  console.log('PASS Railway S3 signed object GET connectivity probe');
   console.log('PASS Railway S3 object PUT');
   console.log('PASS Railway S3 object GET');
 } finally {
