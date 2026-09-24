@@ -135,3 +135,9 @@ jobs:
 
       - name: Live PostgreSQL migrations, import, and repository integration
         run: npm run test:postgres
+
+      - name: Read-only master data audit smoke test
+        run: |
+          npm run audit:master-data > /tmp/master-data-audit.json
+          grep -q '"mode": "READ_ONLY"' /tmp/master-data-audit.json
+          grep -q '"source": "PRODUCTION_POSTGRESQL"' /tmp/master-data-audit.json
