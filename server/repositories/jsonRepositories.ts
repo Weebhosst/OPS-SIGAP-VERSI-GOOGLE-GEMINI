@@ -66,22 +66,60 @@ export const jsonRepositories: RepositoryBundle = {
     findById: async (id) => db.findUserById(id),
     findByNpk: async (npk) => db.findUserByNpk(npk),
     list: async (page) => paginate(db.getUsers(), page),
+    create: async (user) => db.addUser(user),
+    update: async (id, updates, assignment) => {
+      const current = db.findUserById(id);
+      if (!current) return undefined;
+      const next = assignment
+        ? {
+            ...updates,
+            customerId: assignment.customerId,
+            siteId: assignment.siteId,
+            assignmentHistory: [
+              ...(current.assignmentHistory || []),
+              {
+                customerId: assignment.customerId,
+                siteId: assignment.siteId,
+                effectiveAt: assignment.effectiveAt,
+                changedBy: assignment.changedBy,
+              },
+            ],
+          }
+        : updates;
+      return db.updateUser(id, next);
+    },
+    resetPassword: async (id, passwordHash, changedAt) => db.updateUser(id, {
+      passwordHash,
+      mustChangePassword: false,
+      passwordChangedAt: changedAt,
+    }),
   },
 
   customers: {
     findById: async (id) => db.findCustomerById(id),
     list: async (page) => paginate(db.getCustomers(), page),
+    create: async (customer) => db.addCustomer(customer),
+    update: async (id, updates) => db.updateCustomer(id, updates),
   },
 
   sites: {
     findById: async (id) => db.findSiteById(id),
     list: async (page) => paginate(db.getSites(), page),
+    create: async (site) => db.addSite(site),
+    update: async (id, updates) => db.updateSite(id, updates),
   },
 
   checkpoints: {
     findById: async (id) => db.findCheckpointById(id),
     findByToken: async (token) => db.findCheckpointByToken(token),
+    list: async (page) => paginate(db.getCheckpoints(), page),
     listBySite: async (siteId) => db.getCheckpoints(siteId),
+    create: async (checkpoint) => db.addCheckpoint(checkpoint),
+    update: async (id, updates) => db.updateCheckpoint(id, updates),
+    replaceToken: async (id, token, _actorUserId, activate) => db.updateCheckpoint(id, {
+      qrToken: token,
+      qrStatus: activate ? 'ACTIVE' : 'INACTIVE',
+    }),
   },
 
   sessions: {
@@ -97,6 +135,28 @@ export const jsonRepositories: RepositoryBundle = {
       return db.createPatrolSession(session);
     },
     update: async (id, updates) => db.updatePatrolSession(id, updates),
+    completeAtomic: async (id, userId, updates) => {
+      const session = db.findSessionById(id);
+      if (!session || session.userId !== userId) throw new RepositoryError('SESSION_NOT_FOUND', 'Active session milik Anda tidak ditemukan.', 404);
+      if (session.status !== 'ACTIVE') throw new RepositoryError('SESSION_NOT_ACTIVE', 'Session sudah tidak aktif.', 409);
+      return db.updatePatrolSession(id, updates)!;
+    },
+    forceCloseAtomic: async (id, actorUserId, actorRole, reason) => {
+      const session = db.findSessionById(id);
+      if (!session) throw new RepositoryError('SESSION_NOT_FOUND', 'Session tidak ditemukan.', 404);
+      if (session.status !== 'ACTIVE') throw new RepositoryError('SESSION_NOT_ACTIVE', 'Session sudah tidak aktif.', 409);
+      const now = new Date().toISOString();
+      return db.updatePatrolSession(id, {
+        status: 'FORCE_CLOSED',
+        endedAt: now,
+        forceClosed: true,
+        forceCloseBy: actorUserId,
+        forceCloseRole: actorRole as any,
+        forceCloseReason: reason,
+        forceCloseAt: now,
+      })!;
+    },
+    countActiveBySite: async (siteId) => db.getActiveSessionsForSite(siteId).length,
     list: async (page) => paginate(db.getPatrolSessions(), page),
     listFiltered: async (filter, page) => paginate(db.getPatrolSessions().filter((session) => sessionMatches(session as any, filter)), page),
   },
@@ -118,6 +178,35 @@ export const jsonRepositories: RepositoryBundle = {
     },
     listBySession: async (sessionId, page) => paginate(db.getPatrolLogs(sessionId), page),
     listAllBySession: async (sessionId) => db.getPatrolLogs(sessionId),
+  },
+
+  handovers: {
+    findById: async (id) => db.findHandoverById(id),
+    list: async (filter, page) => paginate(
+      db.getHandovers({
+        siteId: filter.siteId || null,
+        shiftCode: filter.shiftCode || null,
+        userId: filter.userId || null,
+      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      page,
+    ),
+    create: async (handover) => db.addHandover(handover),
+    update: async (id, updates) => db.updateHandover(id, updates),
+  },
+
+  incidents: {
+    findById: async (id) => db.findIncidentById(id),
+    list: async (filter, page) => paginate(
+      db.getIncidents({
+        siteId: filter.siteId || null,
+        shiftCode: filter.shiftCode || null,
+        userId: filter.userId || null,
+        status: filter.status || null,
+      }).sort((a, b) => new Date(b.incidentAt).getTime() - new Date(a.incidentAt).getTime()),
+      page,
+    ),
+    create: async (incident) => db.addIncident(incident),
+    update: async (id, updates) => db.updateIncident(id, updates),
   },
 
   alerts: {
