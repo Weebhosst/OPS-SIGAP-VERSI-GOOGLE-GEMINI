@@ -101,6 +101,29 @@ try {
   const userTwo = await createTestUser(userTwoId, `91${suffix.slice(-6)}2`);
   assert.equal((await repositories.users.findById(userOne.id))?.siteId, siteId);
 
+  const authTokenHash = `AUTH-HASH-${suffix}`;
+  const authSession = await repositories.authSessions.create({
+    id: `AUTH-PG-${suffix}`,
+    tokenHash: authTokenHash,
+    userId: userOne.id,
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    createdAt: now,
+    lastSeenAt: now,
+    revokedAt: null,
+    ipAddress: '127.0.0.1',
+    userAgent: 'postgres-live-test',
+  });
+  assert.equal((await repositories.authSessions.findActiveByTokenHash(authTokenHash, now))?.id, authSession.id);
+  await repositories.authSessions.touch(authSession.id, new Date().toISOString());
+
+  const resetUser = await repositories.users.resetPassword(userTwo.id, bcrypt.hashSync(userTwo.npk, 4), new Date().toISOString());
+  assert.equal(resetUser?.mustChangePassword, true, 'Reset password harus memaksa rotasi password.');
+  const changedUser = await repositories.users.changePassword(userTwo.id, bcrypt.hashSync('SecureTest123', 4), new Date().toISOString());
+  assert.equal(changedUser?.mustChangePassword, false, 'Change password harus menyelesaikan rotasi password.');
+
+  await repositories.authSessions.revokeByTokenHash(authTokenHash, new Date().toISOString());
+  assert.equal(await repositories.authSessions.findActiveByTokenHash(authTokenHash, new Date().toISOString()), undefined);
+
   const checkpoint = await repositories.checkpoints.create({
     id: checkpointId,
     siteId,
@@ -379,6 +402,7 @@ try {
   console.log('PASS JSON -> PostgreSQL live import and idempotency');
   console.log('PASS PostgreSQL provider health and imported data visibility');
   console.log('PASS PostgreSQL customer/site/user/checkpoint CRUD');
+  console.log('PASS PostgreSQL authenticated session persistence and password rotation');
   console.log('PASS encrypted QR token persistence and hash lookup');
   console.log('PASS PostgreSQL active-session uniqueness and site capacity');
   console.log('PASS PostgreSQL checkpoint uniqueness and validation alert workflow');
