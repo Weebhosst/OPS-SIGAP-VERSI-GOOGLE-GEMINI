@@ -11,7 +11,6 @@ interface AuthContextValue {
   loading: boolean;
   login: (npk: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
-  quickLogin: (npk: string, pass: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -52,15 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const quickLogin = async (npk: string, pass: string) => {
-    setLoading(true);
-    try {
-      await login(npk, pass);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const changePassword = async (currentPassword: string, newPassword: string) => {
     const res = await api.changePassword(currentPassword, newPassword);
     setUser(res.user);
@@ -74,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, quickLogin, changePassword, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, changePassword, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
