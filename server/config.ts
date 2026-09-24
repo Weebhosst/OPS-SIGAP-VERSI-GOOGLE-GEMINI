@@ -14,6 +14,7 @@ export const config = Object.freeze({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT) || 3000,
   sessionSecret: process.env.SESSION_SECRET || '',
+  checkpointTokenSecret: process.env.CHECKPOINT_TOKEN_SECRET || process.env.SESSION_SECRET || '',
   timezone: process.env.APP_TIMEZONE || 'Asia/Jakarta',
   mediaProvider: process.env.MEDIA_PROVIDER || 'local',
   jsonDataFile: process.env.OPS_SIGAP_DATA_FILE || 'data/ops-sigap.json',
