@@ -3,12 +3,14 @@ import type {
   AuditLog,
   Checkpoint,
   Customer,
+  AdminFilterState,
   IncidentReport,
   MediaGalleryItem,
   PatrolLog,
   PatrolSession,
   ShiftCode,
   ShiftHandover,
+  RadiusCalibration,
   Site,
   User,
   ValidationAlert,
@@ -83,6 +85,7 @@ export interface PatrolRepository {
   addLogAtomic(log: PatrolLog): Promise<PatrolLog>;
   listBySession(sessionId: string, page: PageRequest): Promise<Page<PatrolLog>>;
   listAllBySession(sessionId: string): Promise<PatrolLog[]>;
+  overrideValidation(id: string, newStatus: PatrolLog['validationStatus'], reason: string): Promise<PatrolLog | undefined>;
 }
 
 export interface HandoverFilter {
@@ -114,6 +117,16 @@ export interface AlertRepository {
   findById(id: string): Promise<ValidationAlert | undefined>;
   list(status: ValidationAlertStatus | undefined, page: PageRequest): Promise<Page<ValidationAlert>>;
   transition(id: string, action: 'REVIEW' | 'CLOSE' | 'REOPEN', actorUserId: string, closeNote?: string): Promise<ValidationAlert>;
+}
+
+export interface AdminStateRepository {
+  get(userId: string): Promise<AdminFilterState | undefined>;
+  set(userId: string, updates: Partial<AdminFilterState>): Promise<AdminFilterState>;
+}
+
+export interface RadiusCalibrationRepository {
+  list(page: PageRequest): Promise<Page<RadiusCalibration>>;
+  create(entry: RadiusCalibration): Promise<RadiusCalibration>;
 }
 
 export interface MediaFilters {
@@ -150,6 +163,8 @@ export interface RepositoryBundle {
   handovers: HandoverRepository;
   incidents: IncidentRepository;
   alerts: AlertRepository;
+  adminState: AdminStateRepository;
+  radiusCalibrations: RadiusCalibrationRepository;
   media: MediaRepository;
   audit: AuditRepository;
 }
