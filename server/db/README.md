@@ -52,46 +52,65 @@ metadata and a `legacy_json` reference; external media storage is Round 4B.
 The repository tests do not substitute for a live PostgreSQL integration test.
 
 
-## Round 4A.1 cutover safety
+## Round 4A.2 provider cutover
 
-The selected provider is now respected by the patrol validation service and gallery/media query service.
-Those services no longer import the legacy JSON store directly.
+Application routes and operational services now use `RepositoryBundle` instead of importing the
+legacy JSON store directly. The JSON store is initialized only when `DATABASE_PROVIDER=json`.
 
-Some administrative and field-report routes are intentionally still JSON-backed while their repository
-contracts are being migrated. When `DATABASE_PROVIDER=postgres`, those legacy routes return HTTP 503
-with code `POSTGRES_ROUTE_NOT_MIGRATED` instead of touching the JSON file. This is deliberate
-fail-closed behavior to prevent split-brain data.
+Provider-neutral coverage now includes:
 
-Current PostgreSQL-safe flow includes:
+- authentication lookup and password reset
+- Start Shift, Naik Jaga, patrol current/progress, scan, normal Close Shift, Force Close
+- Handover / Serah Terima
+- Incident reporting and status workflow
+- Validation Alert workflow and validation override
+- Customer, Site, Personnel, Checkpoint master CRUD
+- Active Session monitoring and Command Center
+- Admin filter state
+- Radius calibration
+- Gallery/media metadata queries
+- Audit log reads/writes
+- Health counts
 
-- authentication lookup
-- Start Shift transaction and site-capacity enforcement
-- current patrol state / round progress reads
-- patrol scan validation and validation-alert persistence
-- patrol/session list reads
-- gallery/media reads
-- validation-alert workflow
-- audit repository writes used by migrated flows
-- health check
+### Checkpoint token security
 
-Still guarded until the next cutover patch:
+PostgreSQL stores:
 
-- Naik Jaga / Turun Jaga workflow
-- normal Close Shift / Force Close
-- handover CRUD
-- incident CRUD
-- master-data CRUD
-- radius calibration
-- validation override
+- SHA-256 token hash for QR validation
+- AES-256-GCM encrypted token payload for authorized QR re-view/print
+
+Configure a stable secret before using PostgreSQL:
+
+```text
+CHECKPOINT_TOKEN_SECRET=<long-random-secret>
+```
+
+If `CHECKPOINT_TOKEN_SECRET` changes after tokens are created, existing encrypted QR tokens cannot be
+recovered for printing and should be regenerated. Never commit the production secret.
 
 ### Media gate before Round 4B
 
-Camera capture currently produces base64 data URLs. Round 4A must not store those image binaries in
-PostgreSQL. Therefore a valid PostgreSQL patrol scan containing a `data:` photo is returned as
-`REVIEW / MEDIA_STORAGE_NOT_READY` and is not counted as a valid checkpoint. This prevents evidence
-loss and keeps binary media out of PostgreSQL.
+Camera capture currently produces base64 data URLs. Round 4A intentionally refuses base64 evidence
+when PostgreSQL is active and returns `MEDIA_STORAGE_NOT_READY`. This prevents photo binary data from
+being stored inside PostgreSQL and prevents operational actions from being counted without durable
+evidence.
 
-Round 4B must connect an object-storage provider, then remove this temporary gate.
+Round 4B will connect object storage. After that, media metadata remains in PostgreSQL while image
+binary data lives in object storage.
 
-Legacy JSON media import also stores only a `legacy-json:<id>` reference in PostgreSQL metadata.
-The JSON source remains untouched for the later media migration.
+Legacy JSON media import stores only a `legacy-json:<id>` metadata reference and preserves
+incident/handover media relations. The source JSON remains untouched.
+
+## CI
+
+The repository includes `.github/workflows/ci.yml` using Node.js 22 LTS. It runs:
+
+```text
+npm ci
+npm run lint
+npm test
+npm run build
+```
+
+CI always uses an isolated JSON fixture. Live PostgreSQL integration remains a separate gate and must
+be reported as NOT TESTED until a development `DATABASE_URL` is available.
