@@ -5,6 +5,7 @@ import {
   RepositoryError,
   normalizePage,
   toPage,
+  type AuthSessionRecord,
   type MediaFilters,
   type PageRequest,
   type SessionFilter,
@@ -51,6 +52,8 @@ function mediaMatches(item: MediaGalleryItem & { documentType: string }, filters
   return true;
 }
 
+const jsonAuthSessions = new Map<string, AuthSessionRecord>();
+
 function normalizedMedia(filters: MediaFilters = {}) {
   return db.getMedia()
     .map((item) => ({ ...item, documentType: normalizeDocumentType(item) }))
@@ -90,9 +93,45 @@ export const jsonRepositories: RepositoryBundle = {
     },
     resetPassword: async (id, passwordHash, changedAt) => db.updateUser(id, {
       passwordHash,
+      mustChangePassword: true,
+      passwordChangedAt: changedAt,
+    }),
+    changePassword: async (id, passwordHash, changedAt) => db.updateUser(id, {
+      passwordHash,
       mustChangePassword: false,
       passwordChangedAt: changedAt,
     }),
+  },
+
+  authSessions: {
+    create: async (session) => {
+      jsonAuthSessions.set(session.tokenHash, session);
+      return session;
+    },
+    findActiveByTokenHash: async (tokenHash, now) => {
+      const session = jsonAuthSessions.get(tokenHash);
+      if (!session || session.revokedAt || session.expiresAt <= now) return undefined;
+      return session;
+    },
+    touch: async (id, at) => {
+      for (const [key, session] of jsonAuthSessions.entries()) {
+        if (session.id === id) {
+          jsonAuthSessions.set(key, { ...session, lastSeenAt: at });
+          return;
+        }
+      }
+    },
+    revokeByTokenHash: async (tokenHash, revokedAt) => {
+      const session = jsonAuthSessions.get(tokenHash);
+      if (session) jsonAuthSessions.set(tokenHash, { ...session, revokedAt });
+    },
+    revokeAllForUser: async (userId, revokedAt, exceptTokenHash) => {
+      for (const [key, session] of jsonAuthSessions.entries()) {
+        if (session.userId === userId && key !== exceptTokenHash && !session.revokedAt) {
+          jsonAuthSessions.set(key, { ...session, revokedAt });
+        }
+      }
+    },
   },
 
   customers: {
