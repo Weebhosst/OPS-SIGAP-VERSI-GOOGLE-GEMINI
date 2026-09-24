@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+# Local security UAT fixture; do not commit operational test data.
+data/ops-sigap-SECURITY-UAT.json

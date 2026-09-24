@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { apiRouter } from './server/routes';
 import { config, validateRuntimeConfig } from './server/config';
+import { closePostgresPool } from './server/db/postgres';
 
 async function startServer() {
   validateRuntimeConfig();
@@ -75,12 +76,48 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[OPS SIGAP] Server listening on http://0.0.0.0:${PORT}`);
+  });
+
+  let shuttingDown = false;
+
+  const shutdown = async (signal: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+
+    console.warn(`[OPS SIGAP] Received ${signal}; shutting down gracefully...`);
+
+    httpServer.close(async () => {
+      try {
+        await closePostgresPool();
+        console.log('[OPS SIGAP] HTTP server and PostgreSQL pool closed cleanly.');
+      } catch (error) {
+        console.error('[OPS SIGAP] Error while closing resources:', error instanceof Error ? error.message : 'unknown');
+      }
+      process.exit(0);
+    });
+
+    setTimeout(() => {
+      console.error('[OPS SIGAP] Graceful shutdown timed out; forcing exit.');
+      process.exit(1);
+    }, 15000).unref();
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+  process.on('uncaughtException', (error) => {
+    console.error('[OPS SIGAP] Uncaught exception:', error.message);
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    console.error('[OPS SIGAP] Unhandled rejection:', error.message);
+    process.exit(1);
   });
 }
 
 startServer().catch((err) => {
-  console.error('[OPS SIGAP] Fatal error during startup:', err);
+  console.error('[OPS SIGAP] Fatal error during startup:', err instanceof Error ? err.message : 'unknown');
   process.exit(1);
 });
