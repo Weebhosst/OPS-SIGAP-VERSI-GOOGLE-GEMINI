@@ -788,24 +788,38 @@ export const postgresRepositories: RepositoryBundle = {
         );
       }
       const documentType = item.documentType || normalizeDocumentType(item);
-      await query(
-        "INSERT INTO media(id,document_type,user_id,session_id,customer_id,site_id,reference_type,reference_id,storage_provider,storage_key,mime_type,file_name,file_size,captured_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'external_url',$9,$10,$11,NULL,$12,$13) ON CONFLICT(id) DO NOTHING",
-        [
-          item.id,
-          documentType,
-          item.userId,
-          sessionId,
-          customerId,
-          item.siteId,
-          item.sourceModule,
-          item.sourceId,
-          item.photoUrl,
-          item.photoUrl.endsWith('.png') ? 'image/png' : 'image/jpeg',
-          item.caption || `${item.id}.jpg`,
-          item.eventAt,
-          item.createdAt,
-        ],
-      );
+      await transaction(async (client) => {
+        await client.query(
+          "INSERT INTO media(id,document_type,user_id,session_id,customer_id,site_id,reference_type,reference_id,storage_provider,storage_key,mime_type,file_name,file_size,captured_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'external_url',$9,$10,$11,NULL,$12,$13) ON CONFLICT(id) DO NOTHING",
+          [
+            item.id,
+            documentType,
+            item.userId,
+            sessionId,
+            customerId,
+            item.siteId,
+            item.sourceModule,
+            item.sourceId,
+            item.photoUrl,
+            item.photoUrl.endsWith('.png') ? 'image/png' : 'image/jpeg',
+            item.caption || `${item.id}.jpg`,
+            item.eventAt,
+            item.createdAt,
+          ],
+        );
+        if (item.handoverId) {
+          await client.query(
+            'INSERT INTO handover_media(handover_id,media_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
+            [item.handoverId, item.id],
+          );
+        }
+        if (item.incidentId) {
+          await client.query(
+            'INSERT INTO incident_media(incident_id,media_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
+            [item.incidentId, item.id],
+          );
+        }
+      });
       return { ...item, documentType };
     },
   },
