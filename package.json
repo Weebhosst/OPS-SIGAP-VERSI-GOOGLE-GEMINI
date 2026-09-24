@@ -14,7 +14,8 @@
     "db:migrate": "tsx server/db/migrate.ts",
     "db:import-json": "tsx server/db/importJson.ts",
     "test:postgres": "tsx server/repositories/postgres-live-tests.ts",
-    "test:media-storage": "tsx server/mediaStorage.run-tests.ts"
+    "test:media-storage": "tsx server/mediaStorage.run-tests.ts",
+    "test:media-storage-live": "tsx server/mediaStorage.live-test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
