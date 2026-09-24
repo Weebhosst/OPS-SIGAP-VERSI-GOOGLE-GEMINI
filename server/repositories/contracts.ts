@@ -141,10 +141,28 @@ export interface MediaFilters {
   from?: string;
   to?: string;
 }
+export type PersistableMediaItem = MediaGalleryItem & {
+  storageProvider?: 'inline_json' | 'external_url' | 'railway_s3' | 'legacy_json';
+  storageKey?: string;
+  mimeType?: string;
+  fileName?: string;
+  fileSize?: number | null;
+};
+
+export interface MediaObjectRef {
+  id: string;
+  storageProvider: string;
+  storageKey: string;
+  mimeType?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+}
+
 export interface MediaRepository {
   list(filters: MediaFilters, page: PageRequest): Promise<Page<MediaGalleryItem>>;
   counts(filters: Omit<MediaFilters, 'documentType'>): Promise<Record<string, number>>;
-  add(item: MediaGalleryItem, sessionId?: string | null, customerId?: string | null): Promise<MediaGalleryItem>;
+  findObjectRef(id: string): Promise<MediaObjectRef | undefined>;
+  add(item: PersistableMediaItem, sessionId?: string | null, customerId?: string | null): Promise<MediaGalleryItem>;
 }
 
 export interface AuditRepository {
