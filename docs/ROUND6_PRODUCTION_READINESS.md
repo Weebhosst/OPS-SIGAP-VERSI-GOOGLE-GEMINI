@@ -39,7 +39,7 @@ This document tracks the production-readiness gates for OPS SIGAP after the vali
 ### Items to close before Production Freeze PASS
 
 1. Railway source branch is now `main`; source-of-truth switch PASS. Post-switch deployment and browser session persistence also PASS.
-2. Railway source currently has `checkSuites=false`; decide whether deployment should be gated by GitHub checks before automatic deploy.
+2. Railway `Wait for CI` remains NOT VERIFIED/NOT ENABLED through the API path. Two API attempts were accepted as staged config changes, but direct read-back still reports `checkSuites=false`. Railway documentation identifies this as a Service Settings dashboard toggle. Enable `Wait for CI` manually in Railway after confirming GitHub App permissions, then re-verify.
 3. Railway start command is `npx tsx server.ts`; this currently works, but production runtime still relies on `tsx` being installed from devDependencies. Harden before final go-live or explicitly accept this runtime model.
 4. Legacy `R2_*` variable names remain alongside the active `MEDIA_*` Railway S3 configuration. Confirm whether they are obsolete, then remove only after verification.
 5. No custom domain is configured. Railway domain is acceptable for pilot go-live, but a custom domain can be added later if required.
