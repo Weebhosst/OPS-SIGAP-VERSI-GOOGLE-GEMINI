@@ -12,6 +12,7 @@ interface AuthContextValue {
   login: (npk: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
   quickLogin: (npk: string, pass: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -40,9 +41,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (npk: string, pass: string) => {
     const res = await api.login(npk, pass);
-    if (res.token) {
-      localStorage.setItem('sigap_token', res.token);
-    }
     setUser(res.user);
   };
 
@@ -50,7 +48,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await api.logout();
     } catch {}
-    localStorage.removeItem('sigap_token');
     if (user) sessionStorage.removeItem(`ops:lastRoute:${user.id}`);
     setUser(null);
   };
@@ -64,6 +61,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    const res = await api.changePassword(currentPassword, newPassword);
+    setUser(res.user);
+  };
+
   const refreshUser = async () => {
     try {
       const res = await api.getMe();
@@ -72,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, quickLogin, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, quickLogin, changePassword, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
