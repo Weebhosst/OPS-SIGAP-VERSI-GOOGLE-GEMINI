@@ -1,3 +1,5 @@
+ALTER TABLE checkpoint_tokens ADD COLUMN token_ciphertext text;
+
 CREATE TABLE admin_filter_state (
   id text PRIMARY KEY,
   user_id text NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
