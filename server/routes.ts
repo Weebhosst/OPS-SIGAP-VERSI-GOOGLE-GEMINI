@@ -6,6 +6,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { validateAndProcessScan, getMemberShiftProgress } from './patrolService';
 import { getOperationalMedia, getOperationalMediaCounts } from './mediaService';
+import { checkMediaStorage, cleanupPreparedMedia, prepareMedia, prepareMediaBatch, readMediaObject } from './mediaStorage';
 import { repositories } from './repositories';
 import { RepositoryError } from './repositories/contracts';
 import {
@@ -117,14 +118,9 @@ function requireFieldMember(req: AuthenticatedRequest, res: Response, next: Next
   next();
 }
 
-function rejectUnstoredBase64Media(res: Response, urls: string[]): boolean {
-  if (repositories.provider !== 'postgres') return false;
-  if (!urls.some((url) => url.startsWith('data:'))) return false;
-  res.status(503).json({
-    success: false,
-    code: 'MEDIA_STORAGE_NOT_READY',
-    error: 'Penyimpanan foto produksi belum aktif. Data tidak disimpan agar bukti dokumentasi tidak hilang.',
-  });
+function sendRepositoryError(res: Response, error: unknown): boolean {
+  if (!(error instanceof RepositoryError)) return false;
+  res.status(error.status).json({ success: false, code: error.code, error: error.message });
   return true;
 }
 
