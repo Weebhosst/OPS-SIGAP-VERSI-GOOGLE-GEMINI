@@ -865,26 +865,20 @@ apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, async (r
 // INCIDENT ROUTES
 // -------------------------------------------------------------
 
-apiRouter.get('/incidents', authMiddleware, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const isSuperAdmin = isAdministrator(req.user!.role);
+apiRouter.get('/incidents', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-
-  if (!isSuperAdmin) {
-    filter.siteId = req.user!.siteId;
+  if (!isAdministrator(req.user!.role)) {
+    if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
     if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
     if (req.query.status) filter.status = String(req.query.status);
   }
-
-  const incidents = db.getIncidents(filter).sort(
-    (a, b) => new Date(b.incidentAt).getTime() - new Date(a.incidentAt).getTime()
-  );
-
-  res.json({ success: true, incidents });
+  const page = await repositories.incidents.list(filter, { limit: 500, offset: 0 });
+  res.json({ success: true, incidents: page.items });
 });
 
-apiRouter.post('/incidents', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
   const {
     category,
     severity,
@@ -909,21 +903,24 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, requireLegacyJs
   } = req.body;
 
   if (!title || !locationText || !chronology || !initialAction) {
-    return res.status(400).json({
-      success: false,
-      error: 'Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.',
-    });
+    return res.status(400).json({ success: false, error: 'Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.' });
   }
 
   const siteId = req.user!.siteId || 'BB92';
-  const activeSession = db.getActiveSessionForUser(req.user!.id);
-  if (!activeSession || activeSession.siteId !== siteId || !activeSession.startDocumentationCompleted) return res.status(409).json({ success: false, error: 'Laporan kejadian hanya dapat dibuat saat shift aktif setelah Sertigas Naik Jaga.' });
-  const incidentPhotos = Array.isArray(photoUrls) ? photoUrls.filter((item: unknown) => typeof item === 'string' && item) : (photoUrl ? [photoUrl] : []);
+  const activeSession = await repositories.sessions.getActiveByUser(req.user!.id);
+  if (!activeSession || activeSession.siteId !== siteId || !activeSession.startDocumentationCompleted) {
+    return res.status(409).json({ success: false, error: 'Laporan kejadian hanya dapat dibuat saat shift aktif setelah Sertigas Naik Jaga.' });
+  }
+
+  const incidentPhotos = Array.isArray(photoUrls)
+    ? photoUrls.filter((item: unknown) => typeof item === 'string' && item)
+    : (photoUrl ? [photoUrl] : []);
   if (incidentPhotos.length < 3) return res.status(400).json({ success: false, error: 'Dokumentasi kejadian minimal 3 foto.' });
   if (incidentPhotos.length > 5) return res.status(400).json({ success: false, error: 'Maksimal 5 foto dokumentasi.' });
+  if (rejectUnstoredBase64Media(res, incidentPhotos)) return;
+
   const now = new Date().toISOString();
   const id = `INC-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
   const incident: IncidentReport = {
     id,
     sessionId: activeSession.id,
@@ -959,11 +956,10 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, requireLegacyJs
     updatedAt: now,
   };
 
-  db.addIncident(incident);
-
-  // Register every evidence photo in the gallery.
-  incidentPhotos.forEach((incidentPhoto: string, index: number) => {
-    db.addMedia({
+  await repositories.incidents.create(incident);
+  for (let index = 0; index < incidentPhotos.length; index += 1) {
+    const incidentPhoto = incidentPhotos[index];
+    await repositories.media.add({
       id: `MED-${id}-${index + 1}`,
       sourceModule: 'INCIDENT',
       sourceTable: 'incident_reports',
@@ -973,6 +969,7 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, requireLegacyJs
       shiftDate: activeSession.shiftDate,
       shiftCode: activeSession.shiftCode,
       category: 'KEJADIAN',
+      documentType: 'INSIDEN',
       subcategory: incident.category,
       photoUrl: incidentPhoto,
       caption: `${incident.category} • ${incident.title} [${incident.severity}]`,
@@ -983,42 +980,33 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, requireLegacyJs
       status: 'ACTIVE',
       createdAt: now,
       createdBy: req.user!.id,
-    });
-  });
+    }, activeSession.id, activeSession.customerId || null);
+  }
 
-  db.addAuditLog({
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'INCIDENT_REPORTED',
     entityType: 'incident_report',
     entityId: id,
-    newValue: {
-      title,
-      category: incident.category,
-      severity: incident.severity,
-      escalated: incident.escalated,
-    },
+    newValue: { title, category: incident.category, severity: incident.severity, escalated: incident.escalated },
     reason: `Laporan kejadian: ${title} (${incident.severity})`,
   });
 
   res.json({ success: true, incident });
 });
 
-apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { status, followUp } = req.body;
-  const incident = db.findIncidentById(req.params.id);
-
-  if (!incident) {
-    return res.status(404).json({ success: false, error: 'Laporan kejadian tidak ditemukan.' });
-  }
+  const incident = await repositories.incidents.findById(req.params.id);
+  if (!incident) return res.status(404).json({ success: false, error: 'Laporan kejadian tidak ditemukan.' });
 
   const updates: Partial<IncidentReport> = {};
   if (status) updates.status = status;
   if (followUp) updates.followUp = followUp;
   if (status === 'CLOSED') updates.closedAt = new Date().toISOString();
 
-  const updated = db.updateIncident(incident.id, updates);
-
-  db.addAuditLog({
+  const updated = await repositories.incidents.update(incident.id, updates);
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'INCIDENT_STATUS_CHANGE',
     entityType: 'incident_report',
