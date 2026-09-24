@@ -678,6 +678,7 @@ export const postgresRepositories: RepositoryBundle = {
         [sessionId],
       )
     ).rows.map(mapLog),
+    countAll: async () => Number((await query<{count:string}>('SELECT count(*) FROM patrol_logs')).rows[0]?.count || 0),
     overrideValidation: async (id, newStatus, reason) => {
       try {
         const result=await query(
