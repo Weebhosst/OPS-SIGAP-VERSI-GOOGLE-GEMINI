@@ -811,7 +811,7 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, requireLegacyJs
   res.json({ success: true, incident });
 });
 
-apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { status, followUp } = req.body;
   const incident = db.findIncidentById(req.params.id);
 
