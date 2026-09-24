@@ -6,6 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import { config } from './config';
 import {
   User,
   Customer,
@@ -830,4 +831,6 @@ class DatabaseStore {
 }
 
 export const db = new DatabaseStore();
-db.init();
+if (config.databaseProvider === 'json') {
+  db.init();
+}
