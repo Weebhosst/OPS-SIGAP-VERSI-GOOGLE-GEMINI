@@ -232,19 +232,26 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
     return res.status(403).json({ success: false, error: 'Akun tidak aktif.' });
   }
 
+  const defaultPasswordStillUsed = bcrypt.compareSync(user.npk, user.passwordHash);
+  let authenticatedUser = user;
+  if ((!user.passwordChangedAt || defaultPasswordStillUsed) && !user.mustChangePassword) {
+    authenticatedUser = await repositories.users.update(user.id, { mustChangePassword: true }) || user;
+  }
+
   loginAttempts.delete(attemptKey);
-  await issueSession(user, req, res);
+  await issueSession(authenticatedUser, req, res);
 
   await repositories.audit.append({
-    actorUserId: user.id,
+    actorUserId: authenticatedUser.id,
     action: 'LOGIN_SUCCESS',
     entityType: 'user',
-    entityId: user.id,
+    entityId: authenticatedUser.id,
     ipAddress: req.ip,
     userAgent: req.headers['user-agent'],
+    metadata: { passwordRotationRequired: !!authenticatedUser.mustChangePassword },
   });
 
-  const { passwordHash, ...safeUser } = user;
+  const { passwordHash, ...safeUser } = authenticatedUser;
   res.json({ success: true, user: safeUser });
 });
 
