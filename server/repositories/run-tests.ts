@@ -24,6 +24,23 @@ try {
   const source = JSON.parse(fs.readFileSync(temporaryDatabase, 'utf8'));
   assert.deepEqual(validateJsonImport(normalizeLegacyJson(source)), []);
 
+  const authNow = new Date();
+  const authRecord = await jsonRepositories.authSessions.create({
+    id: `AUTH-TEST-${Date.now()}`,
+    tokenHash: `HASH-${Date.now()}`,
+    userId: users.items[0].id,
+    createdAt: authNow.toISOString(),
+    lastSeenAt: authNow.toISOString(),
+    expiresAt: new Date(authNow.getTime() + 60_000).toISOString(),
+    revokedAt: null,
+    ipAddress: '127.0.0.1',
+    userAgent: 'repository-test',
+  });
+  assert.equal((await jsonRepositories.authSessions.findActiveByTokenHash(authRecord.tokenHash, authNow.toISOString()))?.id, authRecord.id);
+  await jsonRepositories.authSessions.touch(authRecord.id, new Date(authNow.getTime() + 1000).toISOString());
+  await jsonRepositories.authSessions.revokeByTokenHash(authRecord.tokenHash, new Date(authNow.getTime() + 2000).toISOString());
+  assert.equal(await jsonRepositories.authSessions.findActiveByTokenHash(authRecord.tokenHash, new Date(authNow.getTime() + 3000).toISOString()), undefined);
+
   const user = users.items.find((item) => item.siteId) || users.items[0];
   const sites = await jsonRepositories.sites.list({ limit: 1, offset: 0 });
   const site = (user?.siteId && await jsonRepositories.sites.findById(user.siteId)) || sites.items[0];
@@ -61,6 +78,12 @@ try {
   );
 
   assert.equal((await jsonRepositories.sessions.findById(active.id))?.shiftDate, active.shiftDate);
+
+  const filteredSessions = await jsonRepositories.sessions.listFiltered(
+    { userId: active.userId, siteId: active.siteId, status: 'ACTIVE', operationalDate: active.shiftDate },
+    { limit: 20, offset: 0 },
+  );
+  assert.ok(filteredSessions.items.some((item) => item.id === active!.id), 'Filtered session repository harus mengembalikan sesi aktif yang sama.');
 
   const otherUser = users.items.find((item) => item.id !== user.id && item.siteId === site.id);
   if (otherUser) {
@@ -103,6 +126,100 @@ try {
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'CLOSE', user.id, 'Sudah diverifikasi')).status, 'CLOSED');
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'REOPEN', user.id)).status, 'OPEN');
 
+  const mediaId = `TEST-MEDIA-${Date.now()}`;
+  await jsonRepositories.media.add({
+    id: mediaId,
+    sourceModule: 'PATROL',
+    sourceTable: 'patrol_logs',
+    sourceId: logBase.id,
+    siteId: site.id,
+    userId: user.id,
+    shiftDate: active.shiftDate,
+    shiftCode: active.shiftCode,
+    category: 'PATROLI_QR',
+    documentType: 'PATROLI_QR',
+    photoUrl: 'data:image/jpeg;base64,TEST',
+    caption: 'Repository media test',
+    eventAt: new Date().toISOString(),
+    checkpointId: checkpoint.id,
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    createdBy: user.id,
+  }, active.id, active.customerId);
+  const mediaPage = await jsonRepositories.media.list({ siteId: site.id, documentType: 'PATROLI_QR' }, { limit: 100, offset: 0 });
+  assert.ok(mediaPage.items.some((item) => item.id === mediaId), 'Media repository harus mengembalikan media yang baru disimpan.');
+  const mediaCounts = await jsonRepositories.media.counts({ siteId: site.id });
+  assert.ok((mediaCounts.PATROLI_QR || 0) >= 1, 'Media counter PATROLI_QR harus tersedia.');
+
+  const filterState = await jsonRepositories.adminState.set(user.id, { siteId: site.id, shiftCode: 'SHIFT_1' });
+  assert.equal((await jsonRepositories.adminState.get(user.id))?.siteId, site.id);
+  assert.equal(filterState.shiftCode, 'SHIFT_1');
+
+  const handoverId = `TEST-HANDOVER-${Date.now()}`;
+  const handover = await jsonRepositories.handovers.create({
+    id: handoverId,
+    sessionId: active.id,
+    siteId: site.id,
+    shiftDate: active.shiftDate,
+    shiftCode: active.shiftCode,
+    handoverType: 'SERAH_TERIMA',
+    fromUserId: user.id,
+    eventAt: new Date().toISOString(),
+    conditionStatus: 'BAIK',
+    personnelStatus: 'Lengkap',
+    equipmentStatus: 'Baik',
+    keysStatus: 'Baik',
+    vehicleStatus: 'Baik',
+    ackFrom: true,
+    ackTo: false,
+    status: 'SUBMITTED',
+    createdBy: user.id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  assert.equal((await jsonRepositories.handovers.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === handover.id), true);
+  assert.equal((await jsonRepositories.handovers.update(handover.id, { ackTo: true, status: 'ACKNOWLEDGED', toUserId: user.id }))?.ackTo, true);
+
+  const incidentId = `TEST-INCIDENT-${Date.now()}`;
+  const incident = await jsonRepositories.incidents.create({
+    id: incidentId,
+    sessionId: active.id,
+    customerId: site.customerId,
+    siteId: site.id,
+    userId: user.id,
+    incidentAt: new Date().toISOString(),
+    shiftCode: active.shiftCode,
+    shiftDate: active.shiftDate,
+    category: 'INSIDENTIL',
+    severity: 'RENDAH',
+    title: 'Repository test',
+    locationText: 'Test area',
+    chronology: 'Test chronology',
+    initialAction: 'Test action',
+    status: 'OPEN',
+    escalated: false,
+    createdBy: user.id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  assert.equal((await jsonRepositories.incidents.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === incident.id), true);
+  assert.equal((await jsonRepositories.incidents.update(incident.id, { status: 'CLOSED', closedAt: new Date().toISOString() }))?.status, 'CLOSED');
+
+  const calibration = await jsonRepositories.radiusCalibrations.create({
+    id: `TEST-CAL-${Date.now()}`,
+    siteId: site.id,
+    checkpointId: checkpoint.id,
+    testedByUserId: user.id,
+    testedAt: new Date().toISOString(),
+    latitude: checkpoint.latitude,
+    longitude: checkpoint.longitude,
+    calculatedDistanceM: 0,
+    configuredRadiusM: checkpoint.radiusMeters,
+    verdict: 'VALID',
+    createdAt: new Date().toISOString(),
+  });
+  assert.equal((await jsonRepositories.radiusCalibrations.list({ limit: 100, offset: 0 })).items.some((item) => item.id === calibration.id), true);
+
   const beforeDryRun = fs.readFileSync(temporaryDatabase);
   execFileSync(process.execPath, ['--import', 'tsx', 'server/db/importJson.ts', '--dry-run'], {
     cwd: process.cwd(),
@@ -112,12 +229,53 @@ try {
   assert.deepEqual(fs.readFileSync(temporaryDatabase), beforeDryRun);
 
   const schemaSql = fs.readFileSync(path.resolve('server/db/migrations/001_initial_schema.sql'), 'utf8');
+  const runtimeSchemaSql = fs.readFileSync(path.resolve('server/db/migrations/003_admin_runtime.sql'), 'utf8');
+  const authSchemaSql = fs.readFileSync(path.resolve('server/db/migrations/004_auth_sessions.sql'), 'utf8');
   const postgresSource = fs.readFileSync(path.resolve('server/repositories/postgresRepositories.ts'), 'utf8');
+  const postgresPoolSource = fs.readFileSync(path.resolve('server/db/postgres.ts'), 'utf8');
+  const configSource = fs.readFileSync(path.resolve('server/config.ts'), 'utf8');
   const importerSource = fs.readFileSync(path.resolve('server/db/importJson.ts'), 'utf8');
+  const patrolServiceSource = fs.readFileSync(path.resolve('server/patrolService.ts'), 'utf8');
+  const mediaServiceSource = fs.readFileSync(path.resolve('server/mediaService.ts'), 'utf8');
+  const tokenCryptoSource = fs.readFileSync(path.resolve('server/security/checkpointTokenCrypto.ts'), 'utf8');
+  const mediaStorageSource = fs.readFileSync(path.resolve('server/mediaStorage.ts'), 'utf8');
+  const routeSource = fs.readFileSync(path.resolve('server/routes.ts'), 'utf8');
+  const apiClientSource = fs.readFileSync(path.resolve('src/lib/api.ts'), 'utf8');
+  const authContextSource = fs.readFileSync(path.resolve('src/context/AuthContext.tsx'), 'utf8');
+  const loginViewSource = fs.readFileSync(path.resolve('src/views/LoginView.tsx'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
   assert.match(importerSource, /ON CONFLICT\(id\) DO NOTHING/);
+  assert.match(importerSource, /legacy-json:/);
+  assert.match(importerSource, /token_ciphertext/);
+  assert.match(importerSource, /incident_media/);
+  assert.match(importerSource, /handover_media/);
+  assert.match(runtimeSchemaSql, /token_ciphertext/);
+  assert.match(runtimeSchemaSql, /CREATE TABLE admin_filter_state/);
+  assert.match(runtimeSchemaSql, /CREATE TABLE radius_calibrations/);
+  assert.match(authSchemaSql, /CREATE TABLE auth_sessions/);
+  assert.match(authSchemaSql, /token_hash text NOT NULL UNIQUE/);
+  assert.match(routeSource, /randomBytes\(32\)/);
+  assert.match(routeSource, /sameSite: 'strict'/);
+  assert.match(routeSource, /PASSWORD_CHANGE_REQUIRED/);
+  assert.doesNotMatch(routeSource, /res\.json\(\{\s*success:\s*true,\s*user:\s*safeUser,\s*token/);
+  assert.doesNotMatch(apiClientSource, /localStorage\.getItem\(['"]sigap_token/);
+  assert.doesNotMatch(authContextSource, /localStorage\.(setItem|removeItem)\(['"]sigap_token/);
+  assert.doesNotMatch(loginViewSource, /Akun Demo Pengujian|SUPER ADMIN \(Demo\)/);
+  assert.match(postgresSource, /encryptCheckpointToken/);
+  assert.match(configSource, /PG_SSL_REJECT_UNAUTHORIZED/);
+  assert.match(postgresPoolSource, /postgresSslRejectUnauthorized/);
+  assert.doesNotMatch(postgresPoolSource, /NODE_TLS_REJECT_UNAUTHORIZED/);
+  assert.match(tokenCryptoSource, /aes-256-gcm/);
+  assert.doesNotMatch(patrolServiceSource, /from ['"]\.\/db['"]|\bdb\./);
+  assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
+  assert.doesNotMatch(routeSource, /from ['"]\.\/db['"]|\bdb\./);
+  assert.match(patrolServiceSource, /prepareMedia/);
+  assert.match(mediaStorageSource, /AWS4-HMAC-SHA256/);
+  assert.match(mediaStorageSource, /railway_s3/);
+  assert.match(routeSource, /\/media\/:id\/content/);
+  assert.doesNotMatch(postgresSource, /storage_provider[^\n]+external_url[^\n]+item\.photoUrl/);
 
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
@@ -126,6 +284,13 @@ try {
   console.log('PASS valid-checkpoint uniqueness and alert workflow persistence');
   console.log('PASS migration dry-run leaves JSON source unchanged');
   console.log('PASS PostgreSQL constraints, capacity lock, and idempotent import strategy');
+  console.log('PASS provider-safe patrol/media service cutover');
+  console.log('PASS operational/master repositories, admin state, radius calibration, and media relations');
+  console.log('PASS routes/services contain no direct legacy JSON db access');
+  console.log('PASS checkpoint tokens are hashed plus AES-GCM encrypted at rest');
+  console.log('PASS Round 4B media storage is provider-neutral and uses private delivery routes');
+  console.log('PASS HttpOnly auth sessions, forced password rotation, and production credential hygiene');
+  console.log('PASS production PostgreSQL TLS verification is explicit and scoped to the DB client');
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }

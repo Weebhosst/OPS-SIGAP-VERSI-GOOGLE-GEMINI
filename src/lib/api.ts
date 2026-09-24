@@ -29,18 +29,14 @@ export class ApiError extends Error {
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('sigap_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
+    credentials: 'same-origin',
     headers,
   });
 
@@ -56,7 +52,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export const api = {
   // Auth
   login: (npk: string, password: string) =>
-    request<{ success: boolean; user: User; token: string }>('/auth/login', {
+    request<{ success: boolean; user: User }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ npk, password }),
     }),
@@ -66,6 +62,12 @@ export const api = {
   logout: () =>
     request<{ success: boolean }>('/auth/logout', {
       method: 'POST',
+    }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ success: boolean; user: User }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 
   resetPasswordToNpk: (userId: string) =>

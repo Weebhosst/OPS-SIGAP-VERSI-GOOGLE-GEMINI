@@ -20,7 +20,7 @@ import { offlineQueue, OfflineQueueItem } from '../lib/offlineQueue';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
 export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { user, logout, quickLogin } = useAuth();
+  const { user, logout } = useAuth();
   const [queueItems, setQueueItems] = useState<OfflineQueueItem[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
@@ -191,43 +191,6 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>{isSyncing ? 'Sinkronisasi...' : 'Sinkronkan Sekarang'}</span>
           </button>
-        </div>
-
-        {/* Account Switcher for Evaluation */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 text-xs space-y-2">
-          <div className="font-semibold text-slate-300 uppercase tracking-wider text-[11px]">
-            Ganti Akun Cepat (Evaluasi Testing)
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => quickLogin('234378', '234378')}
-              className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-left text-slate-300 font-mono"
-            >
-              <div className="font-bold text-white">Ahmad Sopyan</div>
-              <div className="text-[10px] text-slate-400">NPK: 234378</div>
-            </button>
-            <button
-              onClick={() => quickLogin('305464', '305464')}
-              className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-left text-slate-300 font-mono"
-            >
-              <div className="font-bold text-white">Arif Janwaripin</div>
-              <div className="text-[10px] text-slate-400">NPK: 305464</div>
-            </button>
-            <button
-              onClick={() => quickLogin('237129', '237129')}
-              className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-left text-slate-300 font-mono"
-            >
-              <div className="font-bold text-white">Ayo Sunaryo</div>
-              <div className="text-[10px] text-slate-400">NPK: 237129</div>
-            </button>
-            <button
-              onClick={() => quickLogin('230557', '230557')}
-              className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-left text-slate-300 font-mono"
-            >
-              <div className="font-bold text-white">Deni Winarya</div>
-              <div className="text-[10px] text-slate-400">NPK: 230557</div>
-            </button>
-          </div>
         </div>
 
         {/* Logout Button */}

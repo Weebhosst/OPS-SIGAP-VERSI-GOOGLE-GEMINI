@@ -10,9 +10,13 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx src/types/run-tests.ts && tsx server/repositories/run-tests.ts",
+    "test": "tsx src/types/run-tests.ts && tsx server/repositories/run-tests.ts && tsx server/mediaStorage.run-tests.ts && tsx server/security.run-tests.ts",
     "db:migrate": "tsx server/db/migrate.ts",
-    "db:import-json": "tsx server/db/importJson.ts"
+    "db:import-json": "tsx server/db/importJson.ts",
+    "test:postgres": "tsx server/repositories/postgres-live-tests.ts",
+    "test:media-storage": "tsx server/mediaStorage.run-tests.ts",
+    "test:media-storage-live": "tsx server/mediaStorage.live-test.ts",
+    "test:security": "tsx server/security.run-tests.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -45,5 +49,10 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2"
+  },
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=10 <11"
   }
 }

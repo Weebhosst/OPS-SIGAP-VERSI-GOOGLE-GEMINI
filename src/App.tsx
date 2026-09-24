@@ -23,6 +23,7 @@ import {
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OfflineBanner } from './components/OfflineBanner';
 import { LoginView } from './views/LoginView';
+import { ChangePasswordView } from './views/ChangePasswordView';
 import { MemberHome } from './views/MemberHome';
 import { PatrolActiveView } from './views/PatrolActiveView';
 import { HandoverView } from './views/HandoverView';
@@ -86,6 +87,15 @@ function AppContent() {
       <>
         <OfflineBanner />
         <LoginView />
+      </>
+    );
+  }
+
+  if (user.mustChangePassword) {
+    return (
+      <>
+        <OfflineBanner />
+        <ChangePasswordView />
       </>
     );
   }
