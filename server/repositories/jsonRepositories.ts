@@ -12,6 +12,7 @@ import {
 import type {
   MediaGalleryItem,
   PatrolLog,
+  PatrolSession,
   ValidationAlertStatus,
 } from '../../src/types/ops';
 
@@ -20,10 +21,7 @@ const paginate = <T>(items: T[], request: PageRequest) => {
   return toPage(items.slice(page.offset, page.offset + page.limit), items.length, page);
 };
 
-function sessionMatches(
-  session: Awaited<ReturnType<typeof db.findSessionById>> extends infer T ? Exclude<T, undefined> : never,
-  filter: SessionFilter,
-) {
+function sessionMatches(session: PatrolSession, filter: SessionFilter) {
   if (filter.userId && session.userId !== filter.userId) return false;
   if (filter.siteId && session.siteId !== filter.siteId) return false;
   if (filter.shiftCode && session.shiftCode !== filter.shiftCode) return false;
