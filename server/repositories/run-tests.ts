@@ -232,6 +232,8 @@ try {
   const runtimeSchemaSql = fs.readFileSync(path.resolve('server/db/migrations/003_admin_runtime.sql'), 'utf8');
   const authSchemaSql = fs.readFileSync(path.resolve('server/db/migrations/004_auth_sessions.sql'), 'utf8');
   const postgresSource = fs.readFileSync(path.resolve('server/repositories/postgresRepositories.ts'), 'utf8');
+  const postgresPoolSource = fs.readFileSync(path.resolve('server/db/postgres.ts'), 'utf8');
+  const configSource = fs.readFileSync(path.resolve('server/config.ts'), 'utf8');
   const importerSource = fs.readFileSync(path.resolve('server/db/importJson.ts'), 'utf8');
   const patrolServiceSource = fs.readFileSync(path.resolve('server/patrolService.ts'), 'utf8');
   const mediaServiceSource = fs.readFileSync(path.resolve('server/mediaService.ts'), 'utf8');
@@ -262,6 +264,9 @@ try {
   assert.doesNotMatch(authContextSource, /localStorage\.(setItem|removeItem)\(['"]sigap_token/);
   assert.doesNotMatch(loginViewSource, /Akun Demo Pengujian|SUPER ADMIN \(Demo\)/);
   assert.match(postgresSource, /encryptCheckpointToken/);
+  assert.match(configSource, /PG_SSL_REJECT_UNAUTHORIZED/);
+  assert.match(postgresPoolSource, /postgresSslRejectUnauthorized/);
+  assert.doesNotMatch(postgresPoolSource, /NODE_TLS_REJECT_UNAUTHORIZED/);
   assert.match(tokenCryptoSource, /aes-256-gcm/);
   assert.doesNotMatch(patrolServiceSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
@@ -285,6 +290,7 @@ try {
   console.log('PASS checkpoint tokens are hashed plus AES-GCM encrypted at rest');
   console.log('PASS Round 4B media storage is provider-neutral and uses private delivery routes');
   console.log('PASS HttpOnly auth sessions, forced password rotation, and production credential hygiene');
+  console.log('PASS production PostgreSQL TLS verification is explicit and scoped to the DB client');
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
