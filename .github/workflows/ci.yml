@@ -47,6 +47,56 @@ jobs:
       - name: Production build
         run: npm run build
 
+  production-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_PROVIDER: json
+      NODE_ENV: test
+      OPS_SIGAP_DATA_FILE: /tmp/ops-sigap-runtime.json
+      PORT: 3100
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install production dependencies only
+        run: npm ci --omit=dev
+
+      - name: Prepare isolated runtime database
+        run: cp data/ops-sigap.json /tmp/ops-sigap-runtime.json
+
+      - name: Build with production dependency set
+        run: npm run build
+
+      - name: Start runtime through npm start
+        run: |
+          npm start > /tmp/ops-sigap-runtime.log 2>&1 &
+          echo $! > /tmp/ops-sigap-runtime.pid
+
+      - name: Verify runtime health
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3100/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/ops-sigap-runtime.log
+          exit 1
+
+      - name: Stop runtime
+        if: always()
+        run: |
+          if [ -f /tmp/ops-sigap-runtime.pid ]; then
+            kill "$(cat /tmp/ops-sigap-runtime.pid)" || true
+          fi
+
   postgres-live:
     runs-on: ubuntu-latest
     timeout-minutes: 12
