@@ -1293,43 +1293,96 @@ apiRouter.patch('/admin/validation-alerts/:id', authMiddleware, requireAdmin, as
 });
 
 // Admin User Management
-apiRouter.get('/admin/users', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (_req: Request, res: Response) => {
-  const users = db.getUsers().map(({ passwordHash, ...u }) => u);
+apiRouter.get('/admin/users', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
+  const page = await repositories.users.list({ limit: 500, offset: 0 });
+  const users = page.items.map(({ passwordHash, ...user }) => user);
   res.json({ success: true, users });
 });
 
-apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (_req: Request, res: Response) => {
-  const customers = db.getCustomers();
-  const sites = db.getSites().map((site) => ({
+apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
+  const [customersPage, sitesPage, usersPage, checkpointsPage, activeSessionsPage] = await Promise.all([
+    repositories.customers.list({ limit: 500, offset: 0 }),
+    repositories.sites.list({ limit: 500, offset: 0 }),
+    repositories.users.list({ limit: 500, offset: 0 }),
+    repositories.checkpoints.list({ limit: 500, offset: 0 }),
+    repositories.sessions.listFiltered({ status: 'ACTIVE' }, { limit: 500, offset: 0 }),
+  ]);
+  const customersById = new Map(customersPage.items.map((customer) => [customer.id, customer]));
+  const activeCountBySite = new Map<string, number>();
+  for (const session of activeSessionsPage.items) {
+    activeCountBySite.set(session.siteId, (activeCountBySite.get(session.siteId) || 0) + 1);
+  }
+  const sites = sitesPage.items.map((site) => ({
     ...site,
-    customer: db.findCustomerById(site.customerId) || null,
-    activeCount: db.getActiveSessionsForSite(site.id).length,
+    customer: customersById.get(site.customerId) || null,
+    activeCount: activeCountBySite.get(site.id) || 0,
   }));
-  const personnel = db.getUsers()
+  const personnel = usersPage.items
     .filter((user) => user.role === 'ANGGOTA')
     .map(({ passwordHash, ...user }) => user);
-  res.json({ success: true, customers, sites, personnel, checkpoints: db.getCheckpoints() });
+
+  res.json({
+    success: true,
+    customers: customersPage.items,
+    sites,
+    personnel,
+    checkpoints: checkpointsPage.items,
+  });
 });
 
-apiRouter.post('/admin/customers', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/customers', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const code = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
   if (!code || !name) return res.status(400).json({ success: false, error: 'Kode dan nama Customer wajib diisi.' });
-  if (db.getCustomers().some((item) => item.code === code)) return res.status(409).json({ success: false, error: 'Kode Customer sudah digunakan.' });
+
+  const existing = await repositories.customers.list({ limit: 500, offset: 0 });
+  if (existing.items.some((item) => item.code === code)) {
+    return res.status(409).json({ success: false, error: 'Kode Customer sudah digunakan.' });
+  }
+
   const now = new Date().toISOString();
-  const customer = db.addCustomer({ id: `CUST-${code}`, code, name, status: 'ACTIVE', createdAt: now, updatedAt: now });
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'CUSTOMER_CREATE', entityType: 'customer', entityId: customer.id, newValue: customer, reason: `Tambah customer ${name}` });
-  res.status(201).json({ success: true, customer });
+  try {
+    const customer = await repositories.customers.create({
+      id: `CUST-${code}`,
+      code,
+      name,
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'CUSTOMER_CREATE',
+      entityType: 'customer',
+      entityId: customer.id,
+      newValue: customer,
+      reason: `Tambah customer ${name}`,
+    });
+    res.status(201).json({ success: true, customer });
+  } catch (error:any) {
+    if (error instanceof RepositoryError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    throw error;
+  }
 });
 
-apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const customer = db.findCustomerById(req.params.id);
+apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const customer = await repositories.customers.findById(req.params.id);
   if (!customer) return res.status(404).json({ success: false, error: 'Customer tidak ditemukan.' });
-  const updates: any = {};
+
+  const updates: Partial<typeof customer> = {};
   if (req.body.name !== undefined) updates.name = String(req.body.name).trim();
   if (req.body.status === 'ACTIVE' || req.body.status === 'INACTIVE') updates.status = req.body.status;
-  const updated = db.updateCustomer(customer.id, updates);
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'CUSTOMER_UPDATE', entityType: 'customer', entityId: customer.id, oldValue: customer, newValue: updates, reason: `Perubahan customer ${customer.code}` });
+
+  const updated = await repositories.customers.update(customer.id, updates);
+  await repositories.audit.append({
+    actorUserId: req.user!.id,
+    action: 'CUSTOMER_UPDATE',
+    entityType: 'customer',
+    entityId: customer.id,
+    oldValue: customer,
+    newValue: updates,
+    reason: `Perubahan customer ${customer.code}`,
+  });
   res.json({ success: true, customer: updated });
 });
 
