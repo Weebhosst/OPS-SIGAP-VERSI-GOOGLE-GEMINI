@@ -6,7 +6,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { db } from './db';
 import { validateAndProcessScan, getMemberShiftProgress } from './patrolService';
-import { getOperationalMedia } from './mediaService';
+import { getOperationalMedia, getOperationalMediaCounts } from './mediaService';
+import { requireLegacyJsonProvider } from './providerGuard';
 import { repositories } from './repositories';
 import { RepositoryError } from './repositories/contracts';
 import {
@@ -224,7 +225,7 @@ apiRouter.post('/auth/logout', authMiddleware, (req: AuthenticatedRequest, res: 
   res.json({ success: true, message: 'Berhasil logout.' });
 });
 
-apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { userId } = req.body;
   if (!userId) {
     return res.status(400).json({ success: false, error: 'User ID wajib diisi.' });
@@ -257,52 +258,51 @@ apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, (req: A
 // PATROL ROUTES
 // -------------------------------------------------------------
 
-apiRouter.get('/patrol/shift-progress', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/patrol/shift-progress', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const siteId = req.user!.siteId || 'BB92';
-  const progress = getMemberShiftProgress(req.user!.id, siteId);
+  const progress = await getMemberShiftProgress(req.user!.id, siteId);
   res.json({ success: true, ...progress });
 });
 
-apiRouter.get('/patrol/current', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const siteId = req.user!.siteId || 'BB92';
-  const openSession = db.getOpenSessionForUser(req.user!.id, siteId);
-  const checkpoints = db.getCheckpoints(siteId);
+  const [activeCandidate, checkpoints, site] = await Promise.all([
+    repositories.sessions.getActiveByUser(req.user!.id),
+    repositories.checkpoints.listBySite(siteId),
+    repositories.sites.findById(siteId),
+  ]);
+  const openSession = activeCandidate?.siteId === siteId ? activeCandidate : undefined;
 
   if (!openSession) {
     return res.json({
       success: true,
       hasOpenSession: false,
       session: null,
-      checkpoints: checkpoints.map((c) => ({
-        ...c,
+      checkpoints: checkpoints.map((checkpoint) => ({
+        ...checkpoint,
         statusInRound: 'BELUM',
         lastScanLog: null,
       })),
     });
   }
 
-  const logs = db.getPatrolLogs(openSession.id);
-  const targetRounds = Math.max(1, db.findSiteById(siteId)?.targetRoundsPerShift || 1);
-  const currentRound = Math.min(targetRounds, Math.floor(openSession.totalValid / Math.max(1, checkpoints.length)) + 1);
+  const logs = await repositories.patrol.listAllBySession(openSession.id);
+  const targetRounds = Math.max(1, site?.targetRoundsPerShift || 1);
+  const activeCheckpointCount = Math.max(1, checkpoints.filter((checkpoint) => checkpoint.status === 'ACTIVE').length);
+  const currentRound = Math.min(targetRounds, Math.floor(openSession.totalValid / activeCheckpointCount) + 1);
 
-  const enrichedCheckpoints = checkpoints.map((cp) => {
-    const validLog = logs.find((l) => l.checkpointId === cp.id && l.validationStatus === 'VALID' && (l.roundNumber || 1) === currentRound);
+  const enrichedCheckpoints = checkpoints.map((checkpoint) => {
+    const validLog = logs.find(
+      (log) => log.checkpointId === checkpoint.id
+        && log.validationStatus === 'VALID'
+        && (log.roundNumber || 1) === currentRound,
+    );
     const latestLog = logs
-      .filter((l) => l.checkpointId === cp.id && (l.roundNumber || 1) === currentRound)
+      .filter((log) => log.checkpointId === checkpoint.id && (log.roundNumber || 1) === currentRound)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
-    let statusInRound: 'BELUM' | 'VALID' | 'REVIEW' | 'REJECTED' = 'BELUM';
-    if (validLog) {
-      statusInRound = 'VALID';
-    } else if (latestLog) {
-      statusInRound = latestLog.validationStatus;
-    }
-
-    return {
-      ...cp,
-      statusInRound,
-      lastScanLog: validLog || latestLog || null,
-    };
+    const statusInRound = validLog?.validationStatus || latestLog?.validationStatus || 'BELUM';
+    return { ...checkpoint, statusInRound, lastScanLog: validLog || latestLog || null };
   });
 
   res.json({
@@ -315,8 +315,17 @@ apiRouter.get('/patrol/current', authMiddleware, (req: AuthenticatedRequest, res
     currentRound,
     rounds: Array.from({ length: targetRounds }, (_, index) => {
       const roundNumber = index + 1;
-      const validIds = new Set(logs.filter((log) => log.validationStatus === 'VALID' && (log.roundNumber || 1) === roundNumber).map((log) => log.checkpointId));
-      return { roundNumber, completed: validIds.size, required: checkpoints.length, checkpointIds: [...validIds] };
+      const validIds = new Set(
+        logs
+          .filter((log) => log.validationStatus === 'VALID' && (log.roundNumber || 1) === roundNumber)
+          .map((log) => log.checkpointId),
+      );
+      return {
+        roundNumber,
+        completed: validIds.size,
+        required: checkpoints.filter((checkpoint) => checkpoint.status === 'ACTIVE').length,
+        checkpointIds: [...validIds],
+      };
     }),
   });
 });
@@ -387,7 +396,7 @@ apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, asyn
   }
 });
 
-apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const photoUrl = String(req.body.photoUrl || '').trim();
   if (!photoUrl) return res.status(400).json({ success: false, error: 'Foto Sertigas Naik Jaga wajib diambil.' });
   const session = db.findSessionById(req.params.id);
@@ -411,7 +420,7 @@ apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requir
   res.json({ success: true, session: updated, handover });
 });
 
-apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const session = db.findSessionById(req.params.id);
   if (!session || session.userId !== req.user!.id) return res.status(404).json({ success: false, error: 'Active session milik Anda tidak ditemukan.' });
   if (session.status !== 'ACTIVE') return res.status(409).json({ success: false, error: 'Session sudah tidak aktif.' });
@@ -440,7 +449,7 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
   res.json({ success: true, session: updated });
 });
 
-apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
   const {
     sessionId,
     qrToken,
@@ -469,7 +478,7 @@ apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, (req: Authent
     });
   }
 
-  const result = validateAndProcessScan({
+  const result = await validateAndProcessScan({
     sessionId,
     qrToken,
     latitude: Number(latitude),
@@ -487,31 +496,25 @@ apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, (req: Authent
   res.json({ success: true, ...result });
 });
 
-apiRouter.get('/patrol/sessions', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
-  const isSuperAdmin = isAdministrator(req.user!.role);
+apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-
-  if (!isSuperAdmin) {
+  if (!isAdministrator(req.user!.role)) {
     filter.userId = req.user!.id;
-    filter.siteId = req.user!.siteId;
+    if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
     if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
     if (req.query.userId) filter.userId = String(req.query.userId);
   }
-
-  const sessions = db.getPatrolSessions(filter).sort(
-    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-  );
-
-  res.json({ success: true, sessions });
+  const result = await repositories.sessions.listFiltered(filter, { limit: 500, offset: 0 });
+  res.json({ success: true, sessions: result.items });
 });
 
 // -------------------------------------------------------------
 // HANDOVER ROUTES
 // -------------------------------------------------------------
 
-apiRouter.get('/handover', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/handover', authMiddleware, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const isSuperAdmin = isAdministrator(req.user!.role);
   const filter: any = {};
 
@@ -529,7 +532,7 @@ apiRouter.get('/handover', authMiddleware, (req: AuthenticatedRequest, res: Resp
   res.json({ success: true, handovers });
 });
 
-apiRouter.post('/handover', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/handover', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const {
     handoverType,
     toUserId,
@@ -644,7 +647,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, (req: Authentica
   res.json({ success: true, handover });
 });
 
-apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/handover/:id/ack', authMiddleware, requireLegacyJsonProvider, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
   const handover = db.findHandoverById(req.params.id);
   if (!handover) {
     return res.status(404).json({ success: false, error: 'Data serah terima tidak ditemukan.' });
@@ -670,7 +673,7 @@ apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, (req: Au
 // INCIDENT ROUTES
 // -------------------------------------------------------------
 
-apiRouter.get('/incidents', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/incidents', authMiddleware, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const isSuperAdmin = isAdministrator(req.user!.role);
   const filter: any = {};
 
@@ -689,7 +692,7 @@ apiRouter.get('/incidents', authMiddleware, (req: AuthenticatedRequest, res: Res
   res.json({ success: true, incidents });
 });
 
-apiRouter.post('/incidents', authMiddleware, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/incidents', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const {
     category,
     severity,
@@ -840,51 +843,69 @@ apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, (req: Aut
 // UNIFIED MEDIA GALLERY
 // -------------------------------------------------------------
 
-apiRouter.get('/gallery', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
-  const canViewGlobal = req.user!.role === 'SUPER_ADMIN' || req.user!.role === 'ADMIN';
+apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const canViewGlobal = isAdministrator(req.user!.role) || req.user!.role === 'CHIEF';
   const filter: any = {};
 
   if (!canViewGlobal) {
-    filter.siteId = req.user!.siteId;
-    if (req.user!.role === 'ANGGOTA') filter.userId = req.user!.id;
+    if (req.user!.siteId) filter.siteId = req.user!.siteId;
+    filter.userId = req.user!.id;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
-    if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
+    if (req.query.customerId) filter.customerId = String(req.query.customerId);
   }
 
   if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
-  if (req.query.customerId) filter.customerId = String(req.query.customerId);
   if (req.query.sessionId) filter.sessionId = String(req.query.sessionId);
 
-  const now = new Date();
-  const currentJakarta = getJakartaDateParts(now);
+  const currentJakarta = getJakartaDateParts(new Date());
   const month = Math.min(12, Math.max(1, Number(req.query.month) || currentJakarta.month));
   const year = Math.min(2100, Math.max(2020, Number(req.query.year) || currentJakarta.year));
   let startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-  let nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  let endExclusive = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+
   const requestedDate = String(req.query.date || '');
   if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate.startsWith(`${year}-${String(month).padStart(2, '0')}-`)) {
     startDate = requestedDate;
     const [dateYear, dateMonth, dateDay] = requestedDate.split('-').map(Number);
-    const following = new Date(Date.UTC(dateYear, dateMonth - 1, dateDay + 1));
-    nextMonth = following.toISOString().slice(0, 10);
+    endExclusive = new Date(Date.UTC(dateYear, dateMonth - 1, dateDay + 1)).toISOString().slice(0, 10);
   }
+
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 48));
   const offset = Math.max(0, Number(req.query.offset) || 0);
-
-  const periodMedia = getOperationalMedia(filter).filter((item) => item.shiftDate >= startDate && item.shiftDate < nextMonth);
   const documentType = String(req.query.documentType || '');
-  const matchingMedia = periodMedia.filter((item) => !documentType || item.documentType === documentType || (documentType === 'SERTIGAS' && item.documentType.startsWith('SERTIGAS_'))).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  const media = matchingMedia.slice(offset, offset + limit);
-  const count = (type: string) => periodMedia.filter((item) => type === 'SEMUA' || item.documentType === type || (type === 'SERTIGAS' && item.documentType.startsWith('SERTIGAS_'))).length;
-  const counts = { SEMUA: count('SEMUA'), SERTIGAS: count('SERTIGAS'), PATROLI_QR: count('PATROLI_QR'), SERAH_TERIMA_BARANG: count('SERAH_TERIMA_BARANG'), TARUNA: count('TARUNA'), INSIDEN: count('INSIDEN'), LAINNYA: count('LAINNYA') };
 
-  res.json({ success: true, media, counts, pagination: { total: matchingMedia.length, limit, offset, hasMore: offset + media.length < matchingMedia.length }, period: { startDate, endExclusive: nextMonth } });
+  const queryFilter = {
+    ...filter,
+    from: startDate,
+    to: endExclusive,
+    ...(documentType ? { documentType } : {}),
+  };
+  const [page, counts] = await Promise.all([
+    getOperationalMedia(queryFilter, { limit, offset }),
+    getOperationalMediaCounts({ ...filter, from: startDate, to: endExclusive }),
+  ]);
+
+  const normalizedCounts = {
+    SEMUA: counts.SEMUA || 0,
+    SERTIGAS: counts.SERTIGAS || 0,
+    PATROLI_QR: counts.PATROLI_QR || 0,
+    SERAH_TERIMA_BARANG: counts.SERAH_TERIMA_BARANG || 0,
+    TARUNA: counts.TARUNA || 0,
+    INSIDEN: counts.INSIDEN || 0,
+    LAINNYA: counts.LAINNYA || 0,
+  };
+
+  res.json({
+    success: true,
+    media: page.items,
+    counts: normalizedCounts,
+    pagination: { total: page.total, limit: page.limit, offset: page.offset, hasMore: page.hasMore },
+    period: { startDate, endExclusive },
+  });
 });
 
-apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, (_req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (_req: AuthenticatedRequest, res: Response) => {
   const sites = db.getSites().map((site) => {
     const sessions = db.getActiveSessionsForSite(site.id).map((session) => {
       const user = db.findUserById(session.userId);
@@ -900,7 +921,7 @@ apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, 
   res.json({ success: true, sites });
 });
 
-apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const reason = String(req.body.reason || '').trim();
   if (!reason) return res.status(400).json({ success: false, error: 'Alasan Force Close wajib diisi.' });
   const session = db.findSessionById(req.params.id);
@@ -932,7 +953,7 @@ apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, 
 // SUPER ADMIN COMMAND CENTER & MANAGEMENT
 // -------------------------------------------------------------
 
-apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const adminId = req.user!.id;
   const filterState = db.getAdminFilterState(adminId) || {
     id: `AFS-${adminId}`,
@@ -1046,7 +1067,7 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, (req: 
   });
 });
 
-apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { siteId, shiftCode, memberUserId } = req.body;
   const updated = db.setAdminFilterState(req.user!.id, {
     siteId: siteId === '' ? null : siteId,
@@ -1056,7 +1077,7 @@ apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, (req: A
   res.json({ success: true, filterState: updated });
 });
 
-apiRouter.post('/admin/filter-state/reset', authMiddleware, requireMonitoring, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/filter-state/reset', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const updated = db.setAdminFilterState(req.user!.id, {
     siteId: null,
     shiftCode: null,
@@ -1085,12 +1106,12 @@ apiRouter.patch('/admin/validation-alerts/:id', authMiddleware, requireAdmin, as
 });
 
 // Admin User Management
-apiRouter.get('/admin/users', authMiddleware, requireMonitoring, (_req: Request, res: Response) => {
+apiRouter.get('/admin/users', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (_req: Request, res: Response) => {
   const users = db.getUsers().map(({ passwordHash, ...u }) => u);
   res.json({ success: true, users });
 });
 
-apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, (_req: Request, res: Response) => {
+apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (_req: Request, res: Response) => {
   const customers = db.getCustomers();
   const sites = db.getSites().map((site) => ({
     ...site,
@@ -1103,7 +1124,7 @@ apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, (_req: Reques
   res.json({ success: true, customers, sites, personnel, checkpoints: db.getCheckpoints() });
 });
 
-apiRouter.post('/admin/customers', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/customers', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const code = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
   if (!code || !name) return res.status(400).json({ success: false, error: 'Kode dan nama Customer wajib diisi.' });
@@ -1114,7 +1135,7 @@ apiRouter.post('/admin/customers', authMiddleware, requireAdmin, (req: Authentic
   res.status(201).json({ success: true, customer });
 });
 
-apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const customer = db.findCustomerById(req.params.id);
   if (!customer) return res.status(404).json({ success: false, error: 'Customer tidak ditemukan.' });
   const updates: any = {};
@@ -1125,7 +1146,7 @@ apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, (req: Auth
   res.json({ success: true, customer: updated });
 });
 
-apiRouter.post('/admin/sites', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/sites', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const code = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
   const customerId = String(req.body.customerId || '');
@@ -1141,7 +1162,7 @@ apiRouter.post('/admin/sites', authMiddleware, requireAdmin, (req: Authenticated
   res.status(201).json({ success: true, site });
 });
 
-apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const site = db.findSiteById(req.params.id);
   if (!site) return res.status(404).json({ success: false, error: 'Site tidak ditemukan.' });
   const updates: any = {};
@@ -1163,7 +1184,7 @@ apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, (req: Authenti
   res.json({ success: true, site: updated });
 });
 
-apiRouter.post('/admin/users', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/users', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { name, npk, email, role, siteId, position } = req.body;
   if (!name || !npk) {
     return res.status(400).json({ success: false, error: 'Nama dan NPK wajib diisi.' });
@@ -1211,7 +1232,7 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, (req: Authenticated
   res.json({ success: true, user: safeUser });
 });
 
-apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { name, email, role, siteId, status, position } = req.body;
   const user = db.findUserById(req.params.id);
   if (!user) {
@@ -1250,12 +1271,12 @@ apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, (req: Authenti
 });
 
 // Admin Checkpoint Management
-apiRouter.get('/admin/checkpoints', authMiddleware, (_req: Request, res: Response) => {
+apiRouter.get('/admin/checkpoints', authMiddleware, requireLegacyJsonProvider, (_req: Request, res: Response) => {
   const checkpoints = db.getCheckpoints();
   res.json({ success: true, checkpoints });
 });
 
-apiRouter.post('/admin/checkpoints', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/checkpoints', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { siteId, code, name, latitude, longitude, radiusMeters, coordinateMethod, accuracy, capturedAt } = req.body;
   if (!code || !name || latitude === undefined || longitude === undefined) {
     return res.status(400).json({ success: false, error: 'Semua data checkpoint wajib diisi.' });
@@ -1299,7 +1320,7 @@ apiRouter.post('/admin/checkpoints', authMiddleware, requireAdmin, (req: Authent
   res.json({ success: true, checkpoint: cp });
 });
 
-apiRouter.post('/admin/checkpoints/:id/generate-token', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/checkpoints/:id/generate-token', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const cp = db.findCheckpointById(req.params.id);
   if (!cp) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
   if (!Number.isFinite(cp.latitude) || !Number.isFinite(cp.longitude) || !Number.isFinite(cp.radiusMeters) || cp.radiusMeters < 1) return res.status(409).json({ success: false, error: 'Lengkapi koordinat dan radius checkpoint sebelum generate token.' });
@@ -1312,7 +1333,7 @@ apiRouter.post('/admin/checkpoints/:id/generate-token', authMiddleware, requireA
   res.json({ success: true, checkpoint: updated, token });
 });
 
-apiRouter.post('/admin/checkpoints/:id/generate-qr', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/checkpoints/:id/generate-qr', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const cp = db.findCheckpointById(req.params.id);
   if (!cp) return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
   if (!cp.qrToken) return res.status(409).json({ success: false, error: 'Generate token terlebih dahulu.' });
@@ -1323,7 +1344,7 @@ apiRouter.post('/admin/checkpoints/:id/generate-qr', authMiddleware, requireAdmi
   res.json({ success: true, checkpoint: updated, qrPayload });
 });
 
-apiRouter.patch('/admin/checkpoints/:id', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/admin/checkpoints/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const cp = db.findCheckpointById(req.params.id);
   if (!cp) {
     return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
@@ -1353,7 +1374,7 @@ apiRouter.patch('/admin/checkpoints/:id', authMiddleware, requireAdmin, (req: Au
   res.json({ success: true, checkpoint: updated });
 });
 
-apiRouter.post('/admin/checkpoints/:id/regenerate-qr', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/checkpoints/:id/regenerate-qr', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const cp = db.findCheckpointById(req.params.id);
   if (!cp) {
     return res.status(404).json({ success: false, error: 'Checkpoint tidak ditemukan.' });
@@ -1385,12 +1406,12 @@ apiRouter.post('/admin/checkpoints/:id/regenerate-qr', authMiddleware, requireAd
 });
 
 // Admin Radius Calibration
-apiRouter.get('/admin/radius-calibrations', authMiddleware, (_req: Request, res: Response) => {
+apiRouter.get('/admin/radius-calibrations', authMiddleware, requireLegacyJsonProvider, (_req: Request, res: Response) => {
   const calibrations = db.getRadiusCalibrations();
   res.json({ success: true, calibrations });
 });
 
-apiRouter.post('/admin/radius-calibrations', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/radius-calibrations', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { checkpointId, latitude, longitude, gpsAccuracyM, calculatedDistanceM, verdict, notes } = req.body;
   const cp = db.findCheckpointById(checkpointId);
   if (!cp) {
@@ -1419,13 +1440,13 @@ apiRouter.post('/admin/radius-calibrations', authMiddleware, requireAdmin, (req:
 });
 
 // Admin Audit Logs
-apiRouter.get('/admin/audit-logs', authMiddleware, requireAdmin, (_req: Request, res: Response) => {
+apiRouter.get('/admin/audit-logs', authMiddleware, requireAdmin, requireLegacyJsonProvider, (_req: Request, res: Response) => {
   const logs = db.getAuditLogs().slice(0, 100);
   res.json({ success: true, logs });
 });
 
 // Admin Override Validation
-apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
   const { logId, newStatus, reason } = req.body;
   if (!logId || !newStatus || !reason) {
     return res.status(400).json({ success: false, error: 'Log ID, Status Baru, dan Alasan Koreksi wajib diisi.' });
@@ -1460,7 +1481,7 @@ apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, (req:
 // BATCH OFFLINE QUEUE SYNC
 // -------------------------------------------------------------
 
-apiRouter.post('/sync', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/sync', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const { items } = req.body;
   if (!Array.isArray(items)) {
     return res.status(400).json({ success: false, error: 'Payload sync harus berupa array items.' });
@@ -1471,7 +1492,7 @@ apiRouter.post('/sync', authMiddleware, (req: AuthenticatedRequest, res: Respons
   for (const item of items) {
     try {
       if (item.type === 'PATROL_SCAN') {
-        const result = validateAndProcessScan({
+        const result = await validateAndProcessScan({
           sessionId: item.sessionId,
           qrToken: item.qrToken,
           latitude: Number(item.latitude),
