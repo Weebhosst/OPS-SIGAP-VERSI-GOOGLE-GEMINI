@@ -17,6 +17,12 @@ export const config = Object.freeze({
   checkpointTokenSecret: process.env.CHECKPOINT_TOKEN_SECRET || process.env.SESSION_SECRET || '',
   timezone: process.env.APP_TIMEZONE || 'Asia/Jakarta',
   mediaProvider: process.env.MEDIA_PROVIDER || 'local',
+  mediaBucket: process.env.MEDIA_BUCKET || '',
+  mediaAccessKeyId: process.env.MEDIA_ACCESS_KEY_ID || '',
+  mediaSecretAccessKey: process.env.MEDIA_SECRET_ACCESS_KEY || '',
+  mediaRegion: process.env.MEDIA_REGION || 'auto',
+  mediaEndpoint: process.env.MEDIA_ENDPOINT || '',
+  mediaUrlStyle: process.env.MEDIA_URL_STYLE === 'path' ? 'path' : 'virtual',
   jsonDataFile: process.env.OPS_SIGAP_DATA_FILE || 'data/ops-sigap.json',
 });
 
