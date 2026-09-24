@@ -349,12 +349,16 @@ export async function checkMediaStorage(): Promise<{ provider: string; configure
   }
   try {
     requireS3Config();
-    const response = await s3Request('HEAD', '');
+    // Railway Storage Buckets use an S3-compatible gateway where bucket-root HEAD
+    // is not a reliable readiness probe. A signed GET for a deliberately missing
+    // object validates endpoint routing, credentials, and SigV4 without mutating data.
+    const response = await s3Request('GET', 'ops-sigap/.healthcheck-missing-object');
+    const connected = response.ok || response.status === 404;
     return {
       provider: config.mediaProvider,
       configured: true,
-      connected: response.ok || response.status === 403,
-      ...(response.ok || response.status === 403 ? {} : { error: `HTTP ${response.status}` }),
+      connected,
+      ...(connected ? {} : { error: `HTTP ${response.status}` }),
     };
   } catch (error) {
     return {
