@@ -391,8 +391,8 @@ export const postgresRepositories: RepositoryBundle = {
     update: async (id, updates, assignment) => transaction(async (client) => {
       const fields:string[]=[]; const values:unknown[]=[];
       const columns:Record<string,string>={name:'name',email:'email',role:'role',position:'position',status:'status',mustChangePassword:'must_change_password',passwordChangedAt:'password_changed_at'};
-      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
-      if(fields.length){values.push(id);await client.query(`UPDATE users SET ${fields.join(',')},updated_at=now() WHERE id=${values.length}`,values);}
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
+      if(fields.length){values.push(id);await client.query(`UPDATE users SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length}`,values);}
       if(assignment){
         await client.query('UPDATE user_assignments SET is_current=false,effective_until=$2 WHERE user_id=$1 AND is_current',[id,assignment.effectiveAt]);
         await client.query(
@@ -428,9 +428,9 @@ export const postgresRepositories: RepositoryBundle = {
     },
     update: async (id, updates) => {
       const fields:string[]=[]; const values:unknown[]=[];
-      for(const [key,column] of [['name','name'],['status','status']] as const) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      for(const [key,column] of [['name','name'],['status','status']] as const) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
       if(!fields.length) return postgresRepositories.customers.findById(id);
-      values.push(id); const result=await query(`UPDATE customers SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      values.push(id); const result=await query(`UPDATE customers SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
       return result.rows[0]?mapCustomer(result.rows[0]):undefined;
     },
   },
@@ -452,9 +452,9 @@ export const postgresRepositories: RepositoryBundle = {
     },
     update: async (id, updates) => {
       const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={name:'name',status:'status',personnelCapacity:'personnel_capacity',targetRoundsPerShift:'target_rounds_per_shift'};
-      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
       if(!fields.length) return postgresRepositories.sites.findById(id);
-      values.push(id); const result=await query(`UPDATE sites SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      values.push(id); const result=await query(`UPDATE sites SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
       return result.rows[0]?mapSite(result.rows[0]):undefined;
     },
   },
@@ -540,12 +540,12 @@ export const postgresRepositories: RepositoryBundle = {
       for (const [key,column] of Object.entries(columns)) {
         if ((updates as any)[key] !== undefined) {
           values.push((updates as any)[key]);
-          fields.push(`${column}=${values.length}`);
+          fields.push(`${column}=$${values.length}`);
         }
       }
       if (fields.length) {
         values.push(id);
-        await query(`UPDATE checkpoints SET ${fields.join(',')},updated_at=now() WHERE id=${values.length}`, values);
+        await query(`UPDATE checkpoints SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length}`, values);
       }
       return postgresRepositories.checkpoints.findById(id);
     },
@@ -659,8 +659,8 @@ export const postgresRepositories: RepositoryBundle = {
       if(!current.rows[0]||current.rows[0].user_id!==userId) throw new RepositoryError('SESSION_NOT_FOUND','Active session milik Anda tidak ditemukan.',404);
       if(current.rows[0].status!=='ACTIVE') throw new RepositoryError('SESSION_NOT_ACTIVE','Session sudah tidak aktif.',409);
       const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={status:'status',endedAt:'ended_at',endDocumentationCompleted:'end_documentation_completed',endDocumentationAt:'end_documentation_at',startDocumentationCompleted:'start_documentation_completed',startDocumentationAt:'start_documentation_at',totalValid:'checkpoint_completed'};
-      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
-      values.push(id); const result=await client.query(`UPDATE shift_sessions SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
+      values.push(id); const result=await client.query(`UPDATE shift_sessions SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
       return mapSession(result.rows[0]);
     }),
     forceCloseAtomic: async (id, actorUserId, actorRole, reason) => transaction(async (client) => {
@@ -802,8 +802,8 @@ export const postgresRepositories: RepositoryBundle = {
       return result.rows[0]?mapHandover(result.rows[0]):undefined;
     },
     list: async (filter, request) => {
-      const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}${values.length}`);};
-      if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=${values.length} OR h.to_user_id=${values.length})`);}
+      const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
+      if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=$${values.length} OR h.to_user_id=$${values.length})`);}
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
       const {rows,total,page}=await pageQuery(`SELECT h.* FROM handovers h${where} ORDER BY h.created_at DESC`,`SELECT count(*) FROM handovers h${where}`,values,request);
       return toPage(rows.map(mapHandover),total,page);
@@ -814,9 +814,9 @@ export const postgresRepositories: RepositoryBundle = {
     },
     update: async (id, updates) => {
       const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={toUserId:'to_user_id',ackTo:'ack_to',status:'status',handoverNotes:'handover_notes'};
-      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
       if(!fields.length) return postgresRepositories.handovers.findById(id);
-      values.push(id); const result=await query(`UPDATE handovers SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      values.push(id); const result=await query(`UPDATE handovers SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
       return result.rows[0]?mapHandover(result.rows[0]):undefined;
     },
   },
@@ -827,7 +827,7 @@ export const postgresRepositories: RepositoryBundle = {
       return result.rows[0]?mapIncident(result.rows[0]):undefined;
     },
     list: async (filter, request) => {
-      const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}${values.length}`);};
+      const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
       if(filter.siteId)add('i.site_id=',filter.siteId); if(filter.shiftCode)add('i.shift_code=',filter.shiftCode); if(filter.userId)add('i.user_id=',filter.userId); if(filter.status)add('i.status=',filter.status);
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
       const {rows,total,page}=await pageQuery(`SELECT i.* FROM incident_reports i${where} ORDER BY i.incident_at DESC`,`SELECT count(*) FROM incident_reports i${where}`,values,request);
@@ -839,9 +839,9 @@ export const postgresRepositories: RepositoryBundle = {
     },
     update: async (id, updates) => {
       const fields:string[]=[]; const values:unknown[]=[]; const columns:Record<string,string>={status:'status',followUp:'follow_up',closedAt:'closed_at'};
-      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      for(const [key,column] of Object.entries(columns)) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
       if(!fields.length) return postgresRepositories.incidents.findById(id);
-      values.push(id); const result=await query(`UPDATE incident_reports SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      values.push(id); const result=await query(`UPDATE incident_reports SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
       return result.rows[0]?mapIncident(result.rows[0]):undefined;
     },
   },
