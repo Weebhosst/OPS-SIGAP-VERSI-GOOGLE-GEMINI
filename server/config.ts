@@ -18,6 +18,7 @@ const allowedOrigins = [
 export const config = Object.freeze({
   databaseProvider: databaseProvider(process.env.DATABASE_PROVIDER),
   databaseUrl: process.env.DATABASE_URL || '',
+  postgresSslRejectUnauthorized: String(process.env.PG_SSL_REJECT_UNAUTHORIZED ?? 'true').toLowerCase() !== 'false',
   nodeEnv,
   isProduction: nodeEnv === 'production',
   port: Number(process.env.PORT) || 3000,
