@@ -18,7 +18,8 @@
     "test:media-storage-live": "tsx server/mediaStorage.live-test.ts",
     "test:security": "tsx server/security.run-tests.ts",
     "audit:master-data": "tsx server/masterDataAudit.ts",
-    "cleanup:round6b": "tsx server/round6bCleanup.ts"
+    "cleanup:round6b": "tsx server/round6bCleanup.ts",
+    "gate:round7": "tsx server/round7GoLiveGate.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
