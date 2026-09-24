@@ -31,14 +31,18 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<Role>('ANGGOTA');
   const [newSiteId, setNewSiteId] = useState('BB92');
+  const [sites, setSites] = useState<Array<{ id: string; name: string; customerId: string }>>([]);
+  const [customers, setCustomers] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [filterCustomerId, setFilterCustomerId] = useState('');
+  const [filterSiteId, setFilterSiteId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const loadUsers = async () => {
     try {
-      const res = await api.getAdminUsers();
-      if (res.success) {
-        setUsers(res.users);
-      }
+      const [res, masterRes] = await Promise.all([api.getAdminUsers(), api.getMasters()]);
+      if (res.success) setUsers(res.users);
+      setSites(masterRes.sites);
+      setCustomers(masterRes.customers);
     } catch (err) {
       console.warn('Failed to load users:', err);
     } finally {
@@ -132,6 +136,10 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-xs">
+          <label>Customer<select value={filterCustomerId} onChange={(e) => { setFilterCustomerId(e.target.value); setFilterSiteId(''); }} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2"><option value="">Semua Customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
+          <label>Site<select value={filterSiteId} onChange={(e) => setFilterSiteId(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2"><option value="">Semua Site</option>{sites.filter((site) => !filterCustomerId || site.customerId === filterCustomerId).map((site) => <option key={site.id} value={site.id}>{site.id} — {site.name}</option>)}</select></label>
+        </div>
         {statusMsg && (
           <div className="p-3 bg-emerald-950/70 border border-emerald-700 text-emerald-200 text-xs rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -145,7 +153,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         )}
 
         <div className="space-y-3">
-          {users.map((u) => (
+          {users.filter((u) => (!filterCustomerId || u.customerId === filterCustomerId) && (!filterSiteId || u.siteId === filterSiteId)).map((u) => (
             <div
               key={u.id}
               className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3"
@@ -273,6 +281,8 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
                   >
                     <option value="ANGGOTA">ANGGOTA (Petugas Jaga)</option>
+                    <option value="ADMIN">ADMIN OPERASIONAL</option>
+                    <option value="CHIEF">CHIEF (READ ONLY)</option>
                     <option value="SUPER_ADMIN">SUPER ADMIN</option>
                   </select>
                 </div>
@@ -283,8 +293,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     onChange={(e) => setNewSiteId(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
                   >
-                    <option value="BB92">BB92 (KM 92)</option>
-                    <option value="ALL">Semua Site</option>
+                    {sites.map((site) => <option key={site.id} value={site.id}>{site.id} — {site.name}</option>)}
                   </select>
                 </div>
               </div>

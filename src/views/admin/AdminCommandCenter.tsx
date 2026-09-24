@@ -34,6 +34,8 @@ import {
   ShiftHandover,
   IncidentReport,
   MediaGalleryItem,
+  ValidationAlert,
+  isAdministrator,
 } from '../../types/ops';
 
 interface AdminCommandCenterProps {
@@ -51,7 +53,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   });
   const [panels, setPanels] = useState<{
     activePatrols: PatrolSession[];
-    validationAlerts: PatrolLog[];
+    validationAlerts: Array<ValidationAlert & { patrolLog?: PatrolLog | null }>;
     recentHandovers: ShiftHandover[];
     criticalIncidents: IncidentReport[];
     recentMedia: MediaGalleryItem[];
@@ -74,6 +76,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   const [selectedShift, setSelectedShift] = useState<string>('');
   const [selectedMember, setSelectedMember] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [detailAlert, setDetailAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
+  const [closeAlert, setCloseAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
+  const [closeNote, setCloseNote] = useState('');
 
   const loadDashboard = async () => {
     try {
@@ -131,6 +136,14 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
     } catch (err: any) {
       alert(err.message || 'Gagal mereset filter');
     }
+  };
+
+  const mutateAlert = async (alert: ValidationAlert, action: 'REVIEW' | 'CLOSE' | 'REOPEN') => {
+    try {
+      await api.updateValidationAlert(alert.id, action, action === 'CLOSE' ? closeNote.trim() : undefined);
+      setCloseAlert(null); setCloseNote('');
+      await loadDashboard();
+    } catch (error: any) { window.alert(error.message || 'Gagal memperbarui validation alert.'); }
   };
 
   // Helper for active filter text
@@ -353,8 +366,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] bg-red-950 border border-red-800 text-red-300 font-mono px-1.5 rounded font-bold">
-                          {l.validationStatus}
+                          {l.patrolLog?.validationStatus || 'ALERT'}
                         </span>
+                        <span className={`text-[10px] rounded px-1.5 font-bold ${l.status === 'CLOSED' ? 'bg-slate-700 text-slate-200' : l.status === 'UNDER_REVIEW' ? 'bg-amber-950 text-amber-300' : 'bg-blue-950 text-blue-300'}`}>{l.status.replace('_', ' ')}</span>
                         <span className="font-bold text-xs text-white">
                           {options.users.find((u) => u.id === l.userId)?.name || l.userId}
                         </span>
@@ -365,13 +379,16 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
                     </div>
 
                     <div className="text-xs text-red-300 font-medium">
-                      {l.rejectionMessage || l.rejectionReason}
+                      {l.message}
                     </div>
 
                     <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
-                      <span>Jarak Terhitung: {l.calculatedDistanceM.toFixed(1)}m</span>
-                      {l.isLowGpsAccuracy && <span className="text-amber-400 font-bold">• GPS LOW ACCURACY</span>}
+                      <span>{l.alertType} • {l.siteId}</span>
+                      {l.patrolLog ? <span>Jarak: {l.patrolLog.calculatedDistanceM.toFixed(1)}m</span> : null}
+                      {l.patrolLog?.isLowGpsAccuracy ? <span className="text-amber-400 font-bold">• GPS LOW ACCURACY</span> : null}
                     </div>
+                    {l.status === 'CLOSED' ? <div className="text-[10px] text-slate-400">Closed by {options.users.find((u) => u.id === l.closedBy)?.name || l.closedBy || '-'} • {l.closedAt ? new Date(l.closedAt).toLocaleString('id-ID') : '-'}</div> : null}
+                    <div className="flex flex-wrap gap-1 pt-1"><button onClick={() => setDetailAlert(l)} className="rounded bg-slate-800 px-2 py-1 text-[10px] font-bold">DETAIL</button>{isAdministrator(user?.role) && l.status === 'OPEN' ? <button onClick={() => void mutateAlert(l, 'REVIEW')} className="rounded bg-amber-900 px-2 py-1 text-[10px] font-bold">TANDAI DITINJAU</button> : null}{isAdministrator(user?.role) && l.status !== 'CLOSED' ? <button onClick={() => { setCloseAlert(l); setCloseNote(''); }} className="rounded bg-red-900 px-2 py-1 text-[10px] font-bold">CLOSE</button> : null}{isAdministrator(user?.role) && l.status === 'CLOSED' ? <button onClick={() => void mutateAlert(l, 'REOPEN')} className="rounded bg-blue-800 px-2 py-1 text-[10px] font-bold">BUKA KEMBALI</button> : null}</div>
                   </div>
                 ))}
               </div>
@@ -515,6 +532,10 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
           </div>
         )}
       </main>
+
+      {detailAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 text-xs"><div className="flex justify-between"><h3 className="font-black">DETAIL VALIDATION ALERT</h3><button onClick={() => setDetailAlert(null)}>✕</button></div><div className="mt-4 space-y-2 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div><div>Site: {detailAlert.siteId}</div><div>Jenis: {detailAlert.alertType}</div><div>Detail: {detailAlert.message}</div><div>Status: {detailAlert.status}</div>{detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}</div></div></div> : null}
+
+      {closeAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="w-full max-w-md rounded-2xl border border-red-900 bg-slate-900 p-5 text-xs"><h3 className="font-black text-red-300">TUTUP VALIDATION ALERT</h3><div className="my-3 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div><div>Site: {closeAlert.siteId}</div><div>Jenis: {closeAlert.alertType}</div><div className="mt-2">Detail: {closeAlert.message}</div></div><label className="font-bold">Catatan Penyelesaian<textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal" /></label><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => setCloseAlert(null)} className="rounded-xl bg-slate-800 p-2 font-bold">BATAL</button><button disabled={!closeNote.trim()} onClick={() => void mutateAlert(closeAlert, 'CLOSE')} className="rounded-xl bg-red-700 p-2 font-bold disabled:opacity-40">CLOSE ALERT</button></div></div></div> : null}
 
       {/* Persistent Global Filter Modal */}
       {showFilterModal && (

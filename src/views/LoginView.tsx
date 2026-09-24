@@ -165,6 +165,22 @@ export const LoginView: React.FC = () => {
             <div className="grid grid-cols-2 gap-1.5 pt-1">
               <button
                 type="button"
+                onClick={() => handleQuickSelect('200001', '200001')}
+                className="p-2 bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-800/60 rounded-xl text-left text-emerald-200 transition"
+              >
+                <div className="font-bold text-white text-[11px]">ADMIN</div>
+                <div className="text-[9px] text-emerald-300 font-mono">200001 • 200001</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickSelect('300001', '300001')}
+                className="p-2 bg-amber-950/40 hover:bg-amber-950/70 border border-amber-800/60 rounded-xl text-left text-amber-200 transition"
+              >
+                <div className="font-bold text-white text-[11px]">CHIEF</div>
+                <div className="text-[9px] text-amber-300 font-mono">300001 • 300001</div>
+              </button>
+              <button
+                type="button"
                 onClick={() => handleQuickSelect('999999', 'admin123')}
                 className="p-2 bg-purple-950/40 hover:bg-purple-950/70 border border-purple-800/60 rounded-xl text-left text-purple-200 transition"
               >

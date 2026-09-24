@@ -60,7 +60,7 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
       rejectionMessage: existingLog.rejectionMessage || undefined,
       calculatedDistanceM: existingLog.calculatedDistanceM,
       checkpointId: existingLog.checkpointId,
-      sessionCompleted: session?.status === 'COMPLETE',
+      sessionCompleted: session?.status === 'COMPLETED',
       totalValid: session?.totalValid || 0,
       totalRequired: session?.totalRequired || 5,
       completionPct: session?.completionPct || 0,
@@ -107,8 +107,8 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
     };
   }
 
-  // 2. Session OPEN?
-  if (session.status !== 'OPEN') {
+  // 2. Session ACTIVE?
+  if (session.status !== 'ACTIVE') {
     const failedLog: PatrolLog = {
       id: logId,
       sessionId: session.id,
@@ -136,7 +136,7 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
       rejectionReason: 'SESSION_NOT_OPEN',
       rejectionMessage: 'Sesi patroli ini sudah selesai atau ditutup.',
       calculatedDistanceM: 0,
-      sessionCompleted: session.status === 'COMPLETE',
+      sessionCompleted: session.status === 'COMPLETED',
       totalValid: session.totalValid,
       totalRequired: session.totalRequired,
       completionPct: session.completionPct,
@@ -182,8 +182,32 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
     };
   }
 
-  // 4. Resolve QR token
-  const cp = db.findCheckpointByToken(input.qrToken.trim());
+  if (!session.startDocumentationCompleted) {
+    const failedLog: PatrolLog = {
+      id: logId, sessionId: session.id, checkpointId: 'UNKNOWN', userId: input.userId, siteId: session.siteId,
+      validationStatus: 'REJECTED', rejectionReason: 'START_DOCUMENTATION_REQUIRED',
+      rejectionMessage: 'Sertigas Naik Jaga wajib disimpan sebelum patroli.', latitude: input.latitude, longitude: input.longitude,
+      calculatedDistanceM: 0, photoUrl: input.photoUrl, observationStatus, notes: input.notes,
+      clientCapturedAt: clientTime, serverReceivedAt: now, syncSource, createdAt: now,
+    };
+    db.addPatrolLog(failedLog);
+    return { status: 'REJECTED', rejectionReason: 'START_DOCUMENTATION_REQUIRED', rejectionMessage: 'Sertigas Naik Jaga wajib disimpan sebelum patroli.', calculatedDistanceM: 0, sessionCompleted: false, totalValid: session.totalValid, totalRequired: session.totalRequired, completionPct: session.completionPct, log: failedLog, session };
+  }
+
+  // 4. Resolve QR payload. Legacy token-only QR remains readable, while new QR binds checkpoint ID + secure token.
+  const rawQr = input.qrToken.trim();
+  let secureToken = rawQr;
+  let encodedCheckpointId: string | null = null;
+  try {
+    const payload = JSON.parse(rawQr);
+    if (typeof payload?.token === 'string' && typeof payload?.checkpointId === 'string') {
+      secureToken = payload.token.trim();
+      encodedCheckpointId = payload.checkpointId.trim();
+    }
+  } catch {
+    // Backward compatibility for QR cards that contain only the secure token.
+  }
+  const cp = db.findCheckpointByToken(secureToken);
   if (!cp) {
     const failedLog: PatrolLog = {
       id: logId,
@@ -219,6 +243,18 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
       log: failedLog,
       session,
     };
+  }
+
+  if (encodedCheckpointId && encodedCheckpointId !== cp.id) {
+    const failedLog: PatrolLog = {
+      id: logId, sessionId: session.id, checkpointId: cp.id, userId: input.userId, siteId: session.siteId,
+      validationStatus: 'REJECTED', rejectionReason: 'QR_CHECKPOINT_MISMATCH',
+      rejectionMessage: 'Checkpoint ID pada QR tidak cocok dengan secure token.', latitude: input.latitude,
+      longitude: input.longitude, calculatedDistanceM: 0, photoUrl: input.photoUrl, observationStatus,
+      notes: input.notes, clientCapturedAt: clientTime, serverReceivedAt: now, syncSource, createdAt: now,
+    };
+    db.addPatrolLog(failedLog);
+    return { status: 'REJECTED', rejectionReason: 'QR_CHECKPOINT_MISMATCH', rejectionMessage: 'Checkpoint ID pada QR tidak cocok dengan secure token.', calculatedDistanceM: 0, checkpointId: cp.id, sessionCompleted: false, totalValid: session.totalValid, totalRequired: session.totalRequired, completionPct: session.completionPct, log: failedLog, session };
   }
 
   // 5. Checkpoint & QR status active?
@@ -342,8 +378,12 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
 
   // 7. Duplicate checkpoint in same session?
   const existingLogsForSession = db.getPatrolLogs(session.id);
+  const checkpointsPerRound = Math.max(1, db.getCheckpoints(session.siteId).filter((checkpoint) => checkpoint.status === 'ACTIVE').length);
+  const targetRounds = Math.max(1, db.findSiteById(session.siteId)?.targetRoundsPerShift || 1);
+  const validLogsCount = existingLogsForSession.filter((log) => log.validationStatus === 'VALID').length;
+  const currentRound = Math.min(targetRounds, Math.floor(validLogsCount / checkpointsPerRound) + 1);
   const alreadyValid = existingLogsForSession.some(
-    (l) => l.checkpointId === cp.id && l.validationStatus === 'VALID'
+    (l) => l.checkpointId === cp.id && l.validationStatus === 'VALID' && (l.roundNumber || 1) === currentRound
   );
   if (alreadyValid) {
     const failedLog: PatrolLog = {
@@ -366,6 +406,7 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
       serverReceivedAt: now,
       syncSource,
       createdAt: now,
+      roundNumber: currentRound,
     };
     db.addPatrolLog(failedLog);
     return {
@@ -419,6 +460,7 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
       syncSource,
       isLowGpsAccuracy,
       createdAt: now,
+      roundNumber: currentRound,
     };
     db.addPatrolLog(failedLog);
     return {
@@ -461,6 +503,7 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
       syncSource,
       isLowGpsAccuracy,
       createdAt: now,
+      roundNumber: currentRound,
     };
     db.addPatrolLog(reviewLog);
     return {
@@ -500,6 +543,7 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
     syncSource,
     isLowGpsAccuracy,
     createdAt: now,
+    roundNumber: currentRound,
   };
 
   db.addPatrolLog(validLog);
@@ -529,10 +573,7 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
 
   // Recalculate session progress
   const updatedLogs = db.getPatrolLogs(session.id);
-  const uniqueValidCheckpoints = new Set(
-    updatedLogs.filter((l) => l.validationStatus === 'VALID').map((l) => l.checkpointId)
-  );
-  const totalValid = uniqueValidCheckpoints.size;
+  const totalValid = updatedLogs.filter((l) => l.validationStatus === 'VALID').length;
   const totalRequired = session.totalRequired;
   const completionPct = Math.round((totalValid / totalRequired) * 100);
 
@@ -541,27 +582,23 @@ export function validateAndProcessScan(input: ScanInput): ValidationResult {
   const sessionUpdates: Partial<PatrolSession> = {
     totalValid,
     completionPct,
+    roundNumber: Math.min(targetRounds, Math.floor(totalValid / checkpointsPerRound) + 1),
   };
 
   if (isComplete) {
-    sessionUpdates.status = 'COMPLETE';
-    sessionUpdates.endedAt = clientTime;
-    sessionUpdates.endLatitude = input.latitude;
-    sessionUpdates.endLongitude = input.longitude;
-
-    // Audit log round completed
+    // Checkpoint target achieved. Session remains ACTIVE until mandatory Turun Jaga documentation.
     db.addAuditLog({
       actorUserId: input.userId,
-      action: 'PATROL_ROUND_COMPLETE',
+      action: 'PATROL_TARGET_ACHIEVED',
       entityType: 'patrol_session',
       entityId: session.id,
       newValue: {
         totalValid,
         totalRequired,
         completionPct: 100,
-        endedAt: clientTime,
+        achievedAt: clientTime,
       },
-      reason: `Ronde patroli selesai 100% (${totalValid}/${totalRequired} checkpoint valid)`,
+      reason: `Target checkpoint tercapai (${totalValid}/${totalRequired}); menunggu Turun Jaga`,
     });
   }
 
@@ -593,20 +630,19 @@ export function getMemberShiftProgress(userId: string, siteId: string) {
     shiftCode: shift.code,
   });
 
-  // Completed rounds today for this shift
-  const completedRounds = allSessions.filter(
-    (s) => s.status === 'COMPLETE' && s.shiftDate === shift.operationalDate
-  ).length;
-
   const activeSession = allSessions.find(
-    (s) => s.status === 'OPEN' && s.shiftDate === shift.operationalDate
+    (s) => s.status === 'ACTIVE' && s.shiftDate === shift.operationalDate
   );
+  const targetRounds = Math.max(1, db.findSiteById(siteId)?.targetRoundsPerShift || 1);
+  const checkpointsPerRound = Math.max(1, db.getCheckpoints(siteId).filter((checkpoint) => checkpoint.status === 'ACTIVE').length);
+  const completedSession = allSessions.find((s) => s.status === 'COMPLETED' && s.shiftDate === shift.operationalDate);
+  const completedRounds = completedSession ? targetRounds : Math.min(targetRounds, Math.floor((activeSession?.totalValid || 0) / checkpointsPerRound));
 
   return {
     shift,
-    targetRounds: 5,
+    targetRounds,
     completedRounds,
     activeSession,
-    isTargetAchieved: completedRounds >= 5,
+    isTargetAchieved: completedRounds >= targetRounds,
   };
 }

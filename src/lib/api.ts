@@ -14,6 +14,9 @@ import {
   AdminFilterState,
   AdminKpis,
   ShiftInfo,
+  Customer,
+  Site,
+  ValidationAlert,
 } from '../types/ops';
 
 const API_BASE = '/api';
@@ -89,12 +92,21 @@ export const api = {
       session: PatrolSession | null;
       checkpoints: any[];
       logs?: PatrolLog[];
+      targetRounds?: number;
+      currentRound?: number;
+      rounds?: Array<{ roundNumber: number; completed: number; required: number; checkpointIds: string[] }>;
     }>('/patrol/current'),
 
   startPatrolSession: () =>
     request<{ success: boolean; session: PatrolSession }>('/patrol/session/start', {
       method: 'POST',
     }),
+
+  submitStartDocumentation: (sessionId: string, photoUrl: string) =>
+    request<{ success: boolean; session: PatrolSession }>(`/patrol/session/${sessionId}/start-documentation`, { method: 'POST', body: JSON.stringify({ photoUrl }) }),
+
+  closePatrolSession: (sessionId: string, payload: { endPhotoUrl: string; hasSpecialHandover: boolean; specialNotes?: string; specialPhotoUrls?: string[] }) =>
+    request<{ success: boolean; session: PatrolSession; progress?: { completed: number; target: number }; missingCheckpoints?: Array<{ code: string; name: string }> }>(`/patrol/session/${sessionId}/close`, { method: 'POST', body: JSON.stringify(payload) }),
 
   submitPatrolScan: (payload: {
     sessionId: string;
@@ -172,8 +184,21 @@ export const api = {
   // Gallery
   getGallery: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request<{ success: boolean; media: MediaGalleryItem[] }>(`/gallery${qs}`);
+    return request<{ success: boolean; media: MediaGalleryItem[]; counts: Record<string, number>; pagination: { total: number; limit: number; offset: number; hasMore: boolean } }>(`/gallery${qs}`);
   },
+
+  getActiveSessions: () => request<{ success: boolean; sites: Array<Site & { activeCount: number; capacityStatus: 'FULL' | 'AVAILABLE'; sessions: Array<PatrolSession & { memberName: string; npk: string }> }> }>('/monitoring/active-sessions'),
+
+  forceCloseSession: (id: string, reason: string) =>
+    request<{ success: boolean; session: PatrolSession }>(`/admin/sessions/${id}/force-close`, { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  getMasters: () => request<{ success: boolean; customers: Customer[]; sites: Array<Site & { activeCount: number }>; personnel: User[]; checkpoints: any[] }>('/admin/masters'),
+  createCustomer: (payload: { code: string; name: string }) => request<{ success: boolean; customer: Customer }>('/admin/customers', { method: 'POST', body: JSON.stringify(payload) }),
+  updateCustomer: (id: string, payload: Partial<Customer>) => request<{ success: boolean; customer: Customer }>(`/admin/customers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  createSite: (payload: { code: string; name: string; customerId: string; personnelCapacity: number; targetRoundsPerShift?: number }) => request<{ success: boolean; site: Site }>('/admin/sites', { method: 'POST', body: JSON.stringify(payload) }),
+  updateSite: (id: string, payload: Partial<Site>) => request<{ success: boolean; site: Site }>(`/admin/sites/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  generateCheckpointToken: (id: string) => request<{ success: boolean; token: string }>(`/admin/checkpoints/${id}/generate-token`, { method: 'POST' }),
+  generateCheckpointQr: (id: string) => request<{ success: boolean; qrPayload: string }>(`/admin/checkpoints/${id}/generate-qr`, { method: 'POST' }),
 
   // Admin Command Center
   getCommandCenter: () =>
@@ -183,7 +208,7 @@ export const api = {
       kpis: AdminKpis;
       panels: {
         activePatrols: PatrolSession[];
-        validationAlerts: PatrolLog[];
+        validationAlerts: ValidationAlert[];
         recentHandovers: ShiftHandover[];
         criticalIncidents: IncidentReport[];
         recentMedia: MediaGalleryItem[];
@@ -194,6 +219,9 @@ export const api = {
         shifts: { code: string; name: string }[];
       };
     }>('/admin/command-center'),
+
+  updateValidationAlert: (id: string, action: 'REVIEW' | 'CLOSE' | 'REOPEN', closeNote?: string) =>
+    request<{ success: boolean; alert: ValidationAlert }>(`/admin/validation-alerts/${id}`, { method: 'PATCH', body: JSON.stringify({ action, closeNote }) }),
 
   setAdminFilter: (filter: Partial<AdminFilterState>) =>
     request<{ success: boolean; filterState: AdminFilterState }>('/admin/filter-state', {

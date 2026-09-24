@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { IncidentReport, IncidentCategory, IncidentSeverity, IncidentStatus } from '../types/ops';
+import { IncidentReport, IncidentCategory, IncidentSeverity, IncidentStatus, PatrolSession } from '../types/ops';
 import { CameraCaptureModal } from '../components/CameraCaptureModal';
 
 export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -29,21 +29,25 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [category, setCategory] = useState<IncidentCategory>('INSIDENTIL');
   const [severity, setSeverity] = useState<IncidentSeverity>('RENDAH');
   const [title, setTitle] = useState('');
-  const [locationText, setLocationText] = useState('Area Site BB92');
+  const [locationText, setLocationText] = useState('');
   const [chronology, setChronology] = useState('');
   const [initialAction, setInitialAction] = useState('');
   const [escalated, setEscalated] = useState(false);
   const [escalatedTo, setEscalatedTo] = useState('SUPERVISOR / DANRU');
   const [policeReportNo, setPoliceReportNo] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [notes, setNotes] = useState('');
+  const [activeSession, setActiveSession] = useState<PatrolSession | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const loadIncidents = async () => {
     try {
-      const res = await api.getIncidents();
+      const [res, sessionRes] = await Promise.all([api.getIncidents(), api.getCurrentSession()]);
       if (res.success) {
         setIncidents(res.incidents);
       }
+      setActiveSession(sessionRes.hasOpenSession ? sessionRes.session : null);
     } catch (err) {
       console.warn('Failed to load incidents:', err);
     } finally {
@@ -57,8 +61,12 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const handleCreateIncident = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !chronology || !initialAction) {
-      alert('Judul, kronologi, dan tindakan awal wajib diisi.');
+    if (!title || !locationText || !chronology || !initialAction) {
+      alert('Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.');
+      return;
+    }
+    if (photoUrls.length < 3) {
+      alert('Dokumentasi kejadian minimal 3 foto.');
       return;
     }
 
@@ -74,7 +82,9 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         escalated,
         escalatedTo: escalated ? escalatedTo : undefined,
         policeReportNo: policeReportNo || undefined,
-        photoUrl: photoUrl || undefined,
+        photoUrl: photoUrls[0],
+        photoUrls,
+        notes,
       });
 
       if (res.success) {
@@ -83,6 +93,8 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         setChronology('');
         setInitialAction('');
         setPhotoUrl(null);
+        setPhotoUrls([]);
+        setNotes('');
         setEscalated(false);
         setPoliceReportNo('');
         await loadIncidents();
@@ -93,6 +105,9 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setSubmitting(false);
     }
   };
+
+  const canCreate = user?.role === 'ANGGOTA' && !!activeSession?.startDocumentationCompleted;
+  const canManageStatus = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
   const handleUpdateStatus = async (id: string, newStatus: IncidentStatus) => {
     try {
@@ -122,13 +137,13 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <p className="text-[11px] text-slate-400 font-medium">Insiden, K3, & Keamanan</p>
             </div>
           </div>
-          <button
+          {canCreate ? <button
             onClick={() => setShowCreateModal(true)}
             className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-lg shadow-amber-950/50"
           >
             <Plus className="w-4 h-4" />
             <span>Lapor Insiden</span>
-          </button>
+          </button> : null}
         </div>
       </header>
 
@@ -138,12 +153,12 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <AlertTriangle className="w-10 h-10 mx-auto text-slate-600 mb-2" />
             <p className="text-sm font-medium">Belum ada laporan kejadian aktif.</p>
             <p className="text-xs text-slate-500 mt-1">Situasi site KM 92 kondusif aman.</p>
-            <button
+            {canCreate ? <button
               onClick={() => setShowCreateModal(true)}
               className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl inline-flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" /> Buat Laporan Insiden
-            </button>
+            </button> : null}
           </div>
         ) : (
           incidents.map((inc) => (
@@ -222,7 +237,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               )}
 
               {/* Status Update Quick Toggles */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
+              {canManageStatus ? <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
                 <span className="text-slate-500">Ubah Status:</span>
                 <div className="flex gap-1.5">
                   {inc.status !== 'OPEN' && (
@@ -250,7 +265,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     </button>
                   )}
                 </div>
-              </div>
+              </div> : null}
             </div>
           ))
         )}
@@ -268,6 +283,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </div>
 
             <form onSubmit={handleCreateIncident} className="space-y-3 text-xs">
+              <div className="rounded-xl bg-slate-950 p-3 text-slate-300"><div>Member: <b>{user?.name}</b> ({user?.npk})</div><div>Customer: {activeSession?.customerId}</div><div>Site: {activeSession?.siteId}</div><div>{activeSession?.shiftCode} • Operational Date {activeSession?.shiftDate}</div><div>Session ID: {activeSession?.id}</div></div>
               <div>
                 <label className="font-semibold text-slate-300 block mb-1">Kategori Kejadian:</label>
                 <select
@@ -325,14 +341,18 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Lokasi Kejadian:</label>
+                <label className="font-semibold text-slate-300 block mb-1">AREA KEJADIAN:</label>
                 <input
                   type="text"
+                  required
+                  placeholder="Gerbang Utama / Jalur A / Rest Area / Pos Barat"
                   value={locationText}
                   onChange={(e) => setLocationText(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
                 />
               </div>
+
+              <div><label className="font-semibold text-slate-300 block mb-1">Catatan:</label><textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-white" /></div>
 
               <div>
                 <label className="font-semibold text-slate-300 block mb-1">Kronologi Kejadian Lengkap:</label>
@@ -399,33 +419,15 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
               {/* Photo Evidence Capture */}
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Bukti Foto TKP / Kejadian:</label>
-                {photoUrl ? (
-                  <div className="relative rounded-xl overflow-hidden aspect-video border border-slate-800">
-                    <img src={photoUrl} alt="Evidence" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setPhotoUrl(null)}
-                      className="absolute top-2 right-2 p-1 rounded-lg bg-black/70 text-white"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowCameraModal(true)}
-                    className="w-full py-2.5 border-2 border-dashed border-slate-700 hover:border-slate-500 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Ambil Foto Bukti TKP</span>
-                  </button>
-                )}
+                <label className="font-semibold text-slate-300 block mb-1">Dokumentasi Foto (minimum 3, maksimum 5):</label>
+                <div className="grid grid-cols-3 gap-2">{photoUrls.map((photo, index) => <div key={index} className="relative aspect-square overflow-hidden rounded-xl"><img src={photo} alt={`Bukti ${index + 1}`} className="h-full w-full object-cover" /><button type="button" onClick={() => setPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded bg-black/70 px-1">✕</button></div>)}</div>
+                <button type="button" disabled={photoUrls.length >= 5} onClick={() => setShowCameraModal(true)} className="mt-2 w-full rounded-xl border-2 border-dashed border-slate-700 py-2.5 text-slate-400 disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />Tambah Foto ({photoUrls.length}/5)</button>
+                {photoUrls.length < 3 ? <p className="mt-1 text-amber-300">Dokumentasi kejadian minimal 3 foto.</p> : <p className="mt-1 text-emerald-300">Dokumentasi valid.</p>}
               </div>
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || photoUrls.length < 3 || photoUrls.length > 5}
                 className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-amber-950/40 transition"
               >
                 {submitting ? 'Menyimpan Laporan...' : 'KIRIM LAPORAN KEJADIAN'}
@@ -438,7 +440,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       <CameraCaptureModal
         isOpen={showCameraModal}
         onClose={() => setShowCameraModal(false)}
-        onCapture={(base64) => setPhotoUrl(base64)}
+        onCapture={(base64) => setPhotoUrls((items) => items.length < 5 ? [...items, base64] : items)}
       />
     </div>
   );

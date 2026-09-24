@@ -51,6 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await api.logout();
     } catch {}
     localStorage.removeItem('sigap_token');
+    if (user) sessionStorage.removeItem(`ops:lastRoute:${user.id}`);
     setUser(null);
   };
 

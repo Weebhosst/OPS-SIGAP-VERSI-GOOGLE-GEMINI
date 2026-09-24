@@ -8,6 +8,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import {
   User,
+  Customer,
   Site,
   Checkpoint,
   PatrolSession,
@@ -18,10 +19,12 @@ import {
   RadiusCalibration,
   AuditLog,
   AdminFilterState,
+  ValidationAlert,
   calculateDistanceMeters,
 } from '../src/types/ops';
 
 export interface DatabaseSchema {
+  customers: Customer[];
   users: User[];
   sites: Site[];
   checkpoints: Checkpoint[];
@@ -33,12 +36,16 @@ export interface DatabaseSchema {
   radius_calibrations: RadiusCalibration[];
   audit_logs: AuditLog[];
   admin_filter_state: AdminFilterState[];
+  validation_alerts: ValidationAlert[];
   settings: Record<string, any>;
   go_live_checklist: { item: string; done: boolean; checkedAt?: string }[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
-const DATA_FILE = path.join(DATA_DIR, 'ops-sigap.json');
+const DATA_FILE = process.env.OPS_SIGAP_DATA_FILE
+  ? path.resolve(process.env.OPS_SIGAP_DATA_FILE)
+  : path.join(DATA_DIR, 'ops-sigap.json');
+const STORAGE_DIR = path.dirname(DATA_FILE);
 
 class DatabaseStore {
   private data: DatabaseSchema;
@@ -50,6 +57,7 @@ class DatabaseStore {
 
   private getInitialSchema(): DatabaseSchema {
     return {
+      customers: [],
       users: [],
       sites: [],
       checkpoints: [],
@@ -61,6 +69,7 @@ class DatabaseStore {
       radius_calibrations: [],
       audit_logs: [],
       admin_filter_state: [],
+      validation_alerts: [],
       settings: {
         appName: 'OPS SIGAP',
         subtitle: 'Security Operations System',
@@ -81,8 +90,8 @@ class DatabaseStore {
   public init() {
     if (this.initialized) return;
 
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (!fs.existsSync(STORAGE_DIR)) {
+      fs.mkdirSync(STORAGE_DIR, { recursive: true });
     }
 
     if (fs.existsSync(DATA_FILE)) {
@@ -96,6 +105,9 @@ class DatabaseStore {
             (this.data as any)[key] = defaultSchema[key];
           }
         }
+        const isGenuinelyEmpty = this.data.users.length === 0 && this.data.sites.length === 0 && this.data.checkpoints.length === 0;
+        if (isGenuinelyEmpty) this.seedProduction();
+        else this.migrateLegacyData();
       } catch (err) {
         console.error('Failed to read existing database file, re-seeding:', err);
         this.seedProduction();
@@ -104,16 +116,63 @@ class DatabaseStore {
       this.seedProduction();
     }
 
-    // Ensure super admin and initial users are always present
-    this.ensureSeedData();
+    this.migrateLegacyData();
     this.save();
     this.initialized = true;
   }
 
+  private migrateLegacyData() {
+    const now = new Date().toISOString();
+    this.data.validation_alerts ||= [];
+    for (const site of this.data.sites) site.targetRoundsPerShift = Math.max(1, Number(site.targetRoundsPerShift) || 1);
+    for (const site of this.data.sites) {
+      site.customerId ||= this.data.customers[0]?.id || 'UNASSIGNED';
+      site.code ||= site.id;
+      site.personnelCapacity ||= site.id === 'BB92' ? 1 : 1;
+      site.targetRoundsPerShift = Math.max(1, Number(site.targetRoundsPerShift) || 1);
+    }
+    for (const user of this.data.users) {
+      user.customerId ??= user.siteId ? this.data.sites.find((site) => site.id === user.siteId)?.customerId || null : null;
+      user.position ||= user.role === 'ANGGOTA' ? 'ANGGOTA SECURITY' : user.role.replace('_', ' ');
+      user.assignmentHistory ||= [{ customerId: user.customerId || null, siteId: user.siteId, effectiveAt: user.createdAt, changedBy: null }];
+    }
+    for (const session of this.data.patrol_sessions) {
+      const legacyStatus = session.status as string;
+      if (legacyStatus === 'OPEN') session.status = 'ACTIVE';
+      if (legacyStatus === 'COMPLETE') session.status = 'COMPLETED';
+      if (legacyStatus === 'ABANDONED') session.status = 'CANCELLED';
+      session.npk ||= this.data.users.find((user) => user.id === session.userId)?.npk;
+      session.customerId ??= this.data.sites.find((site) => site.id === session.siteId)?.customerId || null;
+      session.forceClosed ??= session.status === 'FORCE_CLOSED';
+      session.startDocumentationCompleted ??= true;
+      session.endDocumentationCompleted ??= session.status === 'COMPLETED';
+    }
+    for (const incident of this.data.incident_reports) incident.photoUrls ||= incident.photoUrl ? [incident.photoUrl] : [];
+    for (const handover of this.data.shift_handovers) handover.photoUrls ||= handover.photoUrl ? [handover.photoUrl] : [];
+    for (const log of this.data.patrol_logs.filter((item) => item.validationStatus !== 'VALID')) {
+      if (!this.data.validation_alerts.some((alert) => alert.patrolLogId === log.id)) this.data.validation_alerts.push({ id: `ALT-${log.id}`, alertType: log.rejectionReason || log.validationStatus, status: 'OPEN', patrolLogId: log.id, userId: log.userId, sessionId: log.sessionId, siteId: log.siteId, checkpointId: log.checkpointId || null, message: log.rejectionMessage || log.rejectionReason || 'Validasi memerlukan perhatian.', createdAt: log.createdAt });
+    }
+    const addLegacyMedia = (item: MediaGalleryItem) => {
+      const exists = this.data.media_gallery.some((media) => media.sourceModule === item.sourceModule && (
+        media.sourceId === item.sourceId ||
+        (!!item.handoverId && media.handoverId === item.handoverId && media.photoUrl === item.photoUrl) ||
+        (!!item.incidentId && media.incidentId === item.incidentId && media.photoUrl === item.photoUrl)
+      ));
+      if (!exists) this.data.media_gallery.push(item);
+    };
+    for (const log of this.data.patrol_logs.filter((item) => item.validationStatus === 'VALID' && item.photoUrl)) {
+      const session = this.data.patrol_sessions.find((item) => item.id === log.sessionId);
+      if (!session) continue;
+      addLegacyMedia({ id: `MED-${log.id}`, sourceModule: 'PATROL', sourceTable: 'patrol_logs', sourceId: log.id, siteId: log.siteId, userId: log.userId, shiftDate: session.shiftDate, shiftCode: session.shiftCode, category: 'PATROLI_QR', subcategory: log.observationStatus, photoUrl: log.photoUrl!, caption: `Patroli QR ${log.checkpointId}`, eventAt: log.clientCapturedAt || log.createdAt, latitude: log.latitude, longitude: log.longitude, checkpointId: log.checkpointId, status: 'ACTIVE', createdAt: log.createdAt, createdBy: log.userId });
+    }
+    for (const handover of this.data.shift_handovers) (handover.photoUrls || []).forEach((photoUrl, index) => addLegacyMedia({ id: `MED-${handover.id}-${index + 1}`, sourceModule: 'HANDOVER', sourceTable: 'shift_handovers', sourceId: `${handover.id}-${index + 1}`, siteId: handover.siteId, userId: handover.fromUserId, shiftDate: handover.shiftDate, shiftCode: handover.shiftCode, category: handover.isTaruna ? 'TARUNA' : handover.handoverType === 'NAIK_JAGA' ? 'SERTIGAS_NAIK_JAGA' : handover.handoverType === 'TURUN_JAGA' ? 'SERTIGAS_TURUN_JAGA' : 'SERAH_TERIMA_BARANG', subcategory: handover.handoverType, photoUrl, caption: handover.handoverNotes || handover.handoverType, eventAt: handover.eventAt, handoverId: handover.id, status: 'ACTIVE', createdAt: handover.createdAt, createdBy: handover.createdBy }));
+    for (const incident of this.data.incident_reports) (incident.photoUrls || []).forEach((photoUrl, index) => addLegacyMedia({ id: `MED-${incident.id}-${index + 1}`, sourceModule: 'INCIDENT', sourceTable: 'incident_reports', sourceId: `${incident.id}-${index + 1}`, siteId: incident.siteId, userId: incident.userId, shiftDate: incident.shiftDate, shiftCode: incident.shiftCode, category: 'INSIDEN', subcategory: incident.category, photoUrl, caption: incident.title, eventAt: incident.incidentAt, latitude: incident.latitude, longitude: incident.longitude, incidentId: incident.id, status: 'ACTIVE', createdAt: incident.createdAt, createdBy: incident.createdBy }));
+  }
+
   private save() {
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+      if (!fs.existsSync(STORAGE_DIR)) {
+        fs.mkdirSync(STORAGE_DIR, { recursive: true });
       }
       fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch (err) {
@@ -126,6 +185,15 @@ class DatabaseStore {
     const now = new Date().toISOString();
 
     const hashSync = (plain: string) => bcrypt.hashSync(plain, 10);
+
+    this.data.customers = [{
+      id: 'CUST-AIS',
+      code: 'AIS',
+      name: 'ASTRA INFRA SOLUTIONS',
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    }];
 
     // 1. Users
     const users: User[] = [
@@ -178,6 +246,30 @@ class DatabaseStore {
         updatedAt: now,
       },
       {
+        id: 'USR-ADMIN-001',
+        name: 'Admin Operasional',
+        npk: '200001',
+        email: 'admin.ops@ops-sigap.local',
+        role: 'ADMIN',
+        siteId: 'BB92',
+        status: 'ACTIVE',
+        passwordHash: hashSync('200001'),
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'USR-CHIEF-001',
+        name: 'Chief Site',
+        npk: '300001',
+        email: 'chief.site@ops-sigap.local',
+        role: 'CHIEF',
+        siteId: 'BB92',
+        status: 'ACTIVE',
+        passwordHash: hashSync('300001'),
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
         id: 'USR-SUPER-001',
         name: 'SUPER ADMIN SIGAP',
         npk: superAdminNpk,
@@ -210,7 +302,10 @@ class DatabaseStore {
     const sites: Site[] = [
       {
         id: 'BB92',
+        code: 'BB92',
         name: 'BARANG BUKTI KM 92',
+        customerId: 'CUST-AIS',
+        personnelCapacity: 1,
         timezone: 'Asia/Jakarta',
         status: 'ACTIVE',
         createdAt: now,
@@ -351,55 +446,6 @@ class DatabaseStore {
     this.save();
   }
 
-  private ensureSeedData() {
-    if (!this.data.sites || this.data.sites.length === 0) {
-      this.seedProduction();
-      return;
-    }
-
-    const hashSync = (plain: string) => bcrypt.hashSync(plain, 10);
-    const now = new Date().toISOString();
-
-    // Ensure Super Admin 999001 and 999999 exist
-    if (!this.data.users.some((u) => u.npk === '999001')) {
-      this.data.users.push({
-        id: 'USR-SUPER-001',
-        name: 'SUPER ADMIN SIGAP',
-        npk: '999001',
-        email: 'sigapgda77@gmail.com',
-        role: 'SUPER_ADMIN',
-        siteId: null,
-        status: 'ACTIVE',
-        passwordHash: hashSync('999001'),
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-
-    if (!this.data.users.some((u) => u.npk === '999999')) {
-      this.data.users.push({
-        id: 'USR-SUPER-999',
-        name: 'SUPER ADMIN (DEMO)',
-        npk: '999999',
-        email: 'admin@ops-sigap.local',
-        role: 'SUPER_ADMIN',
-        siteId: null,
-        status: 'ACTIVE',
-        passwordHash: hashSync('admin123'),
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-
-    // Ensure all 5 checkpoints exist
-    const cpCodes = ['CP01', 'CP02', 'CP03', 'CP04', 'CP05'];
-    const existingCodes = this.data.checkpoints.map((c) => c.code);
-    const hasAll = cpCodes.every((c) => existingCodes.includes(c));
-    if (!hasAll) {
-      this.seedProduction();
-    }
-  }
-
   // -------------------------------------------------------------
   // USER METHODS
   // -------------------------------------------------------------
@@ -434,8 +480,48 @@ class DatabaseStore {
   // SITES & CHECKPOINTS
   // -------------------------------------------------------------
 
+  public getCustomers(): Customer[] {
+    return this.data.customers;
+  }
+
+  public findCustomerById(id: string): Customer | undefined {
+    return this.data.customers.find((customer) => customer.id === id);
+  }
+
+  public addCustomer(customer: Customer): Customer {
+    this.data.customers.push(customer);
+    this.save();
+    return customer;
+  }
+
+  public updateCustomer(id: string, updates: Partial<Customer>): Customer | undefined {
+    const customer = this.findCustomerById(id);
+    if (!customer) return undefined;
+    Object.assign(customer, updates, { updatedAt: new Date().toISOString() });
+    this.save();
+    return customer;
+  }
+
   public getSites(): Site[] {
     return this.data.sites;
+  }
+
+  public findSiteById(id: string): Site | undefined {
+    return this.data.sites.find((site) => site.id === id);
+  }
+
+  public addSite(site: Site): Site {
+    this.data.sites.push(site);
+    this.save();
+    return site;
+  }
+
+  public updateSite(id: string, updates: Partial<Site>): Site | undefined {
+    const site = this.findSiteById(id);
+    if (!site) return undefined;
+    Object.assign(site, updates, { updatedAt: new Date().toISOString() });
+    this.save();
+    return site;
   }
 
   public getCheckpoints(siteId?: string): Checkpoint[] {
@@ -473,8 +559,16 @@ class DatabaseStore {
 
   public getOpenSessionForUser(userId: string, siteId: string): PatrolSession | undefined {
     return this.data.patrol_sessions.find(
-      (s) => s.userId === userId && s.siteId === siteId && s.status === 'OPEN'
+      (s) => s.userId === userId && s.siteId === siteId && s.status === 'ACTIVE'
     );
+  }
+
+  public getActiveSessionForUser(userId: string): PatrolSession | undefined {
+    return this.data.patrol_sessions.find((session) => session.userId === userId && session.status === 'ACTIVE');
+  }
+
+  public getActiveSessionsForSite(siteId: string): PatrolSession[] {
+    return this.data.patrol_sessions.filter((session) => session.siteId === siteId && session.status === 'ACTIVE');
   }
 
   public getPatrolSessions(filter?: {
@@ -525,8 +619,38 @@ class DatabaseStore {
     if (existing) return existing;
 
     this.data.patrol_logs.push(log);
+    if (log.validationStatus !== 'VALID' && !this.data.validation_alerts.some((alert) => alert.patrolLogId === log.id)) {
+      this.data.validation_alerts.push({
+        id: `ALT-${log.id}`,
+        alertType: log.rejectionReason || log.validationStatus,
+        status: 'OPEN',
+        patrolLogId: log.id,
+        userId: log.userId,
+        sessionId: log.sessionId,
+        siteId: log.siteId,
+        checkpointId: log.checkpointId || null,
+        message: log.rejectionMessage || log.rejectionReason || 'Validasi memerlukan perhatian.',
+        createdAt: log.createdAt,
+      });
+    }
     this.save();
     return log;
+  }
+
+  public getValidationAlerts(): ValidationAlert[] {
+    return this.data.validation_alerts;
+  }
+
+  public findValidationAlertById(id: string): ValidationAlert | undefined {
+    return this.data.validation_alerts.find((alert) => alert.id === id);
+  }
+
+  public updateValidationAlert(id: string, updates: Partial<ValidationAlert>): ValidationAlert | undefined {
+    const alert = this.findValidationAlertById(id);
+    if (!alert) return undefined;
+    Object.assign(alert, updates);
+    this.save();
+    return alert;
   }
 
   // -------------------------------------------------------------
@@ -612,12 +736,14 @@ class DatabaseStore {
     shiftCode?: string | null;
     userId?: string | null;
     sourceModule?: string | null;
+    category?: string | null;
   }): MediaGalleryItem[] {
     return this.data.media_gallery.filter((m) => {
       if (filter?.siteId && m.siteId !== filter.siteId) return false;
       if (filter?.shiftCode && m.shiftCode !== filter.shiftCode) return false;
       if (filter?.userId && m.userId !== filter.userId) return false;
       if (filter?.sourceModule && m.sourceModule !== filter.sourceModule) return false;
+      if (filter?.category && !m.category.startsWith(filter.category)) return false;
       return true;
     });
   }

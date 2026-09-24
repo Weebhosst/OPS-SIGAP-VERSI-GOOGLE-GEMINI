@@ -37,6 +37,8 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
   const [session, setSession] = useState<PatrolSession | null>(null);
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
   const [logs, setLogs] = useState<PatrolLog[]>([]);
+  const [rounds, setRounds] = useState<Array<{ roundNumber: number; completed: number; required: number; checkpointIds: string[] }>>([]);
+  const [currentRound, setCurrentRound] = useState(1);
   const [loading, setLoading] = useState(true);
 
   // GPS state
@@ -61,6 +63,12 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
   const [observationStatus, setObservationStatus] = useState<'AMAN' | 'TEMUAN' | 'INSIDEN'>('AMAN');
   const [observationNotes, setObservationNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [hasSpecialHandover, setHasSpecialHandover] = useState(false);
+  const [specialNotes, setSpecialNotes] = useState('');
+  const [specialPhotoUrls, setSpecialPhotoUrls] = useState<string[]>([]);
+  const [endPhotoUrl, setEndPhotoUrl] = useState<string | null>(null);
+  const [cameraMode, setCameraMode] = useState<'CHECKPOINT' | 'SPECIAL' | 'END'>('CHECKPOINT');
   const [validationAlert, setValidationAlert] = useState<{
     type: 'success' | 'error' | 'warning';
     title: string;
@@ -75,9 +83,11 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         setSession(res.session);
         setCheckpoints(res.checkpoints);
         if (res.logs) setLogs(res.logs);
+        setRounds(res.rounds || []);
+        setCurrentRound(res.currentRound || 1);
 
         // Check if round was just completed
-        if (res.session.status === 'COMPLETE' || res.session.totalValid >= res.session.totalRequired) {
+        if (res.session.status === 'COMPLETED' || res.session.totalValid >= res.session.totalRequired) {
           triggerConfetti();
         }
       } else {
@@ -166,13 +176,38 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
     setScannedToken(token);
     setShowQrModal(false);
     // Proceed to Step 3: Photo evidence capture
+    setCameraMode('CHECKPOINT');
     setShowCameraModal(true);
   };
 
   // Step 3: Photo captured
   const handlePhotoCaptured = (photoBase64: string) => {
-    setCapturedPhoto(photoBase64);
+    if (cameraMode === 'SPECIAL') setSpecialPhotoUrls((items) => items.length < 5 ? [...items, photoBase64] : items);
+    else if (cameraMode === 'END') setEndPhotoUrl(photoBase64);
+    else setCapturedPhoto(photoBase64);
     setShowCameraModal(false);
+  };
+
+  const handleOpenCloseShift = () => {
+    if (!session) return;
+    if (session.totalValid < session.totalRequired) {
+      const missing = checkpoints.filter((checkpoint) => checkpoint.statusInRound !== 'VALID').map((checkpoint) => `${checkpoint.code} ${checkpoint.name}`).join(', ');
+      setValidationAlert({ type: 'error', title: 'CLOSE SHIFT DITOLAK', message: `Patroli belum selesai. Checkpoint ${session.totalValid}/${session.totalRequired}. Belum selesai: ${missing}.` });
+      return;
+    }
+    setShowCloseModal(true);
+  };
+
+  const handleCloseShift = async () => {
+    if (!session || !endPhotoUrl) return;
+    setSubmitting(true);
+    try {
+      await api.closePatrolSession(session.id, { endPhotoUrl, hasSpecialHandover, specialNotes, specialPhotoUrls });
+      setShowCloseModal(false);
+      await loadSession();
+      setValidationAlert({ type: 'success', title: 'SHIFT COMPLETED', message: 'Turun Jaga tersimpan dan session berhasil diselesaikan.' });
+    } catch (error: any) { setValidationAlert({ type: 'error', title: 'CLOSE SHIFT DITOLAK', message: error.message || 'Shift belum dapat ditutup.' }); }
+    finally { setSubmitting(false); }
   };
 
   // Step 4: Final submission with observation status
@@ -406,34 +441,40 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
           </div>
         )}
 
-        {/* Round Complete Hero Card */}
-        {session && session.status === 'COMPLETE' && (
+        {session && !session.startDocumentationCompleted ? <div className="rounded-2xl border border-amber-800 bg-amber-950/50 p-4 text-xs text-amber-200">Sertigas Naik Jaga belum disimpan. Kembali ke Buku Mutasi untuk mengambil foto wajib sebelum scan checkpoint.</div> : null}
+
+        {session ? <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-black">PROGRESS RONDE</h2><span className="rounded bg-blue-950 px-2 py-1 text-[10px] font-bold text-blue-300">RONDE AKTIF {currentRound}</span></div><div className="grid gap-2 sm:grid-cols-2">{rounds.map((round) => { const complete = round.completed >= round.required; const completedCodes = checkpoints.filter((checkpoint) => round.checkpointIds.includes(checkpoint.id)); const pendingCodes = checkpoints.filter((checkpoint) => !round.checkpointIds.includes(checkpoint.id)); return <div key={round.roundNumber} className={`rounded-xl border p-3 text-xs ${complete ? 'border-emerald-800 bg-emerald-950/20' : round.roundNumber === currentRound ? 'border-blue-800 bg-blue-950/20' : 'border-slate-800 bg-slate-950'}`}><div className="flex justify-between font-black"><span>RONDE {round.roundNumber}</span><span>{round.completed}/{round.required} {complete ? 'COMPLETE' : ''}</span></div>{completedCodes.length ? <div className="mt-2 text-emerald-300">Completed: {completedCodes.map((checkpoint) => `${checkpoint.code} ✓`).join(', ')}</div> : null}{pendingCodes.length ? <div className="mt-1 text-slate-400">Pending: {pendingCodes.map((checkpoint) => checkpoint.code).join(', ')}</div> : null}</div>; })}</div></section> : null}
+
+        {/* Target checkpoint achieved; normal close still requires Turun Jaga. */}
+        {session && session.totalValid >= session.totalRequired && (
           <div className="bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-900 border border-emerald-500/50 rounded-3xl p-5 text-center shadow-xl shadow-emerald-950/30">
             <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-7 h-7" />
             </div>
-            <h2 className="text-lg font-black text-white">RONDE #{session.roundNumber || 1} SELESAI!</h2>
+            <h2 className="text-lg font-black text-white">TARGET CHECKPOINT TERCAPAI</h2>
             <p className="text-xs text-emerald-300 mt-1 font-medium">
-              5 dari 5 checkpoint terverifikasi valid (100%).
+              {session.totalValid} dari {session.totalRequired} checkpoint terverifikasi. Lanjutkan Close Shift dan Turun Jaga.
             </p>
             <div className="text-[11px] text-slate-400 font-mono mt-2">
-              Selesai: {session.endedAt ? new Date(session.endedAt).toLocaleTimeString('id-ID') : '-'} WIB
+              Session tetap ACTIVE sampai dokumentasi Turun Jaga tersimpan.
             </div>
 
             <button
-              onClick={handleStartNewRound}
+              onClick={handleOpenCloseShift}
               className="mt-4 w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition"
             >
-              <RotateCcw className="w-4 h-4" />
-              <span>MULAI RONDE BERIKUTNYA (#{((session.roundNumber || 1) + 1)})</span>
+              <CheckCircle2 className="w-4 h-4" />
+              <span>CLOSE SHIFT</span>
             </button>
           </div>
         )}
 
+        {session && session.totalValid < session.totalRequired ? <button onClick={handleOpenCloseShift} className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-3 text-xs font-bold text-slate-300">CLOSE SHIFT ({session.totalValid}/{session.totalRequired})</button> : null}
+
         {/* Checkpoints Header */}
         <div className="flex items-center justify-between px-1">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Titik Checkpoint BB92 (5 Titik Wajib)
+            Titik Checkpoint {session?.siteId || ''} ({checkpoints.length} Titik Wajib)
           </h2>
           <span className="text-[11px] font-mono text-slate-400">
             Radius Ketat 10-15m
@@ -687,6 +728,8 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         )}
       </main>
 
+      {showCloseModal && session ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"><div className="max-h-[90vh] w-full max-w-md space-y-4 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5"><div className="flex items-center justify-between"><div><h2 className="font-black">CLOSE SHIFT</h2><p className="text-xs text-slate-400">Checkpoint {session.totalValid}/{session.totalRequired} lengkap</p></div><button onClick={() => setShowCloseModal(false)}>✕</button></div><div><span className="text-xs font-bold">Apakah ada TARUNA / serah terima khusus?</span><div className="mt-2 grid grid-cols-2 gap-2"><button onClick={() => setHasSpecialHandover(false)} className={`rounded-xl p-2 text-xs font-bold ${!hasSpecialHandover ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button onClick={() => setHasSpecialHandover(true)} className={`rounded-xl p-2 text-xs font-bold ${hasSpecialHandover ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>{hasSpecialHandover ? <div className="space-y-2"><label className="block text-xs font-bold">Catatan TARUNA<textarea required value={specialNotes} onChange={(e) => setSpecialNotes(e.target.value)} className="mt-1 min-h-20 w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-normal" /></label><div className="grid grid-cols-3 gap-2">{specialPhotoUrls.map((photo, index) => <div key={index} className="relative aspect-square overflow-hidden rounded-xl"><img src={photo} alt={`TARUNA ${index + 1}`} className="h-full w-full object-cover" /><button onClick={() => setSpecialPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded bg-black/70 px-1">✕</button></div>)}</div><button disabled={specialPhotoUrls.length >= 5} onClick={() => { setCameraMode('SPECIAL'); setShowCameraModal(true); }} className="w-full rounded-xl border border-dashed border-slate-600 p-2 text-xs font-bold disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />DOKUMENTASI TARUNA ({specialPhotoUrls.length}/5)</button>{specialPhotoUrls.length < 3 ? <p className="text-xs text-amber-300">Minimal 3 foto.</p> : null}</div> : null}<div className="rounded-xl border border-blue-900 bg-blue-950/30 p-3"><h3 className="text-xs font-black text-blue-300">SERTIGAS / TURUN JAGA</h3><div className="mt-2 text-xs text-slate-300">Customer {session.customerId} • Site {session.siteId}<br />{session.shiftCode} • {session.shiftDate}<br />End Time otomatis saat konfirmasi</div>{endPhotoUrl ? <img src={endPhotoUrl} alt="Turun Jaga" className="mt-2 max-h-56 w-full rounded-xl object-cover" /> : <button onClick={() => { setCameraMode('END'); setShowCameraModal(true); }} className="mt-2 w-full rounded-xl border-2 border-dashed border-slate-700 p-3 text-xs font-bold"><Camera className="mr-1 inline h-4 w-4" />AMBIL FOTO TURUN JAGA</button>}</div><button disabled={submitting || !endPhotoUrl || (hasSpecialHandover && (!specialNotes.trim() || specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5))} onClick={() => void handleCloseShift()} className="sticky bottom-0 w-full rounded-xl bg-emerald-600 p-3 text-sm font-black disabled:opacity-40">KONFIRMASI & SELESAIKAN SHIFT</button></div></div> : null}
+
       {/* QR Scanner Modal */}
       <QRScannerModal
         isOpen={showQrModal}
@@ -706,8 +749,8 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         isOpen={showCameraModal}
         onClose={() => setShowCameraModal(false)}
         onCapture={handlePhotoCaptured}
-        checkpointCode={activeCpForScan?.code}
-        checkpointName={activeCpForScan?.name}
+        checkpointCode={cameraMode === 'CHECKPOINT' ? activeCpForScan?.code : cameraMode === 'END' ? 'TURUN JAGA' : 'TARUNA'}
+        checkpointName={cameraMode === 'CHECKPOINT' ? activeCpForScan?.name : 'Dokumentasi Shift'}
         latitude={currentGps.latitude}
         longitude={currentGps.longitude}
         gpsAccuracyM={currentGps.accuracy}

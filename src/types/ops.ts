@@ -3,7 +3,7 @@
  * Core Types, Interfaces, & Mathematical Utilities
  */
 
-export type Role = 'ANGGOTA' | 'SUPER_ADMIN';
+export type Role = 'ANGGOTA' | 'ADMIN' | 'CHIEF' | 'SUPER_ADMIN';
 
 export type UserStatus = 'ACTIVE' | 'INACTIVE';
 
@@ -13,7 +13,15 @@ export interface User {
   npk: string;           // e.g. "234378"
   email: string;
   role: Role;
+  customerId?: string | null;
   siteId: string | null; // e.g. "BB92" or null for global Super Admin
+  position?: string;
+  assignmentHistory?: Array<{
+    customerId: string | null;
+    siteId: string | null;
+    effectiveAt: string;
+    changedBy?: string | null;
+  }>;
   status: UserStatus;
   passwordHash: string;
   mustChangePassword?: boolean;
@@ -22,9 +30,22 @@ export interface User {
   updatedAt: string;
 }
 
+export interface Customer {
+  id: string;
+  code: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Site {
   id: string;            // e.g. "BB92"
   name: string;          // "BARANG BUKTI KM 92"
+  code?: string;
+  customerId: string;
+  personnelCapacity: number;
+  targetRoundsPerShift?: number;
   timezone: string;      // "Asia/Jakarta"
   status: 'ACTIVE' | 'INACTIVE';
   createdAt: string;
@@ -39,6 +60,9 @@ export interface Checkpoint {
   latitude: number;      // -6.480722
   longitude: number;     // 107.631389
   radiusMeters: number;  // 15
+  coordinateMethod?: 'MANUAL' | 'GPS';
+  gpsAccuracyM?: number | null;
+  gpsCapturedAt?: string | null;
   qrToken: string;       // "BB92-TT72OQD30E3PSOKN"
   status: 'ACTIVE' | 'INACTIVE';
   qrStatus: 'ACTIVE' | 'INACTIVE';
@@ -55,11 +79,13 @@ export interface ShiftInfo {
   operationalDate: string; // YYYY-MM-DD
 }
 
-export type SessionStatus = 'OPEN' | 'COMPLETE' | 'ABANDONED';
+export type SessionStatus = 'ACTIVE' | 'COMPLETED' | 'FORCE_CLOSED' | 'CANCELLED';
 
 export interface PatrolSession {
   id: string;            // UUID
   userId: string;
+  npk?: string;
+  customerId?: string | null;
   siteId: string;
   shiftCode: ShiftCode;
   shiftDate: string;     // YYYY-MM-DD
@@ -70,6 +96,15 @@ export interface PatrolSession {
   endLatitude?: number | null;
   endLongitude?: number | null;
   status: SessionStatus;
+  forceClosed?: boolean;
+  forceCloseBy?: string | null;
+  forceCloseRole?: Role | null;
+  forceCloseReason?: string | null;
+  forceCloseAt?: string | null;
+  startDocumentationCompleted?: boolean;
+  startDocumentationAt?: string | null;
+  endDocumentationCompleted?: boolean;
+  endDocumentationAt?: string | null;
   totalRequired: number; // e.g. 5
   totalValid: number;    // e.g. 3
   completionPct: number; // e.g. 60
@@ -105,6 +140,29 @@ export interface PatrolLog {
   syncSource: SyncSource;
   isLowGpsAccuracy?: boolean;
   createdAt: string;
+  roundNumber?: number;
+}
+
+export type ValidationAlertStatus = 'OPEN' | 'UNDER_REVIEW' | 'CLOSED';
+
+export interface ValidationAlert {
+  id: string;
+  alertType: string;
+  status: ValidationAlertStatus;
+  patrolLogId: string;
+  userId: string;
+  sessionId: string;
+  siteId: string;
+  checkpointId?: string | null;
+  message: string;
+  createdAt: string;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  closedBy?: string | null;
+  closedAt?: string | null;
+  closeNote?: string | null;
+  reopenedBy?: string | null;
+  reopenedAt?: string | null;
 }
 
 export type HandoverType = 'NAIK_JAGA' | 'TURUN_JAGA' | 'SERAH_TERIMA';
@@ -112,6 +170,7 @@ export type ConditionStatus = 'BAIK' | 'PERLU_PERHATIAN' | 'BERMASALAH';
 
 export interface ShiftHandover {
   id: string;
+  sessionId?: string | null;
   siteId: string;
   shiftDate: string;
   shiftCode: ShiftCode;
@@ -122,6 +181,13 @@ export interface ShiftHandover {
   latitude?: number | null;
   longitude?: number | null;
   photoUrl?: string | null;
+  photoUrls?: string[];
+  itemName?: string | null;
+  itemQuantity?: string | null;
+  itemCondition?: string | null;
+  handedFrom?: string | null;
+  handedTo?: string | null;
+  isTaruna?: boolean;
   conditionStatus: ConditionStatus;
   personnelStatus: string;
   equipmentStatus: string;
@@ -152,6 +218,8 @@ export type IncidentStatus = 'OPEN' | 'FOLLOW_UP' | 'CLOSED';
 
 export interface IncidentReport {
   id: string;
+  sessionId?: string | null;
+  customerId?: string | null;
   siteId: string;
   userId: string;
   incidentAt: string;
@@ -164,6 +232,8 @@ export interface IncidentReport {
   latitude?: number | null;
   longitude?: number | null;
   photoUrl?: string | null;
+  photoUrls?: string[];
+  notes?: string | null;
   chronology: string;
   initialAction: string;
   followUp?: string | null;
@@ -204,7 +274,17 @@ export interface MediaGalleryItem {
   status: 'ACTIVE' | 'ARCHIVED';
   createdAt: string;
   createdBy: string;
+  documentType?: CanonicalDocumentType;
 }
+
+export type CanonicalDocumentType =
+  | 'SERTIGAS_NAIK_JAGA'
+  | 'SERTIGAS_TURUN_JAGA'
+  | 'PATROLI_QR'
+  | 'SERAH_TERIMA_BARANG'
+  | 'TARUNA'
+  | 'INSIDEN'
+  | 'LAINNYA';
 
 export interface RadiusCalibration {
   id: string;
@@ -282,6 +362,108 @@ export function calculateDistanceMeters(
   const distance = R * c;
 
   return Math.round(distance * 100) / 100;
+}
+
+export type FeatureKey =
+  | 'view_dashboard'
+  | 'view_monitoring'
+  | 'view_patrol'
+  | 'view_documentation'
+  | 'view_profile'
+  | 'customer_master_view'
+  | 'customer_master_edit'
+  | 'site_master_view'
+  | 'site_master_edit'
+  | 'personnel_master_view'
+  | 'personnel_master_edit'
+  | 'checkpoint_master_edit'
+  | 'generate_token'
+  | 'generate_qr'
+  | 'force_close_shift'
+  | 'view_active_session'
+  | 'view_patrol_monitoring';
+
+const ROLE_FEATURE_MATRIX: Record<Role, FeatureKey[]> = {
+  ANGGOTA: [
+    'view_dashboard',
+    'view_patrol',
+    'view_documentation',
+    'view_profile',
+  ],
+  ADMIN: [
+    'view_dashboard',
+    'view_monitoring',
+    'view_patrol',
+    'view_documentation',
+    'view_profile',
+    'view_active_session',
+    'view_patrol_monitoring',
+    'customer_master_view',
+    'customer_master_edit',
+    'site_master_view',
+    'site_master_edit',
+    'personnel_master_view',
+    'personnel_master_edit',
+    'checkpoint_master_edit',
+    'generate_token',
+    'generate_qr',
+    'force_close_shift',
+  ],
+  CHIEF: [
+    'view_dashboard',
+    'view_monitoring',
+    'view_patrol',
+    'view_documentation',
+    'view_profile',
+    'view_active_session',
+    'view_patrol_monitoring',
+  ],
+  SUPER_ADMIN: [
+    'view_dashboard',
+    'view_monitoring',
+    'view_patrol',
+    'view_documentation',
+    'view_profile',
+    'view_active_session',
+    'view_patrol_monitoring',
+    'customer_master_view',
+    'customer_master_edit',
+    'site_master_view',
+    'site_master_edit',
+    'personnel_master_view',
+    'personnel_master_edit',
+    'checkpoint_master_edit',
+    'generate_token',
+    'generate_qr',
+    'force_close_shift',
+  ],
+};
+
+export function isAdministrator(role: Role | undefined | null): boolean {
+  return role === 'ADMIN' || role === 'SUPER_ADMIN';
+}
+
+export function hasAccessToFeature(role: Role | undefined | null, feature: FeatureKey): boolean {
+  if (!role) return false;
+  return ROLE_FEATURE_MATRIX[role]?.includes(feature) ?? false;
+}
+
+export function getVisibleShiftCodes(date = new Date()): ShiftCode[] {
+  const currentShift = resolveShift(date);
+
+  if (currentShift.code === 'SHIFT_1') return ['SHIFT_1'];
+  if (currentShift.code === 'SHIFT_2') return ['SHIFT_2', 'SHIFT_1'];
+  return ['SHIFT_3', 'SHIFT_2', 'SHIFT_1'];
+}
+
+export type ShiftStartDecision =
+  | { allowed: true }
+  | { allowed: false; reason: 'USER_ALREADY_HAS_ACTIVE_SESSION' | 'SITE_CAPACITY_FULL' };
+
+export function evaluateShiftStart(hasUserActiveSession: boolean, activeSiteSessions: number, personnelCapacity: number): ShiftStartDecision {
+  if (hasUserActiveSession) return { allowed: false, reason: 'USER_ALREADY_HAS_ACTIVE_SESSION' };
+  if (activeSiteSessions >= personnelCapacity) return { allowed: false, reason: 'SITE_CAPACITY_FULL' };
+  return { allowed: true };
 }
 
 /**

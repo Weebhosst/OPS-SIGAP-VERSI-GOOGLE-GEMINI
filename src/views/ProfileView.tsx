@@ -93,8 +93,21 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
           <div className="pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-1 font-mono">
             <div>Email: {user?.email}</div>
+            <div>Jabatan: {user?.position || user?.role}</div>
+            <div>Customer: {user?.customerId || 'Global'}</div>
+            <div>Status: <span className={user?.status === 'ACTIVE' ? 'text-emerald-400' : 'text-red-400'}>{user?.status}</span></div>
             <div>ID Sistem: {user?.id}</div>
           </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Riwayat Mutasi / Penugasan</h3>
+          {(user?.assignmentHistory || []).length ? (user?.assignmentHistory || []).slice().reverse().map((item, index) => (
+            <div key={`${item.effectiveAt}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs">
+              <div className="font-bold text-slate-200">{item.siteId || 'GLOBAL'}</div>
+              <div className="text-slate-500">Customer {item.customerId || '-'} • {new Date(item.effectiveAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</div>
+            </div>
+          )) : <p className="text-xs text-slate-500">Belum ada riwayat mutasi.</p>}
         </div>
 
         {/* PWA Install Section */}

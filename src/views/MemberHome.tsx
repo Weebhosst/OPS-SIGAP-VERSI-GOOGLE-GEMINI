@@ -32,7 +32,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
   const { user, logout, quickLogin } = useAuth();
   const [shiftInfo, setShiftInfo] = useState<ShiftInfo | null>(null);
   const [completedRounds, setCompletedRounds] = useState(0);
-  const [targetRounds, setTargetRounds] = useState(5);
+  const [targetRounds, setTargetRounds] = useState(1);
   const [activeSession, setActiveSession] = useState<PatrolSession | null>(null);
   const [recentMedia, setRecentMedia] = useState<MediaGalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
       if (progressRes.success) {
         setShiftInfo(progressRes.shift);
         setCompletedRounds(progressRes.completedRounds);
-        setTargetRounds(progressRes.targetRounds || 5);
+        setTargetRounds(progressRes.targetRounds || 1);
       }
 
       if (currentRes.success && currentRes.hasOpenSession) {
@@ -76,7 +76,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
 
   const handleStartPatrol = async () => {
     if (activeSession) {
-      onNavigate('patrol');
+      onNavigate(activeSession.startDocumentationCompleted ? 'patrol' : 'handover');
       return;
     }
     setStartingPatrol(true);
@@ -85,7 +85,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
       const res = await api.startPatrolSession();
       if (res.success && res.session) {
         setActiveSession(res.session);
-        onNavigate('patrol');
+        onNavigate('handover');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal memulai patroli');
@@ -191,7 +191,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
                   {activeSession ? activeSession.totalValid : 0}
                 </span>
                 <span className="text-xs text-slate-400 font-mono">
-                  / {activeSession ? activeSession.totalRequired : 5} CP
+                  / {activeSession ? activeSession.totalRequired : 0} CP
                 </span>
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
@@ -242,7 +242,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
             ) : (
               <>
                 <Play className="w-5 h-5 fill-current" />
-                <span>MULAI PATROLI (RONDE #{completedRounds + 1})</span>
+                <span>MULAI SHIFT</span>
               </>
             )}
           </button>
@@ -264,7 +264,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
               </div>
               <div>
                 <div className="font-bold text-white text-sm">Patroli QR</div>
-                <p className="text-[11px] text-slate-400 mt-0.5">5 Checkpoint BB92</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Target checkpoint sesuai Site</p>
               </div>
             </button>
 
