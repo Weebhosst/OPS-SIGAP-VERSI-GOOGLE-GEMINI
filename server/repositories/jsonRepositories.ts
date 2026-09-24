@@ -178,6 +178,7 @@ export const jsonRepositories: RepositoryBundle = {
     },
     listBySession: async (sessionId, page) => paginate(db.getPatrolLogs(sessionId), page),
     listAllBySession: async (sessionId) => db.getPatrolLogs(sessionId),
+    countAll: async () => db.getPatrolLogs().length,
     overrideValidation: async (id, newStatus, reason) => {
       const log = db.findPatrolLogById(id);
       if (!log) return undefined;
