@@ -843,10 +843,29 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
   if (isTaruna && (!String(handoverNotes || '').trim() || evidencePhotos.length < 3 || evidencePhotos.length > 5)) {
     return res.status(400).json({ success: false, error: 'TARUNA membutuhkan catatan dan dokumentasi minimal 3, maksimal 5 foto.' });
   }
-  if (rejectUnstoredBase64Media(res, evidencePhotos)) return;
 
   const now = new Date().toISOString();
   const id = `HND-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const documentType = isTaruna ? 'TARUNA' : 'SERAH_TERIMA_BARANG';
+  const mediaInputs = evidencePhotos.map((evidencePhoto: string, index: number) => ({
+    mediaId: `MED-${id}-${index + 1}`,
+    sourceModule: 'HANDOVER' as const,
+    siteId,
+    userId: req.user!.id,
+    documentType,
+    eventAt: eventAt || now,
+    photoUrl: evidencePhoto,
+  }));
+
+  let preparedEvidence;
+  try {
+    preparedEvidence = await prepareMediaBatch(mediaInputs);
+  } catch (error) {
+    if (sendRepositoryError(res, error)) return;
+    throw error;
+  }
+
+  const preparedUrls = preparedEvidence.map((item) => item.photoUrl);
   const handover: ShiftHandover = {
     id,
     sessionId: activeSession.id,
@@ -859,8 +878,8 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     eventAt: eventAt || now,
     latitude: latitude ? Number(latitude) : null,
     longitude: longitude ? Number(longitude) : null,
-    photoUrl: evidencePhotos[0] || null,
-    photoUrls: evidencePhotos,
+    photoUrl: preparedUrls[0] || null,
+    photoUrls: preparedUrls,
     itemName,
     itemQuantity: String(itemQuantity),
     itemCondition,
@@ -882,44 +901,65 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     updatedAt: now,
   };
 
-  await repositories.handovers.create(handover);
-  const site = await repositories.sites.findById(siteId);
-  for (let index = 0; index < evidencePhotos.length; index += 1) {
-    const evidencePhoto = evidencePhotos[index];
-    await repositories.media.add({
-      id: `MED-${id}-${index + 1}`,
-      sourceModule: 'HANDOVER',
-      sourceTable: 'shift_handovers',
-      sourceId: `${id}-${index + 1}`,
-      siteId,
-      userId: req.user!.id,
-      shiftDate: activeSession.shiftDate,
-      shiftCode: activeSession.shiftCode,
-      category: isTaruna ? 'TARUNA' : 'SERAH TERIMA BARANG',
-      documentType: isTaruna ? 'TARUNA' : 'SERAH_TERIMA_BARANG',
-      subcategory: isTaruna ? 'TARUNA' : handover.handoverType,
-      photoUrl: evidencePhoto,
-      caption: `${isTaruna ? 'TARUNA' : 'Serah Terima Barang'} • ${itemName} • ${site?.name || siteId}`,
-      eventAt: handover.eventAt,
-      latitude: handover.latitude,
-      longitude: handover.longitude,
-      handoverId: id,
-      status: 'ACTIVE',
-      createdAt: now,
-      createdBy: req.user!.id,
-    }, activeSession.id, activeSession.customerId || null);
+  let handoverCreated = false;
+  try {
+    await repositories.handovers.create(handover);
+    handoverCreated = true;
+    const site = await repositories.sites.findById(siteId);
+    for (let index = 0; index < preparedEvidence.length; index += 1) {
+      const prepared = preparedEvidence[index];
+      await repositories.media.add({
+        id: mediaInputs[index].mediaId,
+        sourceModule: 'HANDOVER',
+        sourceTable: 'shift_handovers',
+        sourceId: `${id}-${index + 1}`,
+        siteId,
+        userId: req.user!.id,
+        shiftDate: activeSession.shiftDate,
+        shiftCode: activeSession.shiftCode,
+        category: isTaruna ? 'TARUNA' : 'SERAH TERIMA BARANG',
+        documentType,
+        subcategory: isTaruna ? 'TARUNA' : handover.handoverType,
+        photoUrl: prepared.photoUrl,
+        storageProvider: prepared.storageProvider,
+        storageKey: prepared.storageKey,
+        mimeType: prepared.mimeType,
+        fileName: prepared.fileName,
+        fileSize: prepared.fileSize,
+        caption: `${isTaruna ? 'TARUNA' : 'Serah Terima Barang'} • ${itemName} • ${site?.name || siteId}`,
+        eventAt: handover.eventAt,
+        latitude: handover.latitude,
+        longitude: handover.longitude,
+        handoverId: id,
+        status: 'ACTIVE',
+        createdAt: now,
+        createdBy: req.user!.id,
+      }, activeSession.id, activeSession.customerId || null);
+    }
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'HANDOVER_CREATE',
+      entityType: 'shift_handover',
+      entityId: id,
+      newValue: {
+        handoverType: handover.handoverType,
+        siteId,
+        shiftCode: activeSession.shiftCode,
+        conditionStatus: handover.conditionStatus,
+        evidenceCount: preparedEvidence.length,
+        storageProvider: preparedEvidence[0]?.storageProvider,
+      },
+      reason: `Input serah terima jaga ${handover.handoverType}`,
+    });
+
+    const stored = await repositories.handovers.findById(id);
+    res.json({ success: true, handover: stored || handover });
+  } catch (error) {
+    if (!handoverCreated) await cleanupPreparedMedia(preparedEvidence);
+    if (sendRepositoryError(res, error)) return;
+    throw error;
   }
-
-  await repositories.audit.append({
-    actorUserId: req.user!.id,
-    action: 'HANDOVER_CREATE',
-    entityType: 'shift_handover',
-    entityId: id,
-    newValue: { handoverType: handover.handoverType, siteId, shiftCode: activeSession.shiftCode, conditionStatus: handover.conditionStatus },
-    reason: `Input serah terima jaga ${handover.handoverType}`,
-  });
-
-  res.json({ success: true, handover });
 });
 
 apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
