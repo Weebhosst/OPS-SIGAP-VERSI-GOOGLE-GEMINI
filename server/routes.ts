@@ -399,56 +399,244 @@ apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, asyn
   }
 });
 
-apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
   const photoUrl = String(req.body.photoUrl || '').trim();
   if (!photoUrl) return res.status(400).json({ success: false, error: 'Foto Sertigas Naik Jaga wajib diambil.' });
-  const session = db.findSessionById(req.params.id);
+  if (rejectUnstoredBase64Media(res, [photoUrl])) return;
+
+  const session = await repositories.sessions.findById(req.params.id);
   if (!session || session.userId !== req.user!.id) return res.status(404).json({ success: false, error: 'Active session milik Anda tidak ditemukan.' });
   if (session.status !== 'ACTIVE') return res.status(409).json({ success: false, error: 'Session sudah tidak aktif.' });
   if (session.startDocumentationCompleted) return res.status(409).json({ success: false, error: 'Sertigas Naik Jaga sudah tersimpan.' });
+
   const now = new Date().toISOString();
   const handoverId = `HND-NAIK-${Date.now()}`;
   const handover: ShiftHandover = {
-    id: handoverId, sessionId: session.id, siteId: session.siteId, shiftDate: session.shiftDate,
-    shiftCode: session.shiftCode, handoverType: 'NAIK_JAGA', fromUserId: req.user!.id, toUserId: null,
-    eventAt: now, photoUrl, photoUrls: [photoUrl], conditionStatus: 'BAIK', personnelStatus: 'Petugas memulai shift',
-    equipmentStatus: 'Dicatat saat naik jaga', keysStatus: 'Dicatat saat naik jaga', vehicleStatus: 'Dicatat saat naik jaga',
-    outstandingIssues: '', handoverNotes: 'Sertigas Naik Jaga', ackFrom: true, ackTo: false, status: 'SUBMITTED',
-    createdBy: req.user!.id, createdAt: now, updatedAt: now,
+    id: handoverId,
+    sessionId: session.id,
+    siteId: session.siteId,
+    shiftDate: session.shiftDate,
+    shiftCode: session.shiftCode,
+    handoverType: 'NAIK_JAGA',
+    fromUserId: req.user!.id,
+    toUserId: null,
+    eventAt: now,
+    photoUrl,
+    photoUrls: [photoUrl],
+    conditionStatus: 'BAIK',
+    personnelStatus: 'Petugas memulai shift',
+    equipmentStatus: 'Dicatat saat naik jaga',
+    keysStatus: 'Dicatat saat naik jaga',
+    vehicleStatus: 'Dicatat saat naik jaga',
+    outstandingIssues: '',
+    handoverNotes: 'Sertigas Naik Jaga',
+    ackFrom: true,
+    ackTo: false,
+    status: 'SUBMITTED',
+    createdBy: req.user!.id,
+    createdAt: now,
+    updatedAt: now,
   };
-  db.addHandover(handover);
-  db.addMedia({ id: `MED-${handoverId}`, sourceModule: 'HANDOVER', sourceTable: 'shift_handovers', sourceId: handoverId, siteId: session.siteId, userId: req.user!.id, shiftDate: session.shiftDate, shiftCode: session.shiftCode, category: 'SERTIGAS NAIK JAGA', subcategory: 'NAIK_JAGA', photoUrl, caption: `Sertigas Naik Jaga • ${req.user!.name}`, eventAt: now, handoverId, status: 'ACTIVE', createdAt: now, createdBy: req.user!.id });
-  const updated = db.updatePatrolSession(session.id, { startDocumentationCompleted: true, startDocumentationAt: now });
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'SERTIGAS_NAIK_JAGA', entityType: 'patrol_session', entityId: session.id, newValue: { photoRequired: true, documentedAt: now }, reason: 'Dokumentasi wajib sebelum patroli' });
+
+  await repositories.handovers.create(handover);
+  await repositories.media.add({
+    id: `MED-${handoverId}`,
+    sourceModule: 'HANDOVER',
+    sourceTable: 'shift_handovers',
+    sourceId: handoverId,
+    siteId: session.siteId,
+    userId: req.user!.id,
+    shiftDate: session.shiftDate,
+    shiftCode: session.shiftCode,
+    category: 'SERTIGAS NAIK JAGA',
+    documentType: 'SERTIGAS_NAIK_JAGA',
+    subcategory: 'NAIK_JAGA',
+    photoUrl,
+    caption: `Sertigas Naik Jaga • ${req.user!.name}`,
+    eventAt: now,
+    handoverId,
+    status: 'ACTIVE',
+    createdAt: now,
+    createdBy: req.user!.id,
+  }, session.id, session.customerId || null);
+
+  const updated = await repositories.sessions.update(session.id, {
+    startDocumentationCompleted: true,
+    startDocumentationAt: now,
+  });
+  await repositories.audit.append({
+    actorUserId: req.user!.id,
+    action: 'SERTIGAS_NAIK_JAGA',
+    entityType: 'patrol_session',
+    entityId: session.id,
+    newValue: { photoRequired: true, documentedAt: now },
+    reason: 'Dokumentasi wajib sebelum patroli',
+  });
   res.json({ success: true, session: updated, handover });
 });
 
-apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const session = db.findSessionById(req.params.id);
+apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+  const session = await repositories.sessions.findById(req.params.id);
   if (!session || session.userId !== req.user!.id) return res.status(404).json({ success: false, error: 'Active session milik Anda tidak ditemukan.' });
   if (session.status !== 'ACTIVE') return res.status(409).json({ success: false, error: 'Session sudah tidak aktif.' });
-  const activeCheckpoints = db.getCheckpoints(session.siteId).filter((checkpoint) => checkpoint.status === 'ACTIVE');
-  const targetRounds = Math.max(1, db.findSiteById(session.siteId)?.targetRoundsPerShift || 1);
-  const validLogs = db.getPatrolLogs(session.id).filter((log) => log.validationStatus === 'VALID');
-  const missing = Array.from({ length: targetRounds }, (_, index) => index + 1).flatMap((roundNumber) => activeCheckpoints.filter((checkpoint) => !validLogs.some((log) => log.checkpointId === checkpoint.id && (log.roundNumber || 1) === roundNumber)).map((checkpoint) => ({ id: checkpoint.id, code: checkpoint.code, name: checkpoint.name, roundNumber })));
-  if (session.totalValid < session.totalRequired || missing.length) return res.status(409).json({ success: false, code: 'CHECKPOINT_INCOMPLETE', error: `Patroli belum selesai. Checkpoint ${session.totalValid}/${session.totalRequired}. Belum selesai: ${missing.map((checkpoint) => `${checkpoint.code} ${checkpoint.name}`).join(', ')}.`, progress: { completed: session.totalValid, target: session.totalRequired }, missingCheckpoints: missing });
+
+  const [activeCheckpointsRaw, site, validLogsAll] = await Promise.all([
+    repositories.checkpoints.listBySite(session.siteId),
+    repositories.sites.findById(session.siteId),
+    repositories.patrol.listAllBySession(session.id),
+  ]);
+  const activeCheckpoints = activeCheckpointsRaw.filter((checkpoint) => checkpoint.status === 'ACTIVE');
+  const targetRounds = Math.max(1, site?.targetRoundsPerShift || 1);
+  const validLogs = validLogsAll.filter((log) => log.validationStatus === 'VALID');
+  const missing = Array.from({ length: targetRounds }, (_, index) => index + 1).flatMap(
+    (roundNumber) => activeCheckpoints
+      .filter((checkpoint) => !validLogs.some((log) => log.checkpointId === checkpoint.id && (log.roundNumber || 1) === roundNumber))
+      .map((checkpoint) => ({ id: checkpoint.id, code: checkpoint.code, name: checkpoint.name, roundNumber })),
+  );
+
+  if (session.totalValid < session.totalRequired || missing.length) {
+    return res.status(409).json({
+      success: false,
+      code: 'CHECKPOINT_INCOMPLETE',
+      error: `Patroli belum selesai. Checkpoint ${session.totalValid}/${session.totalRequired}. Belum selesai: ${missing.map((checkpoint) => `${checkpoint.code} ${checkpoint.name}`).join(', ')}.`,
+      progress: { completed: session.totalValid, target: session.totalRequired },
+      missingCheckpoints: missing,
+    });
+  }
+
   const endPhotoUrl = String(req.body.endPhotoUrl || '').trim();
   if (!endPhotoUrl) return res.status(400).json({ success: false, error: 'Foto Sertigas / Turun Jaga wajib diambil.' });
+
   const hasSpecialHandover = req.body.hasSpecialHandover === true;
   const specialNotes = String(req.body.specialNotes || '').trim();
-  const specialPhotoUrls = Array.isArray(req.body.specialPhotoUrls) ? req.body.specialPhotoUrls.filter((item: unknown) => typeof item === 'string' && item) : [];
-  if (hasSpecialHandover && (!specialNotes || specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5)) return res.status(400).json({ success: false, error: !specialNotes ? 'Catatan TARUNA wajib diisi.' : 'Dokumentasi TARUNA minimal 3 dan maksimal 5 foto.' });
+  const specialPhotoUrls = Array.isArray(req.body.specialPhotoUrls)
+    ? req.body.specialPhotoUrls.filter((item: unknown) => typeof item === 'string' && item)
+    : [];
+  if (hasSpecialHandover && (!specialNotes || specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5)) {
+    return res.status(400).json({ success: false, error: !specialNotes ? 'Catatan TARUNA wajib diisi.' : 'Dokumentasi TARUNA minimal 3 dan maksimal 5 foto.' });
+  }
+  if (rejectUnstoredBase64Media(res, [endPhotoUrl, ...specialPhotoUrls])) return;
+
   const now = new Date().toISOString();
+
   if (hasSpecialHandover) {
     const specialId = `HND-TARUNA-${Date.now()}`;
-    db.addHandover({ id: specialId, sessionId: session.id, siteId: session.siteId, shiftDate: session.shiftDate, shiftCode: session.shiftCode, handoverType: 'SERAH_TERIMA', fromUserId: req.user!.id, eventAt: now, photoUrl: specialPhotoUrls[0], photoUrls: specialPhotoUrls, conditionStatus: 'PERLU_PERHATIAN', personnelStatus: 'TARUNA / serah terima khusus', equipmentStatus: '-', keysStatus: '-', vehicleStatus: '-', outstandingIssues: specialNotes, handoverNotes: specialNotes, isTaruna: true, ackFrom: true, ackTo: false, status: 'SUBMITTED', createdBy: req.user!.id, createdAt: now, updatedAt: now });
-    specialPhotoUrls.forEach((photoUrl: string, index: number) => db.addMedia({ id: `MED-${specialId}-${index + 1}`, sourceModule: 'HANDOVER', sourceTable: 'shift_handovers', sourceId: `${specialId}-${index + 1}`, siteId: session.siteId, userId: req.user!.id, shiftDate: session.shiftDate, shiftCode: session.shiftCode, category: 'TARUNA', subcategory: 'SERAH_TERIMA_KHUSUS', photoUrl, caption: `TARUNA • ${specialNotes}`, eventAt: now, handoverId: specialId, status: 'ACTIVE', createdAt: now, createdBy: req.user!.id }));
+    const specialHandover: ShiftHandover = {
+      id: specialId,
+      sessionId: session.id,
+      siteId: session.siteId,
+      shiftDate: session.shiftDate,
+      shiftCode: session.shiftCode,
+      handoverType: 'SERAH_TERIMA',
+      fromUserId: req.user!.id,
+      eventAt: now,
+      photoUrl: specialPhotoUrls[0],
+      photoUrls: specialPhotoUrls,
+      conditionStatus: 'PERLU_PERHATIAN',
+      personnelStatus: 'TARUNA / serah terima khusus',
+      equipmentStatus: '-',
+      keysStatus: '-',
+      vehicleStatus: '-',
+      outstandingIssues: specialNotes,
+      handoverNotes: specialNotes,
+      isTaruna: true,
+      ackFrom: true,
+      ackTo: false,
+      status: 'SUBMITTED',
+      createdBy: req.user!.id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await repositories.handovers.create(specialHandover);
+    for (let index = 0; index < specialPhotoUrls.length; index += 1) {
+      const photoUrl = specialPhotoUrls[index];
+      await repositories.media.add({
+        id: `MED-${specialId}-${index + 1}`,
+        sourceModule: 'HANDOVER',
+        sourceTable: 'shift_handovers',
+        sourceId: `${specialId}-${index + 1}`,
+        siteId: session.siteId,
+        userId: req.user!.id,
+        shiftDate: session.shiftDate,
+        shiftCode: session.shiftCode,
+        category: 'TARUNA',
+        documentType: 'TARUNA',
+        subcategory: 'SERAH_TERIMA_KHUSUS',
+        photoUrl,
+        caption: `TARUNA • ${specialNotes}`,
+        eventAt: now,
+        handoverId: specialId,
+        status: 'ACTIVE',
+        createdAt: now,
+        createdBy: req.user!.id,
+      }, session.id, session.customerId || null);
+    }
   }
+
   const endId = `HND-TURUN-${Date.now()}`;
-  db.addHandover({ id: endId, sessionId: session.id, siteId: session.siteId, shiftDate: session.shiftDate, shiftCode: session.shiftCode, handoverType: 'TURUN_JAGA', fromUserId: req.user!.id, eventAt: now, photoUrl: endPhotoUrl, photoUrls: [endPhotoUrl], conditionStatus: 'BAIK', personnelStatus: 'Petugas mengakhiri shift', equipmentStatus: 'Diserahterimakan', keysStatus: 'Diserahterimakan', vehicleStatus: 'Diserahterimakan', outstandingIssues: '', handoverNotes: 'Sertigas Turun Jaga', ackFrom: true, ackTo: false, status: 'SUBMITTED', createdBy: req.user!.id, createdAt: now, updatedAt: now });
-  db.addMedia({ id: `MED-${endId}`, sourceModule: 'HANDOVER', sourceTable: 'shift_handovers', sourceId: endId, siteId: session.siteId, userId: req.user!.id, shiftDate: session.shiftDate, shiftCode: session.shiftCode, category: 'SERTIGAS TURUN JAGA', subcategory: 'TURUN_JAGA', photoUrl: endPhotoUrl, caption: `Sertigas Turun Jaga • ${req.user!.name}`, eventAt: now, handoverId: endId, status: 'ACTIVE', createdAt: now, createdBy: req.user!.id });
-  const updated = db.updatePatrolSession(session.id, { status: 'COMPLETED', endedAt: now, endDocumentationCompleted: true, endDocumentationAt: now });
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'SHIFT_SESSION_COMPLETED', entityType: 'patrol_session', entityId: session.id, oldValue: { status: 'ACTIVE' }, newValue: { status: 'COMPLETED', checkpoint: `${session.totalValid}/${session.totalRequired}`, endDocumentationAt: now }, reason: 'Normal close setelah checkpoint dan Turun Jaga lengkap' });
+  const endHandover: ShiftHandover = {
+    id: endId,
+    sessionId: session.id,
+    siteId: session.siteId,
+    shiftDate: session.shiftDate,
+    shiftCode: session.shiftCode,
+    handoverType: 'TURUN_JAGA',
+    fromUserId: req.user!.id,
+    eventAt: now,
+    photoUrl: endPhotoUrl,
+    photoUrls: [endPhotoUrl],
+    conditionStatus: 'BAIK',
+    personnelStatus: 'Petugas mengakhiri shift',
+    equipmentStatus: 'Diserahterimakan',
+    keysStatus: 'Diserahterimakan',
+    vehicleStatus: 'Diserahterimakan',
+    outstandingIssues: '',
+    handoverNotes: 'Sertigas Turun Jaga',
+    ackFrom: true,
+    ackTo: false,
+    status: 'SUBMITTED',
+    createdBy: req.user!.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await repositories.handovers.create(endHandover);
+  await repositories.media.add({
+    id: `MED-${endId}`,
+    sourceModule: 'HANDOVER',
+    sourceTable: 'shift_handovers',
+    sourceId: endId,
+    siteId: session.siteId,
+    userId: req.user!.id,
+    shiftDate: session.shiftDate,
+    shiftCode: session.shiftCode,
+    category: 'SERTIGAS TURUN JAGA',
+    documentType: 'SERTIGAS_TURUN_JAGA',
+    subcategory: 'TURUN_JAGA',
+    photoUrl: endPhotoUrl,
+    caption: `Sertigas Turun Jaga • ${req.user!.name}`,
+    eventAt: now,
+    handoverId: endId,
+    status: 'ACTIVE',
+    createdAt: now,
+    createdBy: req.user!.id,
+  }, session.id, session.customerId || null);
+
+  const updated = await repositories.sessions.completeAtomic(session.id, req.user!.id, {
+    status: 'COMPLETED',
+    endedAt: now,
+    endDocumentationCompleted: true,
+    endDocumentationAt: now,
+  });
+  await repositories.audit.append({
+    actorUserId: req.user!.id,
+    action: 'SHIFT_SESSION_COMPLETED',
+    entityType: 'patrol_session',
+    entityId: session.id,
+    oldValue: { status: 'ACTIVE' },
+    newValue: { status: 'COMPLETED', checkpoint: `${session.totalValid}/${session.totalRequired}`, endDocumentationAt: now },
+    reason: 'Normal close setelah checkpoint dan Turun Jaga lengkap',
+  });
+
   res.json({ success: true, session: updated });
 });
 
