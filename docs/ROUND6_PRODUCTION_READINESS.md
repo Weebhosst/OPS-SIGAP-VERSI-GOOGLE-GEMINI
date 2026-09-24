@@ -8,6 +8,7 @@ This document tracks the production-readiness gates for OPS SIGAP after the vali
 - Final integration PR: #6
 - Main CI: `validate` PASS, `postgres-live` PASS
 - Railway RC browser validation: login PASS, refresh persistence PASS, session survives redeploy PASS, Force Close PASS, live media upload PASS
+- Round 6A source switch validation: Railway source is now `main`, deployment PASS, post-switch browser session persistence PASS
 
 ## Round 6A — Production Environment Freeze
 
@@ -37,7 +38,7 @@ This document tracks the production-readiness gates for OPS SIGAP after the vali
 
 ### Items to close before Production Freeze PASS
 
-1. Railway source branch still points to `round5a-production-security`; production source of truth must be moved to `main` after explicit deployment approval.
+1. Railway source branch is now `main`; source-of-truth switch PASS. Post-switch deployment and browser session persistence also PASS.
 2. Railway source currently has `checkSuites=false`; decide whether deployment should be gated by GitHub checks before automatic deploy.
 3. Railway start command is `npx tsx server.ts`; this currently works, but production runtime still relies on `tsx` being installed from devDependencies. Harden before final go-live or explicitly accept this runtime model.
 4. Legacy `R2_*` variable names remain alongside the active `MEDIA_*` Railway S3 configuration. Confirm whether they are obsolete, then remove only after verification.
