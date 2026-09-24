@@ -2,16 +2,6 @@ import { closePostgresPool, getPostgresPool } from './db/postgres';
 
 type Row = Record<string, unknown>;
 
-async function rows(sql: string): Promise<Row[]> {
-  const client = await getPostgresPool().connect();
-  try {
-    const result = await client.query(sql);
-    return result.rows as Row[];
-  } finally {
-    client.release();
-  }
-}
-
 async function main() {
   const client = await getPostgresPool().connect();
 
@@ -101,7 +91,6 @@ async function main() {
       `),
       q(`
         SELECT
-          lower(email) AS normalized_email,
           count(*)::int AS count,
           array_agg(id ORDER BY id) AS user_ids
         FROM users
