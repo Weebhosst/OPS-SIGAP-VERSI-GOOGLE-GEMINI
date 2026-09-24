@@ -148,6 +148,7 @@ try {
   const patrolServiceSource = fs.readFileSync(path.resolve('server/patrolService.ts'), 'utf8');
   const mediaServiceSource = fs.readFileSync(path.resolve('server/mediaService.ts'), 'utf8');
   const providerGuardSource = fs.readFileSync(path.resolve('server/providerGuard.ts'), 'utf8');
+  const routeSource = fs.readFileSync(path.resolve('server/routes.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -157,6 +158,18 @@ try {
   assert.doesNotMatch(mediaServiceSource, /from ['"]\.\/db['"]|\bdb\./);
   assert.match(providerGuardSource, /POSTGRES_ROUTE_NOT_MIGRATED/);
 
+  let currentRoute = '';
+  for (const line of routeSource.split('\n')) {
+    if (/apiRouter\.(get|post|patch|put|delete)\('/.test(line)) currentRoute = line.trim();
+    if (/\bdb\./.test(line) && !currentRoute.includes("'/health'")) {
+      assert.match(
+        currentRoute,
+        /requireLegacyJsonProvider/,
+        `Direct JSON db access tanpa provider guard: ${currentRoute}`,
+      );
+    }
+  }
+
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
@@ -165,6 +178,7 @@ try {
   console.log('PASS migration dry-run leaves JSON source unchanged');
   console.log('PASS PostgreSQL constraints, capacity lock, and idempotent import strategy');
   console.log('PASS provider-safe patrol/media service cutover and split-brain guard');
+  console.log('PASS every remaining direct JSON route is fail-closed in PostgreSQL mode');
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
