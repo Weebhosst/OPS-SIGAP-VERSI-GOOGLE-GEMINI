@@ -81,6 +81,13 @@ try {
   });
   assert.equal((await repositories.sites.findById(site.id))?.personnelCapacity, 1);
 
+  const updatedSite = await repositories.sites.update(siteId, {
+    name: 'PostgreSQL Integration Site Updated',
+    targetRoundsPerShift: 2,
+  });
+  assert.equal(updatedSite?.name, 'PostgreSQL Integration Site Updated');
+  assert.equal(updatedSite?.targetRoundsPerShift, 2);
+
   const createTestUser = async (id: string, npk: string) => repositories.users.create({
     id,
     name: id,
