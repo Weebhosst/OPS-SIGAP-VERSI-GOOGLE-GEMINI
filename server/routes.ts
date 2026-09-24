@@ -2100,6 +2100,23 @@ apiRouter.post('/sync', authMiddleware, async (req: AuthenticatedRequest, res: R
 // -------------------------------------------------------------
 
 apiRouter.get('/health', async (_req: Request, res: Response) => {
+  const [repositoryHealth, mediaStorage] = await Promise.all([
+    repositories.health(),
+    checkMediaStorage(),
+  ]);
+  const databaseConnected = repositoryHealth.database === 'connected';
+  const mediaRequired = config.databaseProvider === 'postgres';
+  const mediaConnected = !mediaRequired || mediaStorage.connected;
+  const healthy = databaseConnected && mediaConnected;
+
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'ok' : 'degraded',
+    service: 'OPS SIGAP',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+apiRouter.get('/admin/health/details', authMiddleware, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   const { dateString, timeString } = getJakartaDateParts();
   const shift = resolveShift();
   const [repositoryHealth, mediaStorage] = await Promise.all([
@@ -2110,36 +2127,35 @@ apiRouter.get('/health', async (_req: Request, res: Response) => {
 
   let databaseDetails:any = { status: repositoryHealth.database.toUpperCase() };
   if (connected) {
-    try {
-      const [users, sites, checkpoints, sessions, patrolLogsCount] = await Promise.all([
-        repositories.users.list({ limit: 1, offset: 0 }),
-        repositories.sites.list({ limit: 1, offset: 0 }),
-        repositories.checkpoints.list({ limit: 1, offset: 0 }),
-        repositories.sessions.list({ limit: 1, offset: 0 }),
-        repositories.patrol.countAll(),
-      ]);
-      databaseDetails = {
-        ...databaseDetails,
-        usersCount: users.total,
-        sitesCount: sites.total,
-        checkpointsCount: checkpoints.total,
-        patrolSessionsCount: sessions.total,
-        patrolLogsCount,
-      };
-    } catch (error) {
-      console.error('[health] Count query failed:', error instanceof Error ? error.message : 'unknown');
-    }
+    const [users, sites, checkpoints, sessions, patrolLogsCount] = await Promise.all([
+      repositories.users.list({ limit: 1, offset: 0 }),
+      repositories.sites.list({ limit: 1, offset: 0 }),
+      repositories.checkpoints.list({ limit: 1, offset: 0 }),
+      repositories.sessions.list({ limit: 1, offset: 0 }),
+      repositories.patrol.countAll(),
+    ]);
+    databaseDetails = {
+      ...databaseDetails,
+      usersCount: users.total,
+      sitesCount: sites.total,
+      checkpointsCount: checkpoints.total,
+      patrolSessionsCount: sessions.total,
+      patrolLogsCount,
+    };
   }
 
-  res.status(connected ? 200 : 503).json({
-    status: connected ? 'ok' : 'degraded',
+  res.json({
+    success: true,
     provider: repositoryHealth.provider,
     database: repositoryHealth.database,
-    service: 'OPS SIGAP Security Operations System',
-    timestamp: new Date().toISOString(),
     serverTimeJakarta: `${dateString} ${timeString} WIB`,
     activeShift: shift,
     databaseDetails,
     mediaStorage,
+    security: {
+      cookieOnlyAuth: true,
+      sessionTtlHours: config.sessionTtlHours,
+      productionMode: config.isProduction,
+    },
   });
 });
