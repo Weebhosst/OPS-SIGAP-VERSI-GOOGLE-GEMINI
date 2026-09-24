@@ -1038,10 +1038,28 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     : (photoUrl ? [photoUrl] : []);
   if (incidentPhotos.length < 3) return res.status(400).json({ success: false, error: 'Dokumentasi kejadian minimal 3 foto.' });
   if (incidentPhotos.length > 5) return res.status(400).json({ success: false, error: 'Maksimal 5 foto dokumentasi.' });
-  if (rejectUnstoredBase64Media(res, incidentPhotos)) return;
 
   const now = new Date().toISOString();
   const id = `INC-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const mediaInputs = incidentPhotos.map((incidentPhoto: string, index: number) => ({
+    mediaId: `MED-${id}-${index + 1}`,
+    sourceModule: 'INCIDENT' as const,
+    siteId,
+    userId: req.user!.id,
+    documentType: 'INSIDEN',
+    eventAt: now,
+    photoUrl: incidentPhoto,
+  }));
+
+  let preparedEvidence;
+  try {
+    preparedEvidence = await prepareMediaBatch(mediaInputs);
+  } catch (error) {
+    if (sendRepositoryError(res, error)) return;
+    throw error;
+  }
+
+  const preparedUrls = preparedEvidence.map((item) => item.photoUrl);
   const incident: IncidentReport = {
     id,
     sessionId: activeSession.id,
@@ -1057,8 +1075,8 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     locationText,
     latitude: latitude ? Number(latitude) : null,
     longitude: longitude ? Number(longitude) : null,
-    photoUrl: incidentPhotos[0],
-    photoUrls: incidentPhotos,
+    photoUrl: preparedUrls[0],
+    photoUrls: preparedUrls,
     notes: notes || null,
     chronology,
     initialAction,
@@ -1077,43 +1095,64 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     updatedAt: now,
   };
 
-  await repositories.incidents.create(incident);
-  for (let index = 0; index < incidentPhotos.length; index += 1) {
-    const incidentPhoto = incidentPhotos[index];
-    await repositories.media.add({
-      id: `MED-${id}-${index + 1}`,
-      sourceModule: 'INCIDENT',
-      sourceTable: 'incident_reports',
-      sourceId: `${id}-${index + 1}`,
-      siteId,
-      userId: req.user!.id,
-      shiftDate: activeSession.shiftDate,
-      shiftCode: activeSession.shiftCode,
-      category: 'KEJADIAN',
-      documentType: 'INSIDEN',
-      subcategory: incident.category,
-      photoUrl: incidentPhoto,
-      caption: `${incident.category} • ${incident.title} [${incident.severity}]`,
-      eventAt: incident.incidentAt,
-      latitude: incident.latitude,
-      longitude: incident.longitude,
-      incidentId: id,
-      status: 'ACTIVE',
-      createdAt: now,
-      createdBy: req.user!.id,
-    }, activeSession.id, activeSession.customerId || null);
+  let incidentCreated = false;
+  try {
+    await repositories.incidents.create(incident);
+    incidentCreated = true;
+    for (let index = 0; index < preparedEvidence.length; index += 1) {
+      const prepared = preparedEvidence[index];
+      await repositories.media.add({
+        id: mediaInputs[index].mediaId,
+        sourceModule: 'INCIDENT',
+        sourceTable: 'incident_reports',
+        sourceId: `${id}-${index + 1}`,
+        siteId,
+        userId: req.user!.id,
+        shiftDate: activeSession.shiftDate,
+        shiftCode: activeSession.shiftCode,
+        category: 'KEJADIAN',
+        documentType: 'INSIDEN',
+        subcategory: incident.category,
+        photoUrl: prepared.photoUrl,
+        storageProvider: prepared.storageProvider,
+        storageKey: prepared.storageKey,
+        mimeType: prepared.mimeType,
+        fileName: prepared.fileName,
+        fileSize: prepared.fileSize,
+        caption: `${incident.category} • ${incident.title} [${incident.severity}]`,
+        eventAt: incident.incidentAt,
+        latitude: incident.latitude,
+        longitude: incident.longitude,
+        incidentId: id,
+        status: 'ACTIVE',
+        createdAt: now,
+        createdBy: req.user!.id,
+      }, activeSession.id, activeSession.customerId || null);
+    }
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'INCIDENT_REPORTED',
+      entityType: 'incident_report',
+      entityId: id,
+      newValue: {
+        title,
+        category: incident.category,
+        severity: incident.severity,
+        escalated: incident.escalated,
+        evidenceCount: preparedEvidence.length,
+        storageProvider: preparedEvidence[0]?.storageProvider,
+      },
+      reason: `Laporan kejadian: ${title} (${incident.severity})`,
+    });
+
+    const stored = await repositories.incidents.findById(id);
+    res.json({ success: true, incident: stored || incident });
+  } catch (error) {
+    if (!incidentCreated) await cleanupPreparedMedia(preparedEvidence);
+    if (sendRepositoryError(res, error)) return;
+    throw error;
   }
-
-  await repositories.audit.append({
-    actorUserId: req.user!.id,
-    action: 'INCIDENT_REPORTED',
-    entityType: 'incident_report',
-    entityId: id,
-    newValue: { title, category: incident.category, severity: incident.severity, escalated: incident.escalated },
-    reason: `Laporan kejadian: ${title} (${incident.severity})`,
-  });
-
-  res.json({ success: true, incident });
 });
 
 apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
