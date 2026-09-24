@@ -1386,127 +1386,185 @@ apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, async (req
   res.json({ success: true, customer: updated });
 });
 
-apiRouter.post('/admin/sites', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/sites', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const code = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
   const customerId = String(req.body.customerId || '');
   const personnelCapacity = Number(req.body.personnelCapacity);
-  if (!code || !name || !db.findCustomerById(customerId) || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
+  const customer = await repositories.customers.findById(customerId);
+
+  if (!code || !name || !customer || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
     return res.status(400).json({ success: false, error: 'Customer, kode, nama, dan capacity minimal 1 wajib valid.' });
   }
-  if (db.findSiteById(code)) return res.status(409).json({ success: false, error: 'Kode Site sudah digunakan.' });
+  if (await repositories.sites.findById(code)) return res.status(409).json({ success: false, error: 'Kode Site sudah digunakan.' });
+
   const now = new Date().toISOString();
   const targetRoundsPerShift = Math.max(1, Number(req.body.targetRoundsPerShift) || 1);
-  const site = db.addSite({ id: code, code, name, customerId, personnelCapacity, targetRoundsPerShift, timezone: 'Asia/Jakarta', status: 'ACTIVE', createdAt: now, updatedAt: now });
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'SITE_CREATE', entityType: 'site', entityId: site.id, newValue: site, reason: `Tambah site ${name}` });
-  res.status(201).json({ success: true, site });
+  try {
+    const site = await repositories.sites.create({
+      id: code,
+      code,
+      name,
+      customerId,
+      personnelCapacity,
+      targetRoundsPerShift,
+      timezone: 'Asia/Jakarta',
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'SITE_CREATE',
+      entityType: 'site',
+      entityId: site.id,
+      newValue: site,
+      reason: `Tambah site ${name}`,
+    });
+    res.status(201).json({ success: true, site });
+  } catch (error:any) {
+    if (error instanceof RepositoryError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    throw error;
+  }
 });
 
-apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const site = db.findSiteById(req.params.id);
+apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const site = await repositories.sites.findById(req.params.id);
   if (!site) return res.status(404).json({ success: false, error: 'Site tidak ditemukan.' });
-  const updates: any = {};
+
+  const updates: Partial<typeof site> = {};
   if (req.body.name !== undefined) updates.name = String(req.body.name).trim();
   if (req.body.status === 'ACTIVE' || req.body.status === 'INACTIVE') updates.status = req.body.status;
+
   if (req.body.personnelCapacity !== undefined) {
     const capacity = Number(req.body.personnelCapacity);
     if (!Number.isInteger(capacity) || capacity < 1) return res.status(400).json({ success: false, error: 'Personnel capacity minimal 1.' });
-    if (capacity < db.getActiveSessionsForSite(site.id).length) return res.status(409).json({ success: false, error: 'Capacity tidak boleh lebih kecil dari jumlah session aktif.' });
+    const activeCount = await repositories.sessions.countActiveBySite(site.id);
+    if (capacity < activeCount) return res.status(409).json({ success: false, error: 'Capacity tidak boleh lebih kecil dari jumlah session aktif.' });
     updates.personnelCapacity = capacity;
   }
+
   if (req.body.targetRoundsPerShift !== undefined) {
     const targetRounds = Number(req.body.targetRoundsPerShift);
-    if (!Number.isInteger(targetRounds) || targetRounds < 1 || targetRounds > 20) return res.status(400).json({ success: false, error: 'Target ronde harus bilangan 1 sampai 20.' });
+    if (!Number.isInteger(targetRounds) || targetRounds < 1 || targetRounds > 20) {
+      return res.status(400).json({ success: false, error: 'Target ronde harus bilangan 1 sampai 20.' });
+    }
     updates.targetRoundsPerShift = targetRounds;
   }
-  const updated = db.updateSite(site.id, updates);
-  db.addAuditLog({ actorUserId: req.user!.id, action: 'SITE_UPDATE', entityType: 'site', entityId: site.id, oldValue: site, newValue: updates, reason: `Perubahan site ${site.code || site.id}` });
+
+  const updated = await repositories.sites.update(site.id, updates);
+  await repositories.audit.append({
+    actorUserId: req.user!.id,
+    action: 'SITE_UPDATE',
+    entityType: 'site',
+    entityId: site.id,
+    oldValue: site,
+    newValue: updates,
+    reason: `Perubahan site ${site.code || site.id}`,
+  });
   res.json({ success: true, site: updated });
 });
 
-apiRouter.post('/admin/users', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { name, npk, email, role, siteId, position } = req.body;
-  if (!name || !npk) {
-    return res.status(400).json({ success: false, error: 'Nama dan NPK wajib diisi.' });
-  }
-
-  const existing = db.findUserByNpk(String(npk).trim());
-  if (existing) {
-    return res.status(400).json({ success: false, error: 'NPK sudah terdaftar.' });
-  }
+  if (!name || !npk) return res.status(400).json({ success: false, error: 'Nama dan NPK wajib diisi.' });
 
   const cleanNpk = String(npk).trim();
+  if (await repositories.users.findByNpk(cleanNpk)) return res.status(400).json({ success: false, error: 'NPK sudah terdaftar.' });
+
   const now = new Date().toISOString();
   const allowedRoles: Role[] = ['ANGGOTA', 'ADMIN', 'CHIEF', 'SUPER_ADMIN'];
   const selectedRole: Role = allowedRoles.includes(role) ? role : 'ANGGOTA';
-  const selectedSite = selectedRole === 'SUPER_ADMIN' ? null : db.findSiteById(siteId || '');
-  if (selectedRole !== 'SUPER_ADMIN' && !selectedSite) return res.status(400).json({ success: false, error: 'Site penugasan wajib valid.' });
+  const selectedSite = selectedRole === 'SUPER_ADMIN' ? null : await repositories.sites.findById(siteId || '');
+  if (selectedRole !== 'SUPER_ADMIN' && !selectedSite) {
+    return res.status(400).json({ success: false, error: 'Site penugasan wajib valid.' });
+  }
+
   const newUser: User = {
-    id: `USR-${siteId || 'GEN'}-${Date.now().toString().slice(-4)}`,
-    name: name.trim(),
+    id: `USR-${siteId || 'GEN'}-${Date.now().toString().slice(-6)}`,
+    name: String(name).trim(),
     npk: cleanNpk,
-    email: email ? email.trim() : `${cleanNpk}@sigap.local`,
+    email: email ? String(email).trim() : `${cleanNpk}@sigap.local`,
     role: selectedRole,
     customerId: selectedSite?.customerId || null,
     siteId: selectedSite?.id || null,
     position: String(position || (selectedRole === 'ANGGOTA' ? 'ANGGOTA SECURITY' : selectedRole.replace('_', ' '))),
-    assignmentHistory: [{ customerId: selectedSite?.customerId || null, siteId: selectedSite?.id || null, effectiveAt: now, changedBy: req.user!.id }],
+    assignmentHistory: selectedSite ? [{
+      customerId: selectedSite.customerId,
+      siteId: selectedSite.id,
+      effectiveAt: now,
+      changedBy: req.user!.id,
+    }] : [],
     status: 'ACTIVE',
-    passwordHash: bcrypt.hashSync(cleanNpk, 10), // default password = NPK
+    passwordHash: bcrypt.hashSync(cleanNpk, 10),
     createdAt: now,
     updatedAt: now,
   };
 
-  db.addUser(newUser);
-
-  db.addAuditLog({
-    actorUserId: req.user!.id,
-    action: 'USER_CREATE',
-    entityType: 'user',
-    entityId: newUser.id,
-    newValue: { name: newUser.name, npk: newUser.npk, role: newUser.role, siteId: newUser.siteId },
-    reason: `Tambah pengguna baru ${newUser.name}`,
-  });
-
-  const { passwordHash, ...safeUser } = newUser;
-  res.json({ success: true, user: safeUser });
+  try {
+    const created = await repositories.users.create(newUser);
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'USER_CREATE',
+      entityType: 'user',
+      entityId: created.id,
+      newValue: { name: created.name, npk: created.npk, role: created.role, siteId: created.siteId },
+      reason: `Tambah pengguna baru ${created.name}`,
+    });
+    const { passwordHash, ...safeUser } = created;
+    res.json({ success: true, user: safeUser });
+  } catch (error:any) {
+    if (error instanceof RepositoryError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    throw error;
+  }
 });
 
-apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { name, email, role, siteId, status, position } = req.body;
-  const user = db.findUserById(req.params.id);
-  if (!user) {
-    return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
-  }
+  const user = await repositories.users.findById(req.params.id);
+  if (!user) return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
 
   const oldValues = { name: user.name, role: user.role, siteId: user.siteId, status: user.status };
   const updates: Partial<User> = {};
-  if (name !== undefined) updates.name = name.trim();
-  if (email !== undefined) updates.email = email.trim();
+  if (name !== undefined) updates.name = String(name).trim();
+  if (email !== undefined) updates.email = String(email).trim();
   if (role !== undefined) updates.role = role;
   if (position !== undefined) updates.position = String(position).trim();
-  if (siteId !== undefined && siteId !== user.siteId) {
-    const selectedSite = siteId ? db.findSiteById(siteId) : undefined;
-    if (siteId && !selectedSite) return res.status(400).json({ success: false, error: 'Site penugasan tidak valid.' });
-    updates.siteId = selectedSite?.id || null;
-    updates.customerId = selectedSite?.customerId || null;
-    updates.assignmentHistory = [...(user.assignmentHistory || []), { customerId: selectedSite?.customerId || null, siteId: selectedSite?.id || null, effectiveAt: new Date().toISOString(), changedBy: req.user!.id }];
-  }
   if (status !== undefined) updates.status = status;
 
-  const updated = db.updateUser(user.id, updates);
+  let assignment;
+  const requestedRole = (role || user.role) as Role;
+  if (requestedRole === 'SUPER_ADMIN') {
+    if (user.siteId !== null || user.customerId !== null) {
+      assignment = { customerId: null, siteId: null, effectiveAt: new Date().toISOString(), changedBy: req.user!.id };
+    }
+  } else if (siteId !== undefined && siteId !== user.siteId) {
+    const selectedSite = siteId ? await repositories.sites.findById(siteId) : undefined;
+    if (!selectedSite) return res.status(400).json({ success: false, error: 'Site penugasan tidak valid.' });
+    assignment = {
+      customerId: selectedSite.customerId,
+      siteId: selectedSite.id,
+      effectiveAt: new Date().toISOString(),
+      changedBy: req.user!.id,
+    };
+  } else if (!user.siteId) {
+    return res.status(400).json({ success: false, error: 'Site penugasan wajib valid untuk role ini.' });
+  }
 
-  db.addAuditLog({
+  const updated = await repositories.users.update(user.id, updates, assignment);
+  if (!updated) return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
+
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'USER_UPDATE',
     entityType: 'user',
     entityId: user.id,
     oldValue: oldValues,
-    newValue: updates,
+    newValue: { ...updates, ...(assignment ? { customerId: assignment.customerId, siteId: assignment.siteId } : {}) },
     reason: `Perubahan data pengguna ${user.name}`,
   });
 
-  const { passwordHash, ...safeUser } = updated!;
+  const { passwordHash, ...safeUser } = updated;
   res.json({ success: true, user: safeUser });
 });
 
