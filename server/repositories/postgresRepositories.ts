@@ -892,8 +892,8 @@ export const postgresRepositories: RepositoryBundle = {
       const select = `SELECT i.*,med.media_urls,med.primary_media_url
         FROM incident_reports i
         LEFT JOIN LATERAL (
-          SELECT array_agg(m.storage_key ORDER BY m.captured_at) AS media_urls,
-                 min(m.storage_key) AS primary_media_url
+          SELECT array_agg(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END ORDER BY m.captured_at) AS media_urls,
+                 min(CASE WHEN m.storage_provider='external_url' THEN m.storage_key ELSE '/api/media/' || m.id || '/content' END) AS primary_media_url
           FROM incident_media im
           JOIN media m ON m.id=im.media_id
           WHERE im.incident_id=i.id
