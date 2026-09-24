@@ -7,6 +7,17 @@ import bcrypt from 'bcryptjs';
 import { db } from './db';
 import { validateAndProcessScan, getMemberShiftProgress } from './patrolService';
 import { getOperationalMedia } from './mediaService';
+import {
+  MAX_MEDIA_BYTES,
+  createObjectKey,
+  createPresignedReadUrl,
+  createPresignedUploadUrl,
+  getSiteIdFromObjectKey,
+  isAllowedMediaPurpose,
+  isAllowedMediaType,
+  isSafeObjectKey,
+  mediaUrlForKey,
+} from './r2Service';
 import { repositories } from './repositories';
 import { RepositoryError } from './repositories/contracts';
 import {
@@ -251,6 +262,72 @@ apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, (req: A
   });
 
   res.json({ success: true, message: `Password ${targetUser.name} berhasil direset ke NPK (${targetUser.npk}).` });
+});
+
+// -------------------------------------------------------------
+// PRIVATE MEDIA / CLOUDFLARE R2
+// -------------------------------------------------------------
+
+apiRouter.post('/media/presign-upload', authMiddleware, requireOperationalWrite, async (req: AuthenticatedRequest, res: Response) => {
+  const purpose = String(req.body.purpose || '').trim().toUpperCase();
+  const contentType = String(req.body.contentType || '').trim().toLowerCase();
+  const sizeBytes = Number(req.body.sizeBytes);
+
+  if (!isAllowedMediaPurpose(purpose)) {
+    return res.status(400).json({ success: false, error: 'Tujuan upload media tidak valid.' });
+  }
+  if (!isAllowedMediaType(contentType)) {
+    return res.status(400).json({ success: false, error: 'Tipe file tidak didukung. Gunakan JPEG, PNG, WebP, atau PDF.' });
+  }
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_MEDIA_BYTES) {
+    return res.status(400).json({ success: false, error: 'Ukuran file tidak valid atau melebihi batas 5 MB.' });
+  }
+
+  try {
+    const siteId = req.user!.siteId || 'UNASSIGNED';
+    const objectKey = createObjectKey({
+      siteId,
+      userId: req.user!.id,
+      purpose,
+      contentType,
+    });
+    const signed = await createPresignedUploadUrl({ key: objectKey, contentType });
+
+    res.json({
+      success: true,
+      uploadUrl: signed.uploadUrl,
+      objectKey,
+      mediaUrl: mediaUrlForKey(objectKey),
+      expiresIn: signed.expiresIn,
+    });
+  } catch (error) {
+    console.error('[media] Failed to create R2 upload URL:', error instanceof Error ? error.message : 'unknown');
+    res.status(503).json({ success: false, error: 'Object storage belum siap atau tidak dapat diakses.' });
+  }
+});
+
+apiRouter.get('/media/object', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const key = String(req.query.key || '').trim();
+  if (!isSafeObjectKey(key)) {
+    return res.status(400).json({ success: false, error: 'Object key tidak valid.' });
+  }
+
+  const objectSiteId = getSiteIdFromObjectKey(key);
+  if (!objectSiteId) {
+    return res.status(400).json({ success: false, error: 'Object key tidak valid.' });
+  }
+
+  if (req.user!.role !== 'SUPER_ADMIN' && req.user!.siteId && req.user!.siteId !== objectSiteId) {
+    return res.status(403).json({ success: false, error: 'Media berada di site lain.' });
+  }
+
+  try {
+    const signedUrl = await createPresignedReadUrl(key);
+    res.redirect(302, signedUrl);
+  } catch (error) {
+    console.error('[media] Failed to create R2 read URL:', error instanceof Error ? error.message : 'unknown');
+    res.status(503).json({ success: false, error: 'Media tidak dapat dibuka saat ini.' });
+  }
 });
 
 // -------------------------------------------------------------
