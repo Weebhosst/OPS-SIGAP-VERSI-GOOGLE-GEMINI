@@ -953,7 +953,7 @@ apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, 
 // SUPER ADMIN COMMAND CENTER & MANAGEMENT
 // -------------------------------------------------------------
 
-apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, requireLegacyJsonProvider, async (req: AuthenticatedRequest, res: Response) => {
   const adminId = req.user!.id;
   const filterState = db.getAdminFilterState(adminId) || {
     id: `AFS-${adminId}`,
@@ -1038,7 +1038,7 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, requir
     .slice(0, 8);
 
   // Recent Media
-  const recentMedia = getOperationalMedia({ siteId: siteId || undefined, userId: memberUserId || undefined, shiftCode: shiftCode || undefined }).sort((a, b) => new Date(b.eventAt).getTime() - new Date(a.eventAt).getTime()).slice(0, 12);
+  const recentMedia = (await getOperationalMedia({ siteId: siteId || undefined, userId: memberUserId || undefined, shiftCode: shiftCode || undefined }, { limit: 12, offset: 0 })).items;
 
   // Master options for filter dropdowns
   const sites = db.getSites();
