@@ -7,6 +7,7 @@
 
 import { repositories } from './repositories';
 import { RepositoryError } from './repositories/contracts';
+import { cleanupPreparedMedia, prepareMedia } from './mediaStorage';
 import {
   PatrolLog,
   PatrolSession,
@@ -323,25 +324,40 @@ export async function validateAndProcessScan(input: ScanInput): Promise<Validati
     return resultFromLog(log, session, checkpoint);
   }
 
-  if (repositories.provider === 'postgres' && input.photoUrl.startsWith('data:')) {
-    const log = await persistRejected(
-      input,
-      session,
-      logId,
-      'MEDIA_STORAGE_NOT_READY',
-      'Penyimpanan foto produksi belum aktif. Scan tidak dihitung agar bukti foto tidak hilang.',
-      {
-        checkpointId: checkpoint.id,
-        calculatedDistanceM: distance,
-        validationStatus: 'REVIEW',
-        isLowGpsAccuracy,
-        roundNumber: currentRound,
-      },
-    );
-    return resultFromLog(log, session, checkpoint);
+  const now = new Date().toISOString();
+  const mediaId = `MED-${logId}`;
+  let prepared;
+  try {
+    prepared = await prepareMedia({
+      mediaId,
+      sourceModule: 'PATROL',
+      siteId: session.siteId,
+      userId: input.userId,
+      documentType: 'PATROLI_QR',
+      eventAt: input.clientCapturedAt || now,
+      photoUrl: input.photoUrl,
+    });
+  } catch (error) {
+    if (error instanceof RepositoryError) {
+      const log = await persistRejected(
+        input,
+        session,
+        logId,
+        error.code,
+        error.message,
+        {
+          checkpointId: checkpoint.id,
+          calculatedDistanceM: distance,
+          validationStatus: 'REVIEW',
+          isLowGpsAccuracy,
+          roundNumber: currentRound,
+        },
+      );
+      return resultFromLog(log, session, checkpoint);
+    }
+    throw error;
   }
 
-  const now = new Date().toISOString();
   const validLog = createLog(input, {
     id: logId,
     siteId: session.siteId,
@@ -355,6 +371,7 @@ export async function validateAndProcessScan(input: ScanInput): Promise<Validati
   try {
     await repositories.patrol.addLogAtomic(validLog);
   } catch (error) {
+    await cleanupPreparedMedia([prepared]);
     if (error instanceof RepositoryError && error.code === 'DUPLICATE_CHECKPOINT') {
       const duplicateLog = createLog(input, {
         id: logId,
@@ -372,7 +389,7 @@ export async function validateAndProcessScan(input: ScanInput): Promise<Validati
 
   await repositories.media.add(
     {
-      id: `MED-${logId}`,
+      id: mediaId,
       sourceModule: 'PATROL',
       sourceTable: 'patrol_logs',
       sourceId: logId,
@@ -383,7 +400,12 @@ export async function validateAndProcessScan(input: ScanInput): Promise<Validati
       category: 'PATROLI_QR',
       documentType: 'PATROLI_QR',
       subcategory: input.observationStatus || 'AMAN',
-      photoUrl: input.photoUrl,
+      photoUrl: prepared.photoUrl,
+      storageProvider: prepared.storageProvider,
+      storageKey: prepared.storageKey,
+      mimeType: prepared.mimeType,
+      fileName: prepared.fileName,
+      fileSize: prepared.fileSize,
       caption: `${checkpoint.code} (${checkpoint.name}) • Jarak ${distance.toFixed(1)}m • ${input.observationStatus || 'AMAN'}`,
       eventAt: input.clientCapturedAt || now,
       latitude: input.latitude,
