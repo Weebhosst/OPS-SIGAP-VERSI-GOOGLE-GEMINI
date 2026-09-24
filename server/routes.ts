@@ -396,7 +396,6 @@ apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, asyn
 apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
   const photoUrl = String(req.body.photoUrl || '').trim();
   if (!photoUrl) return res.status(400).json({ success: false, error: 'Foto Sertigas Naik Jaga wajib diambil.' });
-  if (rejectUnstoredBase64Media(res, [photoUrl])) return;
 
   const session = await repositories.sessions.findById(req.params.id);
   if (!session || session.userId !== req.user!.id) return res.status(404).json({ success: false, error: 'Active session milik Anda tidak ditemukan.' });
@@ -405,68 +404,100 @@ apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requir
 
   const now = new Date().toISOString();
   const handoverId = `HND-NAIK-${Date.now()}`;
-  const handover: ShiftHandover = {
-    id: handoverId,
-    sessionId: session.id,
-    siteId: session.siteId,
-    shiftDate: session.shiftDate,
-    shiftCode: session.shiftCode,
-    handoverType: 'NAIK_JAGA',
-    fromUserId: req.user!.id,
-    toUserId: null,
-    eventAt: now,
-    photoUrl,
-    photoUrls: [photoUrl],
-    conditionStatus: 'BAIK',
-    personnelStatus: 'Petugas memulai shift',
-    equipmentStatus: 'Dicatat saat naik jaga',
-    keysStatus: 'Dicatat saat naik jaga',
-    vehicleStatus: 'Dicatat saat naik jaga',
-    outstandingIssues: '',
-    handoverNotes: 'Sertigas Naik Jaga',
-    ackFrom: true,
-    ackTo: false,
-    status: 'SUBMITTED',
-    createdBy: req.user!.id,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const mediaId = `MED-${handoverId}`;
+  let prepared;
 
-  await repositories.handovers.create(handover);
-  await repositories.media.add({
-    id: `MED-${handoverId}`,
-    sourceModule: 'HANDOVER',
-    sourceTable: 'shift_handovers',
-    sourceId: handoverId,
-    siteId: session.siteId,
-    userId: req.user!.id,
-    shiftDate: session.shiftDate,
-    shiftCode: session.shiftCode,
-    category: 'SERTIGAS NAIK JAGA',
-    documentType: 'SERTIGAS_NAIK_JAGA',
-    subcategory: 'NAIK_JAGA',
-    photoUrl,
-    caption: `Sertigas Naik Jaga • ${req.user!.name}`,
-    eventAt: now,
-    handoverId,
-    status: 'ACTIVE',
-    createdAt: now,
-    createdBy: req.user!.id,
-  }, session.id, session.customerId || null);
+  try {
+    prepared = await prepareMedia({
+      mediaId,
+      sourceModule: 'HANDOVER',
+      siteId: session.siteId,
+      userId: req.user!.id,
+      documentType: 'SERTIGAS_NAIK_JAGA',
+      eventAt: now,
+      photoUrl,
+    });
+  } catch (error) {
+    if (sendRepositoryError(res, error)) return;
+    throw error;
+  }
 
-  const updated = await repositories.sessions.update(session.id, {
-    startDocumentationCompleted: true,
-    startDocumentationAt: now,
-  });
-  await repositories.audit.append({
-    actorUserId: req.user!.id,
-    action: 'SERTIGAS_NAIK_JAGA',
-    entityType: 'patrol_session',
-    entityId: session.id,
-    newValue: { photoRequired: true, documentedAt: now },
-    reason: 'Dokumentasi wajib sebelum patroli',
-  });
-  res.json({ success: true, session: updated, handover });
+  let handoverCreated = false;
+  try {
+    const handover: ShiftHandover = {
+      id: handoverId,
+      sessionId: session.id,
+      siteId: session.siteId,
+      shiftDate: session.shiftDate,
+      shiftCode: session.shiftCode,
+      handoverType: 'NAIK_JAGA',
+      fromUserId: req.user!.id,
+      toUserId: null,
+      eventAt: now,
+      photoUrl: prepared.photoUrl,
+      photoUrls: [prepared.photoUrl],
+      conditionStatus: 'BAIK',
+      personnelStatus: 'Petugas memulai shift',
+      equipmentStatus: 'Dicatat saat naik jaga',
+      keysStatus: 'Dicatat saat naik jaga',
+      vehicleStatus: 'Dicatat saat naik jaga',
+      outstandingIssues: '',
+      handoverNotes: 'Sertigas Naik Jaga',
+      ackFrom: true,
+      ackTo: false,
+      status: 'SUBMITTED',
+      createdBy: req.user!.id,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await repositories.handovers.create(handover);
+    handoverCreated = true;
+    await repositories.media.add({
+      id: mediaId,
+      sourceModule: 'HANDOVER',
+      sourceTable: 'shift_handovers',
+      sourceId: handoverId,
+      siteId: session.siteId,
+      userId: req.user!.id,
+      shiftDate: session.shiftDate,
+      shiftCode: session.shiftCode,
+      category: 'SERTIGAS NAIK JAGA',
+      documentType: 'SERTIGAS_NAIK_JAGA',
+      subcategory: 'NAIK_JAGA',
+      photoUrl: prepared.photoUrl,
+      storageProvider: prepared.storageProvider,
+      storageKey: prepared.storageKey,
+      mimeType: prepared.mimeType,
+      fileName: prepared.fileName,
+      fileSize: prepared.fileSize,
+      caption: `Sertigas Naik Jaga • ${req.user!.name}`,
+      eventAt: now,
+      handoverId,
+      status: 'ACTIVE',
+      createdAt: now,
+      createdBy: req.user!.id,
+    }, session.id, session.customerId || null);
+
+    const updated = await repositories.sessions.update(session.id, {
+      startDocumentationCompleted: true,
+      startDocumentationAt: now,
+    });
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'SERTIGAS_NAIK_JAGA',
+      entityType: 'patrol_session',
+      entityId: session.id,
+      newValue: { photoRequired: true, documentedAt: now, mediaId, storageProvider: prepared.storageProvider },
+      reason: 'Dokumentasi wajib sebelum patroli',
+    });
+    const storedHandover = await repositories.handovers.findById(handoverId);
+    res.json({ success: true, session: updated, handover: storedHandover || handover });
+  } catch (error) {
+    if (!handoverCreated) await cleanupPreparedMedia([prepared]);
+    if (sendRepositoryError(res, error)) return;
+    throw error;
+  }
 });
 
 apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
