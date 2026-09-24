@@ -705,25 +705,19 @@ apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedReque
 // HANDOVER ROUTES
 // -------------------------------------------------------------
 
-apiRouter.get('/handover', authMiddleware, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
-  const isSuperAdmin = isAdministrator(req.user!.role);
+apiRouter.get('/handover', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-
-  if (!isSuperAdmin) {
-    filter.siteId = req.user!.siteId;
+  if (!isAdministrator(req.user!.role)) {
+    if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
     if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
   }
-
-  const handovers = db.getHandovers(filter).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-
-  res.json({ success: true, handovers });
+  const page = await repositories.handovers.list(filter, { limit: 500, offset: 0 });
+  res.json({ success: true, handovers: page.items });
 });
 
-apiRouter.post('/handover', authMiddleware, requireFieldMember, requireLegacyJsonProvider, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
   const {
     handoverType,
     toUserId,
@@ -748,17 +742,30 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, requireLegacyJso
   } = req.body;
 
   const siteId = req.user!.siteId || 'BB92';
-  const activeSession = db.getActiveSessionForUser(req.user!.id);
-  if (!activeSession || activeSession.siteId !== siteId || !activeSession.startDocumentationCompleted) return res.status(409).json({ success: false, error: 'Serah terima barang hanya dapat dibuat saat shift aktif.' });
-  if (handoverType && handoverType !== 'SERAH_TERIMA') return res.status(400).json({ success: false, error: 'Naik/Turun Jaga hanya dapat dibuat melalui alur Start/Close Shift.' });
-  const evidencePhotos = Array.isArray(photoUrls) ? photoUrls.filter((item: unknown) => typeof item === 'string' && item) : (photoUrl ? [photoUrl] : []);
-  if (!itemName || !itemQuantity || !itemCondition || !handedFrom || !handedTo) return res.status(400).json({ success: false, error: 'Nama barang, jumlah, kondisi, pihak penyerah, dan penerima wajib diisi.' });
-  if (!isTaruna && evidencePhotos.length < 1) return res.status(400).json({ success: false, error: 'Dokumentasi Serah Terima Barang wajib diisi.' });
-  if (isTaruna && (!String(handoverNotes || '').trim() || evidencePhotos.length < 3 || evidencePhotos.length > 5)) return res.status(400).json({ success: false, error: 'TARUNA membutuhkan catatan dan dokumentasi minimal 3, maksimal 5 foto.' });
+  const activeSession = await repositories.sessions.getActiveByUser(req.user!.id);
+  if (!activeSession || activeSession.siteId !== siteId || !activeSession.startDocumentationCompleted) {
+    return res.status(409).json({ success: false, error: 'Serah terima barang hanya dapat dibuat saat shift aktif.' });
+  }
+  if (handoverType && handoverType !== 'SERAH_TERIMA') {
+    return res.status(400).json({ success: false, error: 'Naik/Turun Jaga hanya dapat dibuat melalui alur Start/Close Shift.' });
+  }
+
+  const evidencePhotos = Array.isArray(photoUrls)
+    ? photoUrls.filter((item: unknown) => typeof item === 'string' && item)
+    : (photoUrl ? [photoUrl] : []);
+  if (!itemName || !itemQuantity || !itemCondition || !handedFrom || !handedTo) {
+    return res.status(400).json({ success: false, error: 'Nama barang, jumlah, kondisi, pihak penyerah, dan penerima wajib diisi.' });
+  }
+  if (!isTaruna && evidencePhotos.length < 1) {
+    return res.status(400).json({ success: false, error: 'Dokumentasi Serah Terima Barang wajib diisi.' });
+  }
+  if (isTaruna && (!String(handoverNotes || '').trim() || evidencePhotos.length < 3 || evidencePhotos.length > 5)) {
+    return res.status(400).json({ success: false, error: 'TARUNA membutuhkan catatan dan dokumentasi minimal 3, maksimal 5 foto.' });
+  }
+  if (rejectUnstoredBase64Media(res, evidencePhotos)) return;
+
   const now = new Date().toISOString();
-
   const id = `HND-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
   const handover: ShiftHandover = {
     id,
     sessionId: activeSession.id,
@@ -794,11 +801,11 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, requireLegacyJso
     updatedAt: now,
   };
 
-  db.addHandover(handover);
-
-  evidencePhotos.forEach((evidencePhoto: string, index: number) => {
-    const site = db.getSites().find((s) => s.id === siteId);
-    db.addMedia({
+  await repositories.handovers.create(handover);
+  const site = await repositories.sites.findById(siteId);
+  for (let index = 0; index < evidencePhotos.length; index += 1) {
+    const evidencePhoto = evidencePhotos[index];
+    await repositories.media.add({
       id: `MED-${id}-${index + 1}`,
       sourceModule: 'HANDOVER',
       sourceTable: 'shift_handovers',
@@ -808,6 +815,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, requireLegacyJso
       shiftDate: activeSession.shiftDate,
       shiftCode: activeSession.shiftCode,
       category: isTaruna ? 'TARUNA' : 'SERAH TERIMA BARANG',
+      documentType: isTaruna ? 'TARUNA' : 'SERAH_TERIMA_BARANG',
       subcategory: isTaruna ? 'TARUNA' : handover.handoverType,
       photoUrl: evidencePhoto,
       caption: `${isTaruna ? 'TARUNA' : 'Serah Terima Barang'} • ${itemName} • ${site?.name || siteId}`,
@@ -818,38 +826,31 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, requireLegacyJso
       status: 'ACTIVE',
       createdAt: now,
       createdBy: req.user!.id,
-    });
-  });
+    }, activeSession.id, activeSession.customerId || null);
+  }
 
-  db.addAuditLog({
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'HANDOVER_CREATE',
     entityType: 'shift_handover',
     entityId: id,
-    newValue: {
-      handoverType: handover.handoverType,
-      siteId,
-      shiftCode: activeSession.shiftCode,
-      conditionStatus: handover.conditionStatus,
-    },
+    newValue: { handoverType: handover.handoverType, siteId, shiftCode: activeSession.shiftCode, conditionStatus: handover.conditionStatus },
     reason: `Input serah terima jaga ${handover.handoverType}`,
   });
 
   res.json({ success: true, handover });
 });
 
-apiRouter.post('/handover/:id/ack', authMiddleware, requireLegacyJsonProvider, requireFieldMember, (req: AuthenticatedRequest, res: Response) => {
-  const handover = db.findHandoverById(req.params.id);
-  if (!handover) {
-    return res.status(404).json({ success: false, error: 'Data serah terima tidak ditemukan.' });
-  }
+apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+  const handover = await repositories.handovers.findById(req.params.id);
+  if (!handover) return res.status(404).json({ success: false, error: 'Data serah terima tidak ditemukan.' });
 
-  handover.ackTo = true;
-  handover.status = 'ACKNOWLEDGED';
-  handover.toUserId = req.user!.id;
-  db.updateHandover(handover.id, handover);
-
-  db.addAuditLog({
+  const updated = await repositories.handovers.update(handover.id, {
+    ackTo: true,
+    status: 'ACKNOWLEDGED',
+    toUserId: req.user!.id,
+  });
+  await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'HANDOVER_ACKNOWLEDGE',
     entityType: 'shift_handover',
@@ -857,7 +858,7 @@ apiRouter.post('/handover/:id/ack', authMiddleware, requireLegacyJsonProvider, r
     reason: `Konfirmasi penerimaan serah terima jaga oleh ${req.user!.name}`,
   });
 
-  res.json({ success: true, handover });
+  res.json({ success: true, handover: updated });
 });
 
 // -------------------------------------------------------------
