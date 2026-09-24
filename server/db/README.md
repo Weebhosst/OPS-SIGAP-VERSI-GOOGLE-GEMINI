@@ -37,8 +37,10 @@ stable IDs, imports in foreign-key order, hashes checkpoint tokens, and uses
 `ON CONFLICT (id) DO NOTHING`. Existing rows are skipped, never overwritten.
 The complete import is transactional. The source JSON is never written.
 
-Media binary data is intentionally not imported. PostgreSQL receives only
-metadata and a `legacy_json` reference; external media storage is Round 4B.
+Legacy JSON media binary data is intentionally not copied into PostgreSQL. PostgreSQL receives only
+metadata and a `legacy_json` reference during historical JSON import. New operational photos in
+Round 4B are written to private S3-compatible object storage and PostgreSQL stores only their
+metadata/object keys.
 
 ## Cutover checklist
 
@@ -88,18 +90,52 @@ CHECKPOINT_TOKEN_SECRET=<long-random-secret>
 If `CHECKPOINT_TOKEN_SECRET` changes after tokens are created, existing encrypted QR tokens cannot be
 recovered for printing and should be regenerated. Never commit the production secret.
 
-### Media gate before Round 4B
+### Round 4B private object storage
 
-Camera capture currently produces base64 data URLs. Round 4A intentionally refuses base64 evidence
-when PostgreSQL is active and returns `MEDIA_STORAGE_NOT_READY`. This prevents photo binary data from
-being stored inside PostgreSQL and prevents operational actions from being counted without durable
-evidence.
+Camera capture may still arrive at the API as a base64 data URL, but when PostgreSQL is active the
+server validates the image, uploads the decoded binary to private S3-compatible object storage, and
+stores only metadata/object keys in PostgreSQL.
 
-Round 4B will connect object storage. After that, media metadata remains in PostgreSQL while image
-binary data lives in object storage.
+Supported evidence paths:
 
-Legacy JSON media import stores only a `legacy-json:<id>` metadata reference and preserves
-incident/handover media relations. The source JSON remains untouched.
+- Sertigas Naik Jaga
+- Patrol QR evidence
+- Sertigas Turun Jaga
+- Serah Terima Barang
+- TARUNA
+- Incident / Kejadian
+
+Required variables:
+
+```text
+MEDIA_PROVIDER=railway_s3
+MEDIA_BUCKET=<Railway bucket name>
+MEDIA_ACCESS_KEY_ID=<bucket access key>
+MEDIA_SECRET_ACCESS_KEY=<bucket secret>
+MEDIA_REGION=auto
+MEDIA_ENDPOINT=https://<railway-storage-api-host>
+MEDIA_URL_STYLE=virtual
+```
+
+Railway buckets are private. Browser clients do not receive bucket credentials or direct object keys.
+Authenticated images are delivered through `/api/media/:id/content`, with site/user access checks for
+member accounts and global monitoring access for ADMIN, SUPER_ADMIN, and CHIEF.
+
+One image is limited to 8 MB and must be JPEG, PNG, or WEBP with a matching file signature. Batch
+upload failures compensate already uploaded objects before database persistence begins.
+
+Storage verification commands:
+
+```text
+npm run test:media-storage
+npm run test:media-storage-live
+```
+
+The unit test uses a mocked S3 endpoint. The live test performs HEAD + PUT + GET + DELETE against the
+configured Railway bucket and removes its probe object afterward.
+
+Legacy JSON media import still stores a `legacy-json:<id>` reference and preserves incident/handover
+media relations. The source JSON remains untouched.
 
 ## CI
 
@@ -112,5 +148,6 @@ npm test
 npm run build
 ```
 
-CI always uses an isolated JSON fixture. Live PostgreSQL integration remains a separate gate and must
-be reported as NOT TESTED until a development `DATABASE_URL` is available.
+CI always uses an isolated JSON fixture for the JSON job and a temporary PostgreSQL 16 service for the
+PostgreSQL integration job. Railway object-storage live verification is a separate deployment gate
+because bucket credentials are intentionally not stored in GitHub.
