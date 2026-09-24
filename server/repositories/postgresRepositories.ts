@@ -423,7 +423,7 @@ export const postgresRepositories: RepositoryBundle = {
           [`ASN-${id}-${Date.now()}`,id,assignment.customerId,assignment.siteId,assignment.effectiveAt,assignment.changedBy],
         );
       }
-      const result=await client.query('SELECT u.*,a.customer_id,a.site_id FROM users u LEFT JOIN user_assignments a ON a.user_id=u.id AND a.is_current WHERE u.id=$1',[id]);
+      const result=await client.query(`${USER_SELECT} WHERE u.id=$1`,[id]);
       return result.rows[0]?mapUser(result.rows[0]):undefined;
     }),
     resetPassword: async (id, passwordHash, changedAt) => {
