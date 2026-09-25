@@ -1673,16 +1673,29 @@ apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, async (req
 });
 
 apiRouter.post('/admin/sites', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  const code = String(req.body.code || '').trim().toUpperCase();
+  const requestedCode = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
   const customerId = String(req.body.customerId || '');
   const personnelCapacity = Number(req.body.personnelCapacity);
   const customer = await repositories.customers.findById(customerId);
 
-  if (!code || !name || !customer || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
-    return res.status(400).json({ success: false, error: 'Customer, kode, nama, dan capacity minimal 1 wajib valid.' });
+  if (!name || !customer || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
+    return res.status(400).json({ success: false, error: 'Customer, nama Site, dan capacity minimal 1 wajib valid.' });
   }
-  if (await repositories.sites.findById(code)) return res.status(409).json({ success: false, error: 'Kode Site sudah digunakan.' });
+
+  const existingSites = await repositories.sites.list({ limit: 500, offset: 0 });
+  const usedCodes = new Set(existingSites.items.flatMap((item) => [item.id, item.code].filter(Boolean).map((value) => String(value).toUpperCase())));
+  const generatedBase = `${customer.code || customer.id}-${name}`
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32) || `${customer.code || 'SITE'}-${Date.now().toString().slice(-6)}`;
+  let code = requestedCode || generatedBase;
+  let suffix = 2;
+  while (usedCodes.has(code)) {
+    const suffixText = `-${suffix++}`;
+    code = `${generatedBase.slice(0, Math.max(1, 32 - suffixText.length))}${suffixText}`;
+  }
 
   const now = new Date().toISOString();
   const targetRoundsPerShift = Math.max(1, Number(req.body.targetRoundsPerShift) || 1);
@@ -1705,7 +1718,7 @@ apiRouter.post('/admin/sites', authMiddleware, requireAdmin, async (req: Authent
       entityType: 'site',
       entityId: site.id,
       newValue: site,
-      reason: `Tambah site ${name}`,
+      reason: `Tambah site ${name} pada customer ${customer.name}`,
     });
     res.status(201).json({ success: true, site });
   } catch (error:any) {
@@ -1749,6 +1762,30 @@ apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, async (req: Au
     reason: `Perubahan site ${site.code || site.id}`,
   });
   res.json({ success: true, site: updated });
+});
+
+apiRouter.delete('/admin/sites/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const site = await repositories.sites.findById(req.params.id);
+  if (!site) return res.status(404).json({ success: false, error: 'Site tidak ditemukan.' });
+
+  try {
+    const removed = await repositories.sites.remove(site.id);
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'SITE_DELETE',
+      entityType: 'site',
+      entityId: site.id,
+      oldValue: site,
+      reason: `Hapus site ${site.name}`,
+    });
+    res.json({ success: true, deletedId: removed.id });
+  } catch (error: any) {
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    console.error('[site] Delete failed:', error instanceof Error ? error.message : 'unknown');
+    res.status(500).json({ success: false, error: 'Site gagal dihapus karena gangguan database.' });
+  }
 });
 
 apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
