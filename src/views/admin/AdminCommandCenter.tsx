@@ -166,27 +166,29 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
       {/* Tactical Top Header */}
       <header className={`sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl ${isChief ? '' : 'lg:px-6'}`}>
         <div className={`mx-auto flex items-center justify-between ${isChief ? 'max-w-md' : 'max-w-7xl'}`}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-black">
-              <Shield className="w-5 h-5" />
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-blue-500/40 bg-blue-600/20 text-blue-400">
+              <Shield className="h-5 w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="font-black text-white text-base tracking-tight">{isChief ? 'MONITOR OPERASIONAL' : 'COMMAND CENTER'}</h1>
-                <span className={`rounded border px-2 py-0.5 font-mono text-[10px] font-bold ${isChief ? 'border-blue-800 bg-blue-950/70 text-blue-300' : 'border-red-800 bg-red-950/80 text-red-300'}`}>
-                  {isChief ? 'CHIEF • READ ONLY' : 'SUPER ADMIN'}
-                </span>
+                <h1 className="text-base font-black leading-tight tracking-tight text-white">{isChief ? 'MONITOR OPERASIONAL' : 'COMMAND CENTER'}</h1>
+                {!isChief && (
+                  <span className="rounded border border-red-800 bg-red-950/80 px-2 py-0.5 font-mono text-[10px] font-bold text-red-300">
+                    SUPER ADMIN
+                  </span>
+                )}
               </div>
-              <p className="text-xs font-medium text-slate-400">
-                {isChief ? 'Monitoring site, patroli, insiden & serah terima' : 'OPS SIGAP — Security Operations System'}
+              <p className={`mt-0.5 font-medium text-slate-400 ${isChief ? 'text-[10px] leading-4' : 'text-xs'}`}>
+                {isChief ? 'CHIEF • READ ONLY · Monitoring site & operasional' : 'OPS SIGAP — Security Operations System'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={() => setShowFilterModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-950/40 transition"
+              className="flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-2.5 py-2 text-xs font-bold text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500"
             >
               <Filter className="w-3.5 h-3.5" />
               <span>Filter</span>
