@@ -69,6 +69,7 @@ export interface SiteRepository {
   list(page: PageRequest): Promise<Page<Site>>;
   create(site: Site): Promise<Site>;
   update(id: string, updates: Partial<Site>): Promise<Site | undefined>;
+  remove(id: string): Promise<Site>;
 }
 
 export interface CheckpointRepository {
