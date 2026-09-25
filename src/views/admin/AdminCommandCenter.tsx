@@ -160,10 +160,10 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
+    <div className="min-h-screen bg-[#020817] pb-28 text-slate-100 lg:pb-8">
       {/* Tactical Top Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-black">
               <Shield className="w-5 h-5" />
@@ -200,9 +200,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pt-4 space-y-5">
+      <main className="mx-auto max-w-7xl space-y-5 px-4 pt-4 lg:px-6 lg:pt-6">
         {/* Active Filter Indicator Bar */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-3 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-xs">
             <span className="text-slate-400 font-semibold">Filter Aktif:</span>
             <span className="font-mono font-bold text-blue-400 bg-blue-950/60 border border-blue-900/60 px-2.5 py-1 rounded-lg">
@@ -228,7 +228,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         </div>
 
         {/* 4 TOP KPI CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
           {/* 1. Patroli Aktif */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
@@ -291,7 +291,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         </div>
 
         {/* Tactical Panels Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Panel: Patroli Aktif */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
