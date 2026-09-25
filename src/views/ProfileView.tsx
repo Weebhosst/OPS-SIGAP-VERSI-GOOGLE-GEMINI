@@ -21,6 +21,7 @@ import { PWAInstallButton } from '../components/PWAInstallButton';
 
 export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { user, logout } = useAuth();
+  const isSuperAdminDesktop = user?.role === 'SUPER_ADMIN';
   const [queueItems, setQueueItems] = useState<OfflineQueueItem[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     <div className="min-h-screen bg-[#020817] pb-28 text-slate-100">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between">
+        <div className={`mx-auto flex items-center justify-between ${isSuperAdminDesktop ? 'max-w-5xl' : 'max-w-md'}`}>
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
@@ -74,9 +75,9 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md space-y-4 px-4 pt-4">
+      <main className={`mx-auto space-y-4 px-4 pt-4 ${isSuperAdminDesktop ? 'max-w-5xl lg:px-6 lg:pt-6' : 'max-w-md'}`}>
         {/* Profile Card */}
-        <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-lg shadow-black/10">
+        <div className={`space-y-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-lg shadow-black/10 ${isSuperAdminDesktop ? 'lg:grid lg:grid-cols-[320px_1fr] lg:items-center lg:gap-6 lg:space-y-0' : ''}`}>
           <div className="flex items-center gap-3.5">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-500/40 bg-blue-600/15 text-lg font-black text-blue-300 shadow-lg shadow-blue-950/20">
               {user?.name.charAt(0) || 'U'}
