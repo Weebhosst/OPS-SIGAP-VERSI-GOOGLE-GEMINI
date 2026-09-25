@@ -474,7 +474,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         {session && session.totalValid < session.totalRequired ? <button onClick={handleOpenCloseShift} className="w-full rounded-2xl border border-slate-700 bg-slate-900/90 p-3 text-xs font-bold text-slate-300 shadow-sm transition hover:border-slate-600 hover:bg-slate-800">CLOSE SHIFT ({session.totalValid}/{session.totalRequired})</button> : null}
 
         {/* Checkpoints Header */}
-        <div className="flex items-end justify-between gap-3 px-1">
+        <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">QR + GPS Radius</p>
             <h2 className="mt-1 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-300">
@@ -512,7 +512,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                     : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
                   <div className="flex items-start gap-3">
                     <div
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-mono text-xs font-black ${
@@ -544,7 +544,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                   </div>
 
                   {/* Status Badge */}
-                  <div>
+                  <div className="sm:ml-auto">
                     {isValid ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
                         <CheckCircle2 className="w-3.5 h-3.5" /> VALID
@@ -573,9 +573,9 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                 )}
 
                 {/* Actions Bar */}
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-800/80 pt-3">
+                <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/80 pt-3 sm:flex-row sm:items-center sm:justify-between">
                   {/* Calibration / Test helper button (Positions GPS near checkpoint) */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-1">
                     <button
                       type="button"
                       onClick={() => setSimulationGps(cp, 0)}
@@ -607,7 +607,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                   </div>
 
                   {/* Main Scan Trigger */}
-                  <div>
+                  <div className="sm:ml-auto">
                     {isValid ? (
                       <span className="text-xs text-slate-500 font-medium italic">
                         Sudah Tervalidasi
@@ -634,12 +634,12 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
 
         {/* Active Scan Review & Observation Dialog (After Photo is Taken) */}
         {activeCpForScan && scannedToken && capturedPhoto && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-            <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md sm:p-4">
+            <div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="checkpoint-review-title">
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-[#08111f]/95 p-4 backdrop-blur">
                 <div>
                   <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">Review Bukti Patroli</p>
-                  <h3 className="mt-1 text-sm font-black text-white">Konfirmasi Pengamatan</h3>
+                  <h3 id="checkpoint-review-title" className="mt-1 text-sm font-black text-white">Konfirmasi Pengamatan</h3>
                   <p className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">
                     {activeCpForScan.code} — {activeCpForScan.name}
                   </p>
@@ -662,7 +662,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                 <div className="relative aspect-video overflow-hidden rounded-2xl border border-slate-800 bg-black shadow-inner">
                   <img
                     src={capturedPhoto}
-                    alt="Captured Evidence"
+                    alt={`Bukti foto checkpoint ${activeCpForScan.code}`}
                     className="h-full w-full object-cover"
                   />
                   <div className="absolute left-3 top-3 rounded-full border border-blue-400/30 bg-blue-600/90 px-2.5 py-1 text-[10px] font-black text-white shadow-lg">
@@ -700,6 +700,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                         key={status}
                         type="button"
                         onClick={() => setObservationStatus(status)}
+                        aria-pressed={observationStatus === status}
                         className={`min-h-11 rounded-xl border px-3 py-2 text-xs font-black transition focus:outline-none focus:ring-2 focus:ring-blue-400/30 ${
                           observationStatus === status
                             ? status === 'AMAN'
@@ -761,7 +762,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         )}
       </main>
 
-      {showCloseModal && session ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"><div className="max-h-[90vh] w-full max-w-md space-y-4 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5"><div className="flex items-center justify-between"><div><h2 className="font-black">CLOSE SHIFT</h2><p className="text-xs text-slate-400">Checkpoint {session.totalValid}/{session.totalRequired} lengkap</p></div><button onClick={() => setShowCloseModal(false)}>✕</button></div><div><span className="text-xs font-bold">Apakah ada TARUNA / serah terima khusus?</span><div className="mt-2 grid grid-cols-2 gap-2"><button onClick={() => setHasSpecialHandover(false)} className={`rounded-xl p-2 text-xs font-bold ${!hasSpecialHandover ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button onClick={() => setHasSpecialHandover(true)} className={`rounded-xl p-2 text-xs font-bold ${hasSpecialHandover ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>{hasSpecialHandover ? <div className="space-y-2"><label className="block text-xs font-bold">Catatan TARUNA<textarea required value={specialNotes} onChange={(e) => setSpecialNotes(e.target.value)} className="mt-1 min-h-20 w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-normal" /></label><div className="grid grid-cols-3 gap-2">{specialPhotoUrls.map((photo, index) => <div key={index} className="relative aspect-square overflow-hidden rounded-xl"><img src={photo} alt={`TARUNA ${index + 1}`} className="h-full w-full object-cover" /><button onClick={() => setSpecialPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded bg-black/70 px-1">✕</button></div>)}</div><button disabled={specialPhotoUrls.length >= 5} onClick={() => { setCameraMode('SPECIAL'); setShowCameraModal(true); }} className="w-full rounded-xl border border-dashed border-slate-600 p-2 text-xs font-bold disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />DOKUMENTASI TARUNA ({specialPhotoUrls.length}/5)</button>{specialPhotoUrls.length < 3 ? <p className="text-xs text-amber-300">Minimal 3 foto.</p> : null}</div> : null}<div className="rounded-xl border border-blue-900 bg-blue-950/30 p-3"><h3 className="text-xs font-black text-blue-300">SERTIGAS / TURUN JAGA</h3><div className="mt-2 text-xs text-slate-300">Customer {session.customerId} • Site {session.siteId}<br />{session.shiftCode} • {session.shiftDate}<br />End Time otomatis saat konfirmasi</div>{endPhotoUrl ? <img src={endPhotoUrl} alt="Turun Jaga" className="mt-2 max-h-56 w-full rounded-xl object-cover" /> : <button onClick={() => { setCameraMode('END'); setShowCameraModal(true); }} className="mt-2 w-full rounded-xl border-2 border-dashed border-slate-700 p-3 text-xs font-bold"><Camera className="mr-1 inline h-4 w-4" />AMBIL FOTO TURUN JAGA</button>}</div><button disabled={submitting || !endPhotoUrl || (hasSpecialHandover && (!specialNotes.trim() || specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5))} onClick={() => void handleCloseShift()} className="sticky bottom-0 w-full rounded-xl bg-emerald-600 p-3 text-sm font-black tracking-wide disabled:opacity-40">KONFIRMASI & SELESAIKAN SHIFT</button></div></div> : null}
+      {showCloseModal && session ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 sm:p-4"><div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="close-shift-title"><div className="flex items-center justify-between"><div><h2 id="close-shift-title" className="font-black">CLOSE SHIFT</h2><p className="text-xs text-slate-400">Checkpoint {session.totalValid}/{session.totalRequired} lengkap</p></div><button type="button" onClick={() => setShowCloseModal(false)} aria-label="Tutup dialog close shift">✕</button></div><div><span className="text-xs font-bold">Apakah ada TARUNA / serah terima khusus?</span><div className="mt-2 grid grid-cols-2 gap-2"><button onClick={() => setHasSpecialHandover(false)} className={`rounded-xl p-2 text-xs font-bold ${!hasSpecialHandover ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button onClick={() => setHasSpecialHandover(true)} className={`rounded-xl p-2 text-xs font-bold ${hasSpecialHandover ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>{hasSpecialHandover ? <div className="space-y-2"><label className="block text-xs font-bold">Catatan TARUNA<textarea required value={specialNotes} onChange={(e) => setSpecialNotes(e.target.value)} className="mt-1 min-h-20 w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-normal" /></label><div className="grid grid-cols-3 gap-2">{specialPhotoUrls.map((photo, index) => <div key={index} className="relative aspect-square overflow-hidden rounded-xl"><img src={photo} alt={`TARUNA ${index + 1}`} className="h-full w-full object-cover" /><button onClick={() => setSpecialPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded bg-black/70 px-1">✕</button></div>)}</div><button disabled={specialPhotoUrls.length >= 5} onClick={() => { setCameraMode('SPECIAL'); setShowCameraModal(true); }} className="w-full rounded-xl border border-dashed border-slate-600 p-2 text-xs font-bold disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />DOKUMENTASI TARUNA ({specialPhotoUrls.length}/5)</button>{specialPhotoUrls.length < 3 ? <p className="text-xs text-amber-300">Minimal 3 foto.</p> : null}</div> : null}<div className="rounded-xl border border-blue-900 bg-blue-950/30 p-3"><h3 className="text-xs font-black text-blue-300">SERTIGAS / TURUN JAGA</h3><div className="mt-2 text-xs text-slate-300">Customer {session.customerId} • Site {session.siteId}<br />{session.shiftCode} • {session.shiftDate}<br />End Time otomatis saat konfirmasi</div>{endPhotoUrl ? <img src={endPhotoUrl} alt="Turun Jaga" className="mt-2 max-h-56 w-full rounded-xl object-cover" /> : <button onClick={() => { setCameraMode('END'); setShowCameraModal(true); }} className="mt-2 w-full rounded-xl border-2 border-dashed border-slate-700 p-3 text-xs font-bold"><Camera className="mr-1 inline h-4 w-4" />AMBIL FOTO TURUN JAGA</button>}</div><button disabled={submitting || !endPhotoUrl || (hasSpecialHandover && (!specialNotes.trim() || specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5))} onClick={() => void handleCloseShift()} className="sticky bottom-0 w-full rounded-xl bg-emerald-600 p-3 text-sm font-black tracking-wide disabled:opacity-40">KONFIRMASI & SELESAIKAN SHIFT</button></div></div> : null}
 
       {/* QR Scanner Modal */}
       <QRScannerModal
