@@ -130,7 +130,6 @@ function AppContent() {
                 { id: 'checkpoints', label: 'Titik QR', icon: QrCode },
                 { id: 'users', label: 'Petugas', icon: Users },
                 { id: 'gallery', label: 'Galeri', icon: ImageIcon },
-                { id: 'audit', label: 'Audit Trail', icon: History },
               ].map((item) => {
                 const Icon = item.icon;
                 const active = adminTab === item.id;
@@ -151,6 +150,22 @@ function AppContent() {
                   </button>
                 );
               })}
+              <div className="my-3 border-t border-slate-800 pt-3">
+                <div className="px-3 pb-2 text-[9px] font-black uppercase tracking-[0.16em] text-slate-600">System</div>
+                <button
+                  type="button"
+                  onClick={() => setAdminTab('audit')}
+                  aria-current={adminTab === 'audit' ? 'page' : undefined}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold transition ${
+                    adminTab === 'audit'
+                      ? 'bg-slate-800 text-slate-100 ring-1 ring-slate-700'
+                      : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-300'
+                  }`}
+                >
+                  <History className="h-4 w-4 shrink-0" />
+                  <span>Audit Trail</span>
+                </button>
+              </div>
             </nav>
 
             <div className="border-t border-slate-800 p-3">
