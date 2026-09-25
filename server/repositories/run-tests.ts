@@ -125,6 +125,9 @@ try {
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'REVIEW', user.id)).status, 'UNDER_REVIEW');
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'CLOSE', user.id, 'Sudah diverifikasi')).status, 'CLOSED');
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'REOPEN', user.id)).status, 'OPEN');
+  const removedAlert = await jsonRepositories.alerts.remove(alert.id);
+  assert.equal(removedAlert.id, alert.id);
+  assert.equal(await jsonRepositories.alerts.findById(alert.id), undefined, 'Validation alert yang dihapus tidak boleh tetap tampil.');
 
   const mediaId = `TEST-MEDIA-${Date.now()}`;
   await jsonRepositories.media.add({
@@ -220,6 +223,15 @@ try {
   });
   assert.equal((await jsonRepositories.radiusCalibrations.list({ limit: 100, offset: 0 })).items.some((item) => item.id === calibration.id), true);
 
+  await assert.rejects(
+    () => jsonRepositories.users.remove(user.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'USER_HAS_OPERATIONAL_HISTORY',
+  );
+  await assert.rejects(
+    () => jsonRepositories.sites.remove(site.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'SITE_HAS_DEPENDENCIES',
+  );
+
   const beforeDryRun = fs.readFileSync(temporaryDatabase);
   execFileSync(process.execPath, ['--import', 'tsx', 'server/db/importJson.ts', '--dry-run'], {
     cwd: process.cwd(),
@@ -246,6 +258,9 @@ try {
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
+  assert.match(postgresSource, /DELETE FROM validation_alerts/);
+  assert.match(postgresSource, /USER_HAS_OPERATIONAL_HISTORY/);
+  assert.match(postgresSource, /SITE_HAS_DEPENDENCIES/);
   assert.match(importerSource, /ON CONFLICT\(id\) DO NOTHING/);
   assert.match(importerSource, /legacy-json:/);
   assert.match(importerSource, /token_ciphertext/);
@@ -281,7 +296,8 @@ try {
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
   console.log('PASS site-capacity rejection and operational-date persistence');
-  console.log('PASS valid-checkpoint uniqueness and alert workflow persistence');
+  console.log('PASS valid-checkpoint uniqueness, alert workflow, and validation alert deletion');
+  console.log('PASS destructive master deletes are blocked when operational history exists');
   console.log('PASS migration dry-run leaves JSON source unchanged');
   console.log('PASS PostgreSQL constraints, capacity lock, and idempotent import strategy');
   console.log('PASS provider-safe patrol/media service cutover');
