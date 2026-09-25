@@ -110,7 +110,68 @@ function AppContent() {
       <div className="min-h-screen bg-[#020817] text-slate-100 flex flex-col">
         <OfflineBanner />
 
-        <div className="flex-1">
+        {user.role === 'SUPER_ADMIN' && (
+          <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-800/90 bg-[#08111f] lg:flex">
+            <div className="border-b border-slate-800 px-5 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-500/40 bg-blue-600/15 text-blue-300 shadow-lg shadow-blue-950/20">
+                  <Shield className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-black tracking-tight text-white">OPS SIGAP</div>
+                  <div className="mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">Super Admin</div>
+                </div>
+              </div>
+            </div>
+
+            <nav className="flex-1 space-y-1 px-3 py-4" aria-label="Navigasi Super Admin Desktop">
+              {[
+                { id: 'command', label: 'Command Center', icon: Activity },
+                { id: 'master', label: 'Master Monitoring', icon: Building2 },
+                { id: 'checkpoints', label: 'Titik QR', icon: QrCode },
+                { id: 'users', label: 'Petugas', icon: Users },
+                { id: 'calibration', label: 'Kalibrasi Radius', icon: Sliders },
+                { id: 'gallery', label: 'Galeri', icon: ImageIcon },
+                { id: 'audit', label: 'Audit Trail', icon: History },
+              ].map((item) => {
+                const Icon = item.icon;
+                const active = adminTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setAdminTab(item.id as any)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition ${
+                      active
+                        ? 'bg-blue-600/15 text-blue-200 ring-1 ring-blue-500/30'
+                        : 'text-slate-400 hover:bg-slate-800/70 hover:text-white'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="border-t border-slate-800 p-3">
+              <div className="mb-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                <div className="truncate text-xs font-bold text-white">{user.name}</div>
+                <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">{user.npk}</div>
+              </div>
+              <button
+                type="button"
+                onClick={logout}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-red-300 transition hover:bg-red-950/40"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </aside>
+        )}
+
+        <div className={`flex-1 ${user.role === 'SUPER_ADMIN' ? 'lg:pl-64' : ''}`}>
           {adminTab === 'command' && (
             <AdminCommandCenter onNavigateTab={(t: any) => setAdminTab(t)} />
           )}
@@ -134,7 +195,7 @@ function AppContent() {
           )}
         </div>
 
-        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Admin">
+        <nav className={`fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl ${user.role === 'SUPER_ADMIN' ? 'lg:hidden' : ''}`} aria-label="Navigasi Admin">
           <div className="mx-auto flex max-w-3xl items-center gap-1 overflow-x-auto sm:justify-center">
             <button
               onClick={() => setAdminTab('command')}
