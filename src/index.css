@@ -1,1 +1,317 @@
 @import "tailwindcss";
+
+/*
+ * OPS SIGAP Design System
+ * Phase 11 — shared visual tokens and global interaction polish.
+ * Existing business logic and component behavior are intentionally untouched.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --ops-bg: #020817;
+  --ops-shell: #08111f;
+  --ops-surface: #0f172a;
+  --ops-surface-raised: #111c31;
+  --ops-surface-soft: #172033;
+
+  --ops-border: #1e293b;
+  --ops-border-strong: #334155;
+
+  --ops-text: #f8fafc;
+  --ops-text-soft: #cbd5e1;
+  --ops-text-muted: #94a3b8;
+  --ops-text-dim: #64748b;
+
+  --ops-blue: #2563eb;
+  --ops-blue-hover: #3b82f6;
+  --ops-cyan: #67e8f9;
+  --ops-green: #34d399;
+  --ops-amber: #fbbf24;
+  --ops-red: #f87171;
+  --ops-violet: #c4b5fd;
+
+  --ops-radius-sm: 0.625rem;
+  --ops-radius-md: 0.75rem;
+  --ops-radius-lg: 1rem;
+  --ops-radius-xl: 1.5rem;
+
+  --ops-shadow-card: 0 18px 42px rgba(0, 0, 0, 0.18);
+  --ops-shadow-overlay: 0 28px 80px rgba(0, 0, 0, 0.5);
+
+  --ops-speed-fast: 140ms;
+  --ops-speed-normal: 200ms;
+
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--ops-bg);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--ops-bg);
+  color: var(--ops-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.72);
+  color: #ffffff;
+}
+
+/* Shared fallback focus language. Component-level Tailwind focus rings can add detail. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* Consistent dark-native controls. */
+input,
+select,
+textarea {
+  accent-color: var(--ops-blue);
+}
+
+select {
+  color-scheme: dark;
+}
+
+/* Thin operational scrollbar used by long admin lists, modals and monitoring feeds. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ops-border-strong) var(--ops-shell);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--ops-shell);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid var(--ops-shell);
+  border-radius: 999px;
+  background: var(--ops-border-strong);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/*
+ * Semantic component primitives.
+ * These are intentionally additive, so existing screens keep their approved
+ * appearance while future refactors can converge without redefining colors.
+ */
+
+.ops-card {
+  border: 1px solid var(--ops-border);
+  border-radius: var(--ops-radius-lg);
+  background: var(--ops-surface);
+  box-shadow: var(--ops-shadow-card);
+}
+
+.ops-card-soft {
+  border: 1px solid var(--ops-border);
+  border-radius: var(--ops-radius-lg);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.ops-kicker {
+  color: #93c5fd;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1rem;
+  text-transform: uppercase;
+}
+
+.ops-heading {
+  color: var(--ops-text);
+  font-weight: 900;
+  letter-spacing: -0.015em;
+}
+
+.ops-muted {
+  color: var(--ops-text-muted);
+}
+
+.ops-input {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--ops-border-strong);
+  border-radius: var(--ops-radius-md);
+  background: var(--ops-bg);
+  color: var(--ops-text);
+  transition:
+    border-color var(--ops-speed-fast) ease,
+    box-shadow var(--ops-speed-fast) ease,
+    background-color var(--ops-speed-fast) ease;
+}
+
+.ops-input::placeholder {
+  color: var(--ops-text-dim);
+}
+
+.ops-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+  outline: none;
+}
+
+.ops-btn-primary,
+.ops-btn-secondary,
+.ops-btn-danger {
+  min-height: 2.75rem;
+  border-radius: var(--ops-radius-md);
+  font-size: 0.75rem;
+  font-weight: 800;
+  transition:
+    transform var(--ops-speed-fast) ease,
+    background-color var(--ops-speed-fast) ease,
+    border-color var(--ops-speed-fast) ease,
+    opacity var(--ops-speed-fast) ease;
+}
+
+.ops-btn-primary {
+  background: var(--ops-blue);
+  color: #ffffff;
+  box-shadow: 0 10px 26px rgba(30, 64, 175, 0.3);
+}
+
+.ops-btn-primary:hover:not(:disabled) {
+  background: var(--ops-blue-hover);
+}
+
+.ops-btn-secondary {
+  border: 1px solid var(--ops-border-strong);
+  background: var(--ops-surface-soft);
+  color: var(--ops-text-soft);
+}
+
+.ops-btn-secondary:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+.ops-btn-danger {
+  border: 1px solid rgba(153, 27, 27, 0.7);
+  background: rgba(69, 10, 10, 0.55);
+  color: #fca5a5;
+}
+
+.ops-btn-primary:active:not(:disabled),
+.ops-btn-secondary:active:not(:disabled),
+.ops-btn-danger:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.ops-badge-info,
+.ops-badge-success,
+.ops-badge-warning,
+.ops-badge-danger,
+.ops-badge-neutral {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.625rem;
+  font-weight: 800;
+  line-height: 1rem;
+}
+
+.ops-badge-info {
+  border: 1px solid rgba(37, 99, 235, 0.45);
+  background: rgba(30, 64, 175, 0.24);
+  color: #bfdbfe;
+}
+
+.ops-badge-success {
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: rgba(6, 78, 59, 0.35);
+  color: #6ee7b7;
+}
+
+.ops-badge-warning {
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: rgba(120, 53, 15, 0.3);
+  color: #fcd34d;
+}
+
+.ops-badge-danger {
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(127, 29, 29, 0.3);
+  color: #fca5a5;
+}
+
+.ops-badge-neutral {
+  border: 1px solid var(--ops-border-strong);
+  background: var(--ops-surface-soft);
+  color: var(--ops-text-muted);
+}
+
+.ops-divider {
+  border-color: var(--ops-border);
+}
+
+.ops-safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
