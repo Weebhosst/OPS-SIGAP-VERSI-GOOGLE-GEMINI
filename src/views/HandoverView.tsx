@@ -125,25 +125,26 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+    <div className="min-h-screen bg-[#020817] pb-28 text-slate-100">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Kembali"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="font-extrabold text-white text-base">Buku Mutasi</h1>
+              <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">Shift Handover</p><h1 className="mt-0.5 text-base font-black tracking-tight text-white">Buku Mutasi</h1></div>
               <p className="text-[11px] text-slate-400 font-medium">Sertigas & Serah Terima Barang</p>
             </div>
           </div>
           {canCreate && activeSession?.startDocumentationCompleted ? <button
             onClick={() => setShowCreateModal(true)}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-lg shadow-blue-950/50"
+            className="flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
           >
             <Plus className="w-4 h-4" />
             <span>Serah Terima Barang</span>
@@ -151,15 +152,15 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-3">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-900 p-2"><button onClick={() => setActiveTab('SERTIGAS')} className={`rounded-xl p-2 text-xs font-bold ${activeTab === 'SERTIGAS' ? 'bg-blue-600' : 'text-slate-400'}`}>SERTIGAS</button><button onClick={() => setActiveTab('BARANG')} className={`rounded-xl p-2 text-xs font-bold ${activeTab === 'BARANG' ? 'bg-blue-600' : 'text-slate-400'}`}>SERAH TERIMA BARANG</button></div>
+      <main className="mx-auto max-w-md space-y-3 px-4 pt-4">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-2 shadow-lg shadow-black/10"><button onClick={() => setActiveTab('SERTIGAS')} className={`min-h-10 rounded-xl px-3 py-2 text-xs font-black transition ${activeTab === 'SERTIGAS' ? 'bg-blue-600' : 'text-slate-400'}`}>SERTIGAS</button><button onClick={() => setActiveTab('BARANG')} className={`min-h-10 rounded-xl px-3 py-2 text-xs font-black transition ${activeTab === 'BARANG' ? 'bg-blue-600' : 'text-slate-400'}`}>SERAH TERIMA BARANG</button></div>
         {filteredHandovers.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
-            <FileText className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="text-sm font-medium">Belum ada catatan {activeTab === 'SERTIGAS' ? 'Sertigas' : 'Serah Terima Barang'}.</p>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-center text-slate-400 shadow-lg shadow-black/10">
+            <FileText className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+            <p className="text-sm font-bold">Belum ada catatan {activeTab === 'SERTIGAS' ? 'Sertigas' : 'Serah Terima Barang'}.</p>
             {canCreate && activeTab === 'BARANG' && activeSession?.startDocumentationCompleted ? <button
               onClick={() => setShowCreateModal(true)}
-              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl inline-flex items-center gap-1.5"
+              className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white transition hover:bg-blue-500"
             >
               <Plus className="w-4 h-4" /> Buat Serah Terima Barang
             </button> : null}
@@ -168,12 +169,12 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           filteredHandovers.map((h) => (
             <div
               key={h.id}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-sm"
+              className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10"
             >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-white text-sm">{h.handoverType}</span>
+                    <span className="text-sm font-black text-white">{h.handoverType}</span>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         h.conditionStatus === 'BAIK'
@@ -186,7 +187,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                       {h.conditionStatus}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  <div className="mt-1 font-mono text-[11px] text-slate-400">
                     {h.shiftCode} • {new Date(h.eventAt).toLocaleTimeString('id-ID')} WIB
                   </div>
                 </div>
@@ -205,7 +206,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               {/* Status details */}
-              <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 font-mono">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 font-mono text-xs">
                 <div>
                   <span className="text-slate-500">Personil:</span> {h.personnelStatus}
                 </div>
@@ -221,14 +222,14 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               {h.outstandingIssues && (
-                <div className="text-xs p-2.5 bg-amber-950/30 border border-amber-900/40 rounded-xl text-amber-200">
+                <div className="rounded-xl border border-amber-900/50 bg-amber-950/30 p-3 text-xs leading-5 text-amber-200">
                   <strong>Catatan Pending:</strong> {h.outstandingIssues}
                 </div>
               )}
-              {h.itemName ? <div className="rounded-xl bg-slate-950 p-2.5 text-xs"><b>{h.itemName}</b> • Jumlah {h.itemQuantity} • {h.itemCondition}<div className="mt-1 text-slate-400">Dari {h.handedFrom} → {h.handedTo}</div></div> : null}
+              {h.itemName ? <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs"><b>{h.itemName}</b> • Jumlah {h.itemQuantity} • {h.itemCondition}<div className="mt-1 text-slate-400">Dari {h.handedFrom} → {h.handedTo}</div></div> : null}
 
               {h.photoUrl && (
-                <div className="rounded-xl overflow-hidden border border-slate-800 aspect-video max-h-40">
+                <div className="aspect-video max-h-44 overflow-hidden rounded-xl border border-slate-800">
                   <img
                     src={h.photoUrl}
                     alt="Handover Evidence"
@@ -241,7 +242,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               {h.status !== 'ACKNOWLEDGED' && h.fromUserId !== user?.id && (
                 <button
                   onClick={() => handleAcknowledge(h.id)}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 transition"
+                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
                 >
                   <UserCheck className="w-4 h-4" />
                   <span>Konfirmasi Terima Jaga</span>
@@ -254,23 +255,23 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Create Handover Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-sm">Serah Terima Barang / TARUNA</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md backdrop-blur-md">
+          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-black text-white">Serah Terima Barang / TARUNA</h3>
+              <button onClick={() => setShowCreateModal(false)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label="Tutup formulir serah terima">
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateHandover} className="space-y-3 text-xs">
-              <div className="rounded-xl bg-slate-950 p-3 text-slate-300"><div>Member: <b>{user?.name}</b> ({user?.npk})</div><div>Customer: {activeSession?.customerId} • Site: {activeSession?.siteId}</div><div>{activeSession?.shiftCode} • Operational Date {activeSession?.shiftDate}</div></div>
-              <div className="grid grid-cols-2 gap-2"><label className="font-semibold">Jenis / Nama Barang atau Taruna<input required value={itemName} onChange={(e) => setItemName(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 font-normal" /></label><label className="font-semibold">Jumlah<input required value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 font-normal" /></label><label className="font-semibold">Diserahkan Dari<input required value={handedFrom} onChange={(e) => setHandedFrom(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 font-normal" /></label><label className="font-semibold">Diserahkan Kepada<input required value={handedTo} onChange={(e) => setHandedTo(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 font-normal" /></label></div>
-              <label className="block font-semibold">Kondisi Barang<input required value={itemCondition} onChange={(e) => setItemCondition(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 font-normal" /></label>
-              <div><span className="font-semibold">Apakah ini TARUNA / dokumentasi khusus?</span><div className="mt-1 grid grid-cols-2 gap-2"><button type="button" onClick={() => setIsTaruna(false)} className={`rounded-xl p-2 font-bold ${!isTaruna ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button type="button" onClick={() => setIsTaruna(true)} className={`rounded-xl p-2 font-bold ${isTaruna ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>
+            <form onSubmit={handleCreateHandover} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-slate-300"><div>Member: <b>{user?.name}</b> ({user?.npk})</div><div>Customer: {activeSession?.customerId} • Site: {activeSession?.siteId}</div><div>{activeSession?.shiftCode} • Operational Date {activeSession?.shiftDate}</div></div>
+              <div className="grid grid-cols-2 gap-2"><label className="font-semibold">Jenis / Nama Barang atau Taruna<input required value={itemName} onChange={(e) => setItemName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Jumlah<input required value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Diserahkan Dari<input required value={handedFrom} onChange={(e) => setHandedFrom(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Diserahkan Kepada<input required value={handedTo} onChange={(e) => setHandedTo(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label></div>
+              <label className="block font-semibold">Kondisi Barang<input required value={itemCondition} onChange={(e) => setItemCondition(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label>
+              <div><span className="font-semibold">Apakah ini TARUNA / dokumentasi khusus?</span><div className="mt-1 grid grid-cols-2 gap-2"><button type="button" onClick={() => setIsTaruna(false)} className={`min-h-10 rounded-xl px-3 py-2 font-black transition ${!isTaruna ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button type="button" onClick={() => setIsTaruna(true)} className={`min-h-10 rounded-xl px-3 py-2 font-black transition ${isTaruna ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Status Kondisi Pos/Site:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Status Kondisi Pos/Site:</label>
                 <div className="grid grid-cols-3 gap-1.5">
                   {(['BAIK', 'PERLU_PERHATIAN', 'BERMASALAH'] as ConditionStatus[]).map((c) => (
                     <button
@@ -294,27 +295,27 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Catatan {isTaruna ? '(Wajib)' : ''}:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Catatan {isTaruna ? '(Wajib)' : ''}:</label>
                 <textarea
                   rows={2}
                   value={outstandingIssues}
                   onChange={(e) => setOutstandingIssues(e.target.value)}
                   placeholder="Informasi penting untuk shift berikutnya..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                 />
               </div>
 
               {/* Photo Evidence Capture */}
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Dokumentasi {isTaruna ? '(3–5 foto wajib)' : '(minimal 1 foto)'}:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Dokumentasi {isTaruna ? '(3–5 foto wajib)' : '(minimal 1 foto)'}:</label>
                 <div className="grid grid-cols-3 gap-2">{photoUrls.map((photo, index) => <div key={index} className="relative aspect-square overflow-hidden rounded-xl"><img src={photo} alt={`Dokumentasi ${index + 1}`} className="h-full w-full object-cover" /><button type="button" onClick={() => setPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded bg-black/70 px-1">✕</button></div>)}</div>
-                <button type="button" disabled={photoUrls.length >= 5} onClick={() => { setCameraTarget('ITEM'); setShowCameraModal(true); }} className="mt-2 w-full rounded-xl border-2 border-dashed border-slate-700 py-2.5 text-slate-400 disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />Tambah Foto ({photoUrls.length}/5)</button>
+                <button type="button" disabled={photoUrls.length >= 5} onClick={() => { setCameraTarget('ITEM'); setShowCameraModal(true); }} className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border-2 border-dashed border-slate-700 px-3 py-2.5 text-xs font-bold text-slate-400 transition hover:border-slate-600 hover:bg-slate-800/40 disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />Tambah Foto ({photoUrls.length}/5)</button>
               </div>
 
               <button
                 type="submit"
                 disabled={submitting || (!isTaruna && photoUrls.length < 1) || (isTaruna && (photoUrls.length < 3 || photoUrls.length > 5 || !outstandingIssues.trim()))}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg transition"
+                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-50"
               >
                 {submitting ? 'Menyimpan...' : 'SIMPAN SERAH TERIMA BARANG'}
               </button>
@@ -323,7 +324,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       )}
 
-      {canCreate && activeSession && !activeSession.startDocumentationCompleted ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"><div className="w-full max-w-md space-y-4 rounded-2xl border border-blue-800 bg-slate-900 p-5"><div><h2 className="font-black text-blue-300">SERTIGAS NAIK JAGA</h2><p className="text-xs text-slate-400">Wajib disimpan sebelum patroli dapat dimulai.</p></div><div className="rounded-xl bg-slate-950 p-3 text-xs"><div>Member: <b>{user?.name}</b></div><div>NPK: {user?.npk}</div><div>Customer: {activeSession.customerId}</div><div>Site: {activeSession.siteId}</div><div>Shift: {activeSession.shiftCode}</div><div>Tanggal Operasional: {activeSession.shiftDate}</div><div>Waktu: {new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</div></div>{startPhotoUrl ? <img src={startPhotoUrl} alt="Sertigas Naik Jaga" className="max-h-64 w-full rounded-xl object-cover" /> : <button onClick={() => { setCameraTarget('START'); setShowCameraModal(true); }} className="w-full rounded-xl border-2 border-dashed border-slate-700 p-4 text-sm font-bold"><Camera className="mr-2 inline h-5 w-5" />AMBIL FOTO SERTIGAS</button>}<button disabled={!startPhotoUrl || submitting} onClick={() => void handleStartDocumentation()} className="w-full rounded-xl bg-blue-600 p-3 text-sm font-bold disabled:opacity-40">SIMPAN & LANJUT PATROLI</button></div></div> : null}
+      {canCreate && activeSession && !activeSession.startDocumentationCompleted ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md"><div className="w-full max-w-md space-y-4 rounded-3xl border border-blue-800/80 bg-[#0f172a] p-5 shadow-2xl shadow-black/50"><div><h2 className="font-black text-blue-300">SERTIGAS NAIK JAGA</h2><p className="text-xs text-slate-400">Wajib disimpan sebelum patroli dapat dimulai.</p></div><div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs"><div>Member: <b>{user?.name}</b></div><div>NPK: {user?.npk}</div><div>Customer: {activeSession.customerId}</div><div>Site: {activeSession.siteId}</div><div>Shift: {activeSession.shiftCode}</div><div>Tanggal Operasional: {activeSession.shiftDate}</div><div>Waktu: {new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</div></div>{startPhotoUrl ? <img src={startPhotoUrl} alt="Sertigas Naik Jaga" className="max-h-64 w-full rounded-xl object-cover" /> : <button onClick={() => { setCameraTarget('START'); setShowCameraModal(true); }} className="flex min-h-14 w-full items-center justify-center rounded-xl border-2 border-dashed border-slate-700 p-4 text-sm font-black text-slate-200 transition hover:border-blue-600 hover:bg-blue-950/20"><Camera className="mr-2 inline h-5 w-5" />AMBIL FOTO SERTIGAS</button>}<button disabled={!startPhotoUrl || submitting} onClick={() => void handleStartDocumentation()} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 p-3 text-sm font-black text-white transition hover:bg-blue-500 disabled:opacity-40">SIMPAN & LANJUT PATROLI</button></div></div> : null}
 
       <CameraCaptureModal
         isOpen={showCameraModal}
