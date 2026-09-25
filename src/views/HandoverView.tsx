@@ -239,7 +239,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               )}
 
               {/* Ack Action */}
-              {h.status !== 'ACKNOWLEDGED' && h.fromUserId !== user?.id && (
+              {user?.role === 'ANGGOTA' && h.status !== 'ACKNOWLEDGED' && h.fromUserId !== user?.id && (
                 <button
                   onClick={() => handleAcknowledge(h.id)}
                   className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
