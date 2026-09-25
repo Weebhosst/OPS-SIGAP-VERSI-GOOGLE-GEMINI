@@ -63,6 +63,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow-x: hidden;
   background: var(--ops-bg);
   color: var(--ops-text);
   -webkit-font-smoothing: antialiased;
@@ -313,5 +314,32 @@ select {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* Phase 12 responsive + accessibility utilities */
+.ops-mobile-nav {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.ops-safe-top {
+  padding-top: max(0px, env(safe-area-inset-top));
+}
+
+.ops-dialog {
+  max-height: min(92vh, calc(100dvh - 2rem));
+}
+
+.ops-scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 359px) {
+  .ops-mobile-nav {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
   }
 }
