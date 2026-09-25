@@ -553,6 +553,23 @@ export const postgresRepositories: RepositoryBundle = {
       );
       return result.rows[0]?mapSite(result.rows[0]):undefined;
     }),
+    remove: async (id) => {
+      try {
+        const result = await query('DELETE FROM sites WHERE id=$1 RETURNING *', [id]);
+        if (!result.rows[0]) throw new RepositoryError('SITE_NOT_FOUND', 'Site tidak ditemukan.', 404);
+        return mapSite(result.rows[0]);
+      } catch (error: any) {
+        if (error instanceof RepositoryError) throw error;
+        if (error?.code === '23503') {
+          throw new RepositoryError(
+            'SITE_HAS_DEPENDENCIES',
+            'Site masih memiliki personel, checkpoint, atau histori operasional. Nonaktifkan site atau pindahkan data turunannya terlebih dahulu.',
+            409,
+          );
+        }
+        throw error;
+      }
+    },
   },
 
   checkpoints: {
