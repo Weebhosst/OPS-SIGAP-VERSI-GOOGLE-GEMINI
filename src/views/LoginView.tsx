@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { Shield, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowRight, Eye, EyeOff, LockKeyhole, Shield, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
@@ -11,6 +11,7 @@ export const LoginView: React.FC = () => {
   const { login } = useAuth();
   const [npk, setNpk] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,91 +34,107 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 selection:bg-blue-600 selection:text-white">
-      <div className="max-w-md w-full mx-auto pt-8 space-y-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-blue-600 to-blue-800 border border-blue-400/30 flex items-center justify-center text-white mx-auto shadow-xl shadow-blue-900/30">
-            <Shield className="w-9 h-9" />
+    <main className="min-h-screen bg-slate-100 text-slate-900 selection:bg-blue-700 selection:text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-8 sm:px-6">
+        <header className="mb-7 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-300">
+            <Shield className="h-8 w-8" />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">OPS SIGAP</h1>
-          <p className="text-xs text-slate-400 font-medium max-w-xs mx-auto">
-            Security Operations System • Site Pos BB92 KM 92
+          <p className="mt-4 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-700">Operational Security System</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">OPS SIGAP</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-600">
+            Sistem operasional patroli dan pengamanan untuk personel lapangan.
           </p>
-        </div>
+        </header>
 
-        {/* Login Form Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-          <div className="border-b border-slate-800 pb-3">
-            <h2 className="font-bold text-white text-sm">Masuk Akun Petugas</h2>
-            <p className="text-xs text-slate-400">Gunakan NPK dan password operasional</p>
+        <section
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-6"
+          aria-labelledby="login-title"
+        >
+          <div className="mb-5 border-b border-slate-100 pb-4">
+            <h2 id="login-title" className="text-lg font-extrabold text-slate-950">Masuk ke akun</h2>
+            <p className="mt-1 text-sm text-slate-500">Gunakan NPK dan password operasional.</p>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-950/60 border border-red-800 text-red-200 text-xs rounded-xl flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <div
+              role="alert"
+              className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-            <div>
-              <label className="font-semibold text-slate-300 block mb-1">Nomor Pokok Karyawan (NPK):</label>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold text-slate-700">NPK</span>
               <div className="relative">
-                <User className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+                <UserRound className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
                   required
                   autoFocus
-                  placeholder="Contoh: 234378"
+                  autoComplete="username"
+                  inputMode="numeric"
+                  placeholder="Masukkan NPK"
                   value={npk}
                   onChange={(e) => setNpk(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-white font-mono placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-base text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                 />
               </div>
-            </div>
+            </label>
 
-            <div>
-              <label className="font-semibold text-slate-300 block mb-1">Password:</label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold text-slate-700">Password</span>
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+                <LockKeyhole className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  placeholder="Masukkan password..."
+                  autoComplete="current-password"
+                  placeholder="Masukkan password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-12 text-base text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
-            </div>
+            </label>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-950/50 flex items-center justify-center gap-2 transition active:scale-[0.99]"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <span>Memverifikasi...</span>
               ) : (
                 <>
-                  <span>MASUK SISTEM</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Masuk</span>
+                  <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
-        </div>
+        </section>
 
-        {/* PWA Install Button */}
-        <div className="px-2">
+        <div className="mt-4">
           <PWAInstallButton />
         </div>
-      </div>
 
-      <footer className="py-4 text-center text-[11px] text-slate-600 font-mono">
-        OPS SIGAP v2.0 • Real-Field Offline Patrol & Operations
-      </footer>
-    </div>
+        <footer className="mt-7 text-center text-xs text-slate-500">
+          OPS SIGAP • Akses operasional terproteksi
+        </footer>
+      </div>
+    </main>
   );
 };
