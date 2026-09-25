@@ -20,12 +20,13 @@ import {
   ExternalLink,
   Users,
   QrCode,
-  Sliders,
   History,
   LogOut,
   Image as ImageIcon,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog';
 import { api } from '../../lib/api';
 import {
   AdminFilterState,
@@ -80,7 +81,10 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   const [loading, setLoading] = useState(true);
   const [detailAlert, setDetailAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeAlert, setCloseAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
+  const [deleteAlert, setDeleteAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeNote, setCloseNote] = useState('');
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   const loadDashboard = async () => {
     try {
@@ -121,7 +125,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         await loadDashboard();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mengubah filter');
+      setActionMessage(err.message || 'Gagal mengubah filter.');
     }
   };
 
@@ -136,7 +140,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         await loadDashboard();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mereset filter');
+      setActionMessage(err.message || 'Gagal mereset filter.');
     }
   };
 
@@ -145,7 +149,28 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
       await api.updateValidationAlert(alert.id, action, action === 'CLOSE' ? closeNote.trim() : undefined);
       setCloseAlert(null); setCloseNote('');
       await loadDashboard();
-    } catch (error: any) { window.alert(error.message || 'Gagal memperbarui validation alert.'); }
+    } catch (error: any) { setActionMessage(error.message || 'Gagal memperbarui validation alert.'); }
+  };
+
+  const handleDeleteAlert = async () => {
+    if (!deleteAlert) return;
+    setActionBusy(true);
+    try {
+      await api.deleteValidationAlert(deleteAlert.id);
+      setActionMessage('Validation alert berhasil dihapus.');
+      setDeleteAlert(null);
+      setDetailAlert(null);
+      await loadDashboard();
+    } catch (error: any) {
+      setActionMessage(error.message || 'Validation alert gagal dihapus.');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const openActiveSessions = () => {
+    if (user?.id) sessionStorage.setItem(`ops:masterTab:${user.id}`, 'ACTIVE_SESSION');
+    onNavigateTab('master');
   };
 
   // Helper for active filter text
@@ -205,6 +230,12 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
       </header>
 
       <main className={`mx-auto space-y-5 px-4 pt-4 ${isChief ? 'max-w-md' : 'max-w-7xl lg:px-6 lg:pt-6'}`}>
+        {actionMessage ? (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-blue-800/70 bg-blue-950/30 px-4 py-3 text-xs text-blue-100" role="status" aria-live="polite">
+            <span>{actionMessage}</span>
+            <button type="button" onClick={() => setActionMessage(null)} className="shrink-0 rounded-lg px-2 py-1 font-black text-blue-300 hover:bg-blue-900/50">TUTUP</button>
+          </div>
+        ) : null}
         {/* Active Filter Indicator Bar */}
         <div className={`flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-3 shadow-lg shadow-black/10 ${isChief ? '' : 'sm:flex-row sm:items-center sm:justify-between'}`}>
           <div className={`text-xs ${isChief ? 'space-y-2' : 'flex items-center gap-2'}`}>
@@ -327,14 +358,22 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         <div className={`grid grid-cols-1 gap-3 ${isChief ? '' : 'lg:grid-cols-2'}`}>
           {/* Panel: Patroli Aktif */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-blue-400" />
                 <h2 className="text-sm font-black text-white">{isChief ? 'PATROLI AKTIF' : 'PATROLI AKTIF LAPANGAN'}</h2>
               </div>
-              <span className="text-xs font-mono font-bold text-slate-400">
-                {panels.activePatrols.length} Sesi
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-slate-400">{panels.activePatrols.length} Sesi</span>
+                <button
+                  type="button"
+                  onClick={openActiveSessions}
+                  className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-blue-700/60 bg-blue-950/40 px-3 text-[10px] font-black text-blue-200 transition hover:bg-blue-900/50"
+                >
+                  ACTIVE SESSION
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             {panels.activePatrols.length === 0 ? (
@@ -566,9 +605,74 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         )}
       </main>
 
-      {detailAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-detail-title"><div className="flex justify-between gap-3"><h3 id="validation-detail-title" className="font-black">DETAIL VALIDATION ALERT</h3><button type="button" onClick={() => setDetailAlert(null)} aria-label="Tutup detail validation alert">✕</button></div><div className="mt-4 space-y-2 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div><div>Site: {detailAlert.siteId}</div><div>Jenis: {detailAlert.alertType}</div><div>Detail: {detailAlert.message}</div><div>Status: {detailAlert.status}</div>{detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}</div></div></div> : null}
+      {detailAlert ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-md sm:p-4">
+          <div className="ops-dialog flex w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-700 bg-[#0f172a] shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="validation-detail-title">
+            <header className="sticky top-0 flex items-center justify-between gap-3 border-b border-slate-800 bg-[#08111f]/95 p-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-300">Validation Alert</p>
+                <h3 id="validation-detail-title" className="mt-1 text-sm font-black text-white">DETAIL VALIDATION ALERT</h3>
+              </div>
+              <button type="button" onClick={() => setDetailAlert(null)} aria-label="Tutup detail validation alert" className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
+            </header>
+            <div className="space-y-3 overflow-y-auto p-5 text-xs">
+              <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div>
+                <div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div>
+                <div>Site: {detailAlert.siteId}</div>
+                <div>Jenis: {detailAlert.alertType}</div>
+                <div className="break-words">Detail: {detailAlert.message}</div>
+                <div>Status: {detailAlert.status}</div>
+                {detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}
+              </div>
+              {isAdministrator(user?.role) ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteAlert(detailAlert)}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-800/70 bg-red-950/40 px-4 font-black text-red-200 transition hover:bg-red-900/50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  HAPUS VALIDATION
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-      {closeAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-red-900 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-close-title"><h3 id="validation-close-title" className="font-black text-red-300">TUTUP VALIDATION ALERT</h3><div className="my-3 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div><div>Site: {closeAlert.siteId}</div><div>Jenis: {closeAlert.alertType}</div><div className="mt-2">Detail: {closeAlert.message}</div></div><label className="font-bold">Catatan Penyelesaian<textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal" /></label><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => setCloseAlert(null)} className="rounded-xl bg-slate-800 p-2 font-bold">BATAL</button><button disabled={!closeNote.trim()} onClick={() => void mutateAlert(closeAlert, 'CLOSE')} className="rounded-xl bg-red-700 p-2 font-bold disabled:opacity-40">CLOSE ALERT</button></div></div></div> : null}
+      <ConfirmActionDialog
+        open={!!closeAlert}
+        title="Tutup Validation Alert?"
+        description={closeAlert ? `Alert ${closeAlert.alertType} untuk ${options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId} akan ditandai selesai.` : ''}
+        confirmLabel="TUTUP ALERT"
+        cancelLabel="BATAL"
+        tone="warning"
+        busy={actionBusy}
+        onCancel={() => { setCloseAlert(null); setCloseNote(''); }}
+        onConfirm={async () => {
+          if (!closeAlert || !closeNote.trim()) return;
+          setActionBusy(true);
+          try { await mutateAlert(closeAlert, 'CLOSE'); }
+          finally { setActionBusy(false); }
+        }}
+      >
+        <label className="block text-xs font-bold text-slate-300">
+          Catatan Penyelesaian
+          <textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal text-white outline-none focus:border-amber-500" />
+        </label>
+      </ConfirmActionDialog>
+
+      <ConfirmActionDialog
+        open={!!deleteAlert}
+        title="Hapus Validation Alert?"
+        description="Validation alert akan dihapus dari data alert dan tidak tampil lagi di Command Center. Patrol log asli tetap dipertahankan sebagai histori operasional."
+        confirmLabel="YA, HAPUS"
+        cancelLabel="BATAL"
+        tone="danger"
+        busy={actionBusy}
+        onCancel={() => setDeleteAlert(null)}
+        onConfirm={handleDeleteAlert}
+      />
 
       {/* Persistent Global Filter Modal */}
       {showFilterModal && (
