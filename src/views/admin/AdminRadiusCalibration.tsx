@@ -31,6 +31,7 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
   const [deviceModel, setDeviceModel] = useState('Samsung A14 Field Test');
   const [notes, setNotes] = useState('UAT Geofence Boundary Test');
   const [submitting, setSubmitting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const loadCalibrations = async () => {
     try {
@@ -69,7 +70,7 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
         await loadCalibrations();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan kalibrasi');
+      setStatusMsg(err.message || 'Gagal menyimpan kalibrasi.');
     } finally {
       setSubmitting(false);
     }
@@ -80,29 +81,11 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
       <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Kembali"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div>
-              <h1 className="text-base font-black tracking-tight text-white">Kalibrasi Radius Geofence</h1>
-              <p className="text-[11px] text-slate-400 font-medium">Pengujian Toleransi Jarak Lapangan</p>
-            </div>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Tes</span>
-          </button>
-        </div>
       </header>
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 pt-4 lg:px-6 lg:pt-6">
+        {statusMsg ? <div className="rounded-2xl border border-blue-800/70 bg-blue-950/30 p-3 text-xs text-blue-100" role="status" aria-live="polite">{statusMsg}</div> : null}
         {/* Verification Summary Banner */}
         <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-xs text-slate-300 shadow-lg shadow-black/10">
           <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-white">
