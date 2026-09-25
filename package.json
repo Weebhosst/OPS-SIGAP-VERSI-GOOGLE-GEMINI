@@ -20,7 +20,8 @@
     "audit:master-data": "tsx server/masterDataAudit.ts",
     "cleanup:round6b": "tsx server/round6bCleanup.ts",
     "gate:round7": "tsx server/round7GoLiveGate.ts",
-    "enforce:password-rotation": "tsx server/round7SecurityFix.ts"
+    "enforce:password-rotation": "tsx server/round7SecurityFix.ts",
+    "uat:gate": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
