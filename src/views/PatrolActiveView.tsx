@@ -371,38 +371,38 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       </header>
 
       <main className="mx-auto max-w-md space-y-4 px-4 pt-4">
-        {/* GPS Live Telemetry Pill */}
-        <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/90 p-3.5 shadow-lg shadow-black/10">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-                currentGps.isSimulated
-                  ? 'bg-purple-900/30 text-purple-400 border border-purple-700/50'
-                  : 'bg-emerald-900/30 text-emerald-400 border border-emerald-700/50'
-              }`}
-            >
-              <LocateFixed className="w-4 h-4" />
+        {/* GPS Live Telemetry */}
+        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/90 shadow-lg shadow-black/10">
+          <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className={`flex h-9 w-9 items-center justify-center rounded-xl border ${currentGps.isSimulated ? 'border-purple-700/60 bg-purple-900/25 text-purple-300' : 'border-emerald-700/60 bg-emerald-900/25 text-emerald-300'}`}>
+                <LocateFixed className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Verifikasi Lokasi</p>
+                <p className="mt-0.5 text-sm font-black text-white">{currentGps.isSimulated ? 'GPS Simulasi' : 'GPS Perangkat Aktif'}</p>
+              </div>
+            </div>
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${currentGps.accuracy > 20 ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+              ±{currentGps.accuracy.toFixed(1)} m
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 px-4 py-3 text-xs">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Latitude</p>
+              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps.latitude.toFixed(6)}</p>
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white font-mono">
-                  {currentGps.latitude.toFixed(6)}, {currentGps.longitude.toFixed(6)}
-                </span>
-                {currentGps.isSimulated && (
-                  <span className="text-[9px] bg-purple-950 text-purple-300 px-1 rounded font-mono">
-                    SIM
-                  </span>
-                )}
-              </div>
-              <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                <span>Akurasi GPS: ±{currentGps.accuracy.toFixed(1)}m</span>
-                {currentGps.accuracy > 20 && (
-                  <span className="text-amber-400 font-bold">(GPS LOW ACCURACY)</span>
-                )}
-              </div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Longitude</p>
+              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps.longitude.toFixed(6)}</p>
             </div>
           </div>
-        </div>
+          {currentGps.accuracy > 20 ? (
+            <div className="border-t border-amber-900/60 bg-amber-950/30 px-4 py-2.5 text-[11px] font-semibold text-amber-300">
+              Akurasi GPS rendah. Posisi tetap mengikuti data GPS perangkat yang sedang diterima.
+            </div>
+          ) : null}
+        </section>
 
         {gpsError && (
           <div className="flex items-start gap-2 rounded-xl border border-amber-800/80 bg-amber-950/40 p-3 text-xs text-amber-200">
@@ -475,10 +475,13 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
 
         {/* Checkpoints Header */}
         <div className="flex items-end justify-between gap-3 px-1">
-          <h2 className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">
-            Titik Checkpoint {session?.siteId || ''} ({checkpoints.length} Titik Wajib)
-          </h2>
-          <span className="text-[11px] font-mono text-slate-400">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">QR + GPS Radius</p>
+            <h2 className="mt-1 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-300">
+              Titik Checkpoint {session?.siteId || ''} ({checkpoints.length} Titik Wajib)
+            </h2>
+          </div>
+          <span className="rounded-lg border border-slate-800 bg-slate-900/80 px-2 py-1 font-mono text-[10px] text-slate-400">
             Radius Ketat 10-15m
           </span>
         </div>
@@ -526,15 +529,15 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-black leading-tight text-white">{cp.name}</h3>
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[11px] text-slate-400">
-                        <span>Radius: {cp.radiusMeters}m</span>
-                        <span>•</span>
-                        <span
-                          className={`font-semibold ${
-                            distanceNow <= cp.radiusMeters ? 'text-emerald-400' : 'text-amber-400'
-                          }`}
-                        >
-                          Jarak HP: {distanceNow.toFixed(1)}m
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className="rounded-lg border border-slate-700 bg-slate-950/70 px-2 py-1 font-mono text-slate-400">
+                          Radius {cp.radiusMeters}m
+                        </span>
+                        <span className={`rounded-lg border px-2 py-1 font-mono font-bold ${distanceNow <= cp.radiusMeters ? 'border-emerald-700/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-700/60 bg-amber-950/30 text-amber-300'}`}>
+                          Jarak HP {distanceNow.toFixed(1)}m
+                        </span>
+                        <span className={`rounded-lg border px-2 py-1 text-[10px] font-black ${distanceNow <= cp.radiusMeters ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>
+                          {distanceNow <= cp.radiusMeters ? 'DALAM RADIUS' : 'DI LUAR RADIUS'}
                         </span>
                       </div>
                     </div>
