@@ -525,6 +525,15 @@ class DatabaseStore {
     return site;
   }
 
+  public deleteSite(id: string): Site | undefined {
+    const index = this.data.sites.findIndex((site) => site.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.sites.splice(index, 1);
+    this.data.admin_filter_state = this.data.admin_filter_state.map((state) => state.siteId === id ? { ...state, siteId: null } : state);
+    this.save();
+    return removed;
+  }
+
   public getCheckpoints(siteId?: string): Checkpoint[] {
     if (siteId) {
       return this.data.checkpoints.filter((c) => c.siteId === siteId);
