@@ -146,6 +146,27 @@ export const jsonRepositories: RepositoryBundle = {
     list: async (page) => paginate(db.getSites(), page),
     create: async (site) => db.addSite(site),
     update: async (id, updates) => db.updateSite(id, updates),
+    remove: async (id) => {
+      const site = db.findSiteById(id);
+      if (!site) throw new RepositoryError('SITE_NOT_FOUND', 'Site tidak ditemukan.', 404);
+      const hasDependencies =
+        db.getUsers().some((user) => user.siteId === id) ||
+        db.getCheckpoints(id).length > 0 ||
+        db.getPatrolSessions({ siteId: id }).length > 0 ||
+        db.getPatrolLogs().some((log) => log.siteId === id) ||
+        db.getHandovers({ siteId: id }).length > 0 ||
+        db.getIncidents({ siteId: id }).length > 0 ||
+        db.getMedia({ siteId: id }).length > 0 ||
+        db.getRadiusCalibrations().some((entry) => entry.siteId === id);
+      if (hasDependencies) {
+        throw new RepositoryError(
+          'SITE_HAS_DEPENDENCIES',
+          'Site masih memiliki personel, checkpoint, atau histori operasional. Nonaktifkan site atau pindahkan data turunannya terlebih dahulu.',
+          409,
+        );
+      }
+      return db.deleteSite(id)!;
+    },
   },
 
   checkpoints: {
