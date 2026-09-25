@@ -35,6 +35,7 @@ export interface UserRepository {
   update(id: string, updates: Partial<User>, assignment?: UserAssignmentChange): Promise<User | undefined>;
   resetPassword(id: string, passwordHash: string, changedAt: string): Promise<User | undefined>;
   changePassword(id: string, passwordHash: string, changedAt: string): Promise<User | undefined>;
+  remove(id: string): Promise<User>;
 }
 
 export interface AuthSessionRecord {
