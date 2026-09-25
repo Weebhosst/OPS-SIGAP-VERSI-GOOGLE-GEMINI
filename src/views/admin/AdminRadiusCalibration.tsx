@@ -81,7 +81,20 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
       <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Kembali"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div>
+              <h1 className="text-base font-black tracking-tight text-white">Kalibrasi Radius Geofence</h1>
+              <p className="text-[11px] font-medium text-slate-400">Riwayat pengujian toleransi jarak, read-only dari navigasi utama</p>
+            </div>
           </div>
+        </div>
       </header>
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 pt-4 lg:px-6 lg:pt-6">
