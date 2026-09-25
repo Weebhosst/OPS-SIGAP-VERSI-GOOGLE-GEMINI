@@ -292,11 +292,11 @@ function AppContent() {
           {adminTab === 'incidents' && <IncidentView onBack={() => setAdminTab('command')} />}
           {adminTab === 'profile' && <ProfileView onBack={() => setAdminTab('command')} />}
         </div>
-        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Utama">
-          <div className="mx-auto grid max-w-lg grid-cols-4 gap-1">
+        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Chief">
+          <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
             <button
               onClick={() => setAdminTab('command')}
-              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'command' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
@@ -305,7 +305,7 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('master')}
-              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'master' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
@@ -313,8 +313,26 @@ function AppContent() {
               <span>Session</span>
             </button>
             <button
+              onClick={() => setAdminTab('handovers')}
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
+                adminTab === 'handovers' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Mutasi</span>
+            </button>
+            <button
+              onClick={() => setAdminTab('incidents')}
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
+                adminTab === 'incidents' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              <span>Insiden</span>
+            </button>
+            <button
               onClick={() => setAdminTab('gallery')}
-              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'gallery' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
@@ -323,7 +341,7 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('profile')}
-              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'profile' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
