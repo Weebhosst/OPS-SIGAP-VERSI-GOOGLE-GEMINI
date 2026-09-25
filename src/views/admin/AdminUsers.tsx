@@ -110,24 +110,25 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-[#020817] pb-10 text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Kembali"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="font-extrabold text-white text-base">Manajemen Petugas Security</h1>
+              <h1 className="text-base font-black tracking-tight text-white">Manajemen Petugas Security</h1>
               <p className="text-[11px] text-slate-400 font-medium">NPK, Akun & Reset Password</p>
             </div>
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-lg shadow-blue-950/50"
+            className="flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Petugas</span>
@@ -135,14 +136,14 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-xs">
-          <label>Customer<select value={filterCustomerId} onChange={(e) => { setFilterCustomerId(e.target.value); setFilterSiteId(''); }} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2"><option value="">Semua Customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
-          <label>Site<select value={filterSiteId} onChange={(e) => setFilterSiteId(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2"><option value="">Semua Site</option>{sites.filter((site) => !filterCustomerId || site.customerId === filterCustomerId).map((site) => <option key={site.id} value={site.id}>{site.id} — {site.name}</option>)}</select></label>
+      <main className="mx-auto max-w-7xl space-y-4 px-4 pt-4 lg:px-6 lg:pt-6">
+        <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-xs shadow-lg shadow-black/10 md:grid-cols-2">
+          <label>Customer<select value={filterCustomerId} onChange={(e) => { setFilterCustomerId(e.target.value); setFilterSiteId(''); }} className="mt-1.5 min-h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"><option value="">Semua Customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
+          <label>Site<select value={filterSiteId} onChange={(e) => setFilterSiteId(e.target.value)} className="mt-1.5 min-h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"><option value="">Semua Site</option>{sites.filter((site) => !filterCustomerId || site.customerId === filterCustomerId).map((site) => <option key={site.id} value={site.id}>{site.id} — {site.name}</option>)}</select></label>
         </div>
         {statusMsg && (
-          <div className="p-3 bg-emerald-950/70 border border-emerald-700 text-emerald-200 text-xs rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-700/70 bg-emerald-950/60 p-3 text-xs text-emerald-200">
+            <div className="flex flex-wrap items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>{statusMsg}</span>
             </div>
@@ -152,20 +153,20 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {users.filter((u) => (!filterCustomerId || u.customerId === filterCustomerId) && (!filterSiteId || u.siteId === filterSiteId)).map((u) => (
             <div
               key={u.id}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3"
+              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm grid grid-cols-1 gap-3 xl:grid-cols-2"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/40 text-blue-400 font-black text-base flex items-center justify-center">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600/15 text-base font-black text-blue-300">
                     {u.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-white text-sm">{u.name}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-black text-white">{u.name}</h3>
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           u.role === 'SUPER_ADMIN'
@@ -181,18 +182,18 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    <p className="mt-1 font-mono text-xs text-slate-400">
                       NPK: <strong className="text-slate-200">{u.npk}</strong> • Site: {u.siteId || 'Global'}
                     </p>
-                    <p className="text-[11px] text-slate-500 font-mono">{u.email}</p>
+                    <p className="break-all font-mono text-[11px] text-slate-500">{u.email}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* Reset Password ke NPK Action */}
                   <button
                     onClick={() => setConfirmResetUser(u)}
-                    className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition"
+                    className="flex min-h-9 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-bold text-amber-300 transition hover:bg-slate-700 hover:text-amber-200"
                     title="Reset password ke NPK"
                   >
                     <KeyRound className="w-3.5 h-3.5" />
@@ -203,7 +204,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   {u.role !== 'SUPER_ADMIN' && (
                     <button
                       onClick={() => handleToggleActive(u)}
-                      className={`p-1.5 rounded-xl border transition ${
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
                         u.status === 'ACTIVE'
                           ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-red-400'
                           : 'bg-emerald-950 border-emerald-800 text-emerald-400'
@@ -222,30 +223,30 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Add User Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-sm">Tambah Petugas Baru</h3>
+              <h3 className="text-sm font-black text-white">Tambah Petugas Baru</h3>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleAddUser} className="space-y-3 text-xs">
+            <form onSubmit={handleAddUser} className="grid grid-cols-1 gap-3 xl:grid-cols-2 text-xs">
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Nama Lengkap:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Nama Lengkap:</label>
                 <input
                   type="text"
                   required
                   placeholder="Contoh: Budi Santoso"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">
                   Nomor Pokok Karyawan (NPK):
                 </label>
                 <input
@@ -254,7 +255,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   placeholder="Contoh: 240199"
                   value={newNpk}
                   onChange={(e) => setNewNpk(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 font-mono"
                 />
                 <p className="text-[11px] text-blue-400 mt-1">
                   * Password awal akan otomatis diset sama dengan NPK ({newNpk || 'NPK'}).
@@ -262,23 +263,23 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Email Petugas (Opsional):</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Email Petugas (Opsional):</label>
                 <input
                   type="email"
                   placeholder="budi@security.local"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 font-mono"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-semibold text-slate-300 block mb-1">Peran (Role):</label>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-300">Peran (Role):</label>
                   <select
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value as Role)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                   >
                     <option value="ANGGOTA">ANGGOTA (Petugas Jaga)</option>
                     <option value="ADMIN">ADMIN OPERASIONAL</option>
@@ -287,11 +288,11 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   </select>
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-300 block mb-1">Site Penugasan:</label>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-300">Site Penugasan:</label>
                   <select
                     value={newSiteId}
                     onChange={(e) => setNewSiteId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 font-mono"
                   >
                     {sites.map((site) => <option key={site.id} value={site.id}>{site.id} — {site.name}</option>)}
                   </select>
@@ -301,7 +302,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg transition"
+                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-50"
               >
                 {submitting ? 'Menyimpan Petugas...' : 'SIMPAN PETUGAS BARU'}
               </button>
@@ -312,10 +313,10 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Confirmation Dialog: Reset Password ke NPK */}
       {confirmResetUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-amber-800/80 rounded-2xl p-5 space-y-3 text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-slate-900 border border-amber-800/80 rounded-2xl p-5 grid grid-cols-1 gap-3 xl:grid-cols-2 text-center">
             <KeyRound className="w-10 h-10 text-amber-400 mx-auto" />
-            <h3 className="font-bold text-white text-sm">Reset Password Petugas?</h3>
+            <h3 className="text-sm font-black text-white">Reset Password Petugas?</h3>
             <p className="text-xs text-slate-300">
               Password untuk <strong>{confirmResetUser.name}</strong> akan direset kembali ke nomor NPK:{' '}
               <span className="font-mono text-amber-300 font-bold">{confirmResetUser.npk}</span>.
