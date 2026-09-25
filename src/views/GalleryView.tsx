@@ -289,11 +289,11 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </main>
 
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md sm:p-4">
+          <div className="ops-dialog flex w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="gallery-preview-title">
             <div className="flex items-center justify-between border-b border-slate-800 bg-[#08111f] p-4">
               <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">
+                <span id="gallery-preview-title" className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">
                   {selectedItem.sourceModule} • {selectedItem.category}
                 </span>
                 <p className="mt-1 truncate text-xs font-bold text-white">{selectedItem.caption}</p>
