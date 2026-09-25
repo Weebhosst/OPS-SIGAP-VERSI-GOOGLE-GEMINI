@@ -274,11 +274,11 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Create Incident Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md sm:p-4">
+          <div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="incident-create-title">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-black text-white">Formulir Laporan Kejadian Lapangan</h3>
-              <button onClick={() => setShowCreateModal(false)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label="Tutup formulir laporan kejadian">
+              <h3 id="incident-create-title" className="text-sm font-black text-white">Formulir Laporan Kejadian Lapangan</h3>
+              <button type="button" onClick={() => setShowCreateModal(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label="Tutup formulir laporan kejadian">
                 ✕
               </button>
             </div>
