@@ -40,6 +40,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [notes, setNotes] = useState('');
   const [activeSession, setActiveSession] = useState<PatrolSession | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const loadIncidents = async () => {
     try {
@@ -62,11 +63,11 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const handleCreateIncident = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !locationText || !chronology || !initialAction) {
-      alert('Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.');
+      setStatusMsg('Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.');
       return;
     }
     if (photoUrls.length < 3) {
-      alert('Dokumentasi kejadian minimal 3 foto.');
+      setStatusMsg('Dokumentasi kejadian minimal 3 foto.');
       return;
     }
 
@@ -100,7 +101,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         await loadIncidents();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan laporan kejadian');
+      setStatusMsg(err.message || 'Gagal menyimpan laporan kejadian.');
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +117,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         await loadIncidents();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal memperbarui status');
+      setStatusMsg(err.message || 'Gagal memperbarui status.');
     }
   };
 
@@ -147,6 +148,15 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </button> : null}
         </div>
       </header>
+
+      {statusMsg ? (
+        <div className="mx-auto mt-3 flex max-w-md items-center justify-between gap-3 px-4">
+          <div className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-800/70 bg-amber-950/30 p-3 text-xs text-amber-100" role="status" aria-live="polite">
+            <span>{statusMsg}</span>
+            <button type="button" onClick={() => setStatusMsg(null)} className="shrink-0 rounded-lg px-2 py-1 font-black text-amber-300 hover:bg-amber-900/40">TUTUP</button>
+          </div>
+        </div>
+      ) : null}
 
       <main className="mx-auto max-w-md space-y-3 px-4 pt-4">
         {incidents.length === 0 ? (
