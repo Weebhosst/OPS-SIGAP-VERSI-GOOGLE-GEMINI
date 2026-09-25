@@ -73,7 +73,7 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#020817] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#020817] flex flex-col items-center justify-center p-4" role="status" aria-live="polite">
         <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-300 flex items-center justify-center animate-pulse shadow-xl shadow-blue-950/30">
           <Shield className="w-6 h-6" />
         </div>
@@ -101,7 +101,7 @@ function AppContent() {
   }
 
   if (routeReadyUserId !== user.id) {
-    return <div className="min-h-screen bg-[#020817] flex items-center justify-center text-sm font-semibold text-slate-400">Memulihkan tampilan terakhir...</div>;
+    return <div className="min-h-screen bg-[#020817] flex items-center justify-center text-sm font-semibold text-slate-400" role="status" aria-live="polite">Memulihkan tampilan terakhir...</div>;
   }
 
   // SUPER ADMIN / ADMIN WORKSPACE
@@ -141,6 +141,7 @@ function AppContent() {
                     key={item.id}
                     type="button"
                     onClick={() => setAdminTab(item.id as any)}
+                    aria-current={active ? 'page' : undefined}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition ${
                       active
                         ? 'bg-blue-600/15 text-blue-200 ring-1 ring-blue-500/30'
@@ -195,11 +196,12 @@ function AppContent() {
           )}
         </div>
 
-        <nav className={`fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl ${user.role === 'SUPER_ADMIN' ? 'lg:hidden' : ''}`} aria-label="Navigasi Admin">
+        <nav className={`ops-mobile-nav fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl ${user.role === 'SUPER_ADMIN' ? 'lg:hidden' : ''}`} aria-label="Navigasi Admin">
           <div className="mx-auto flex max-w-3xl items-center gap-1 overflow-x-auto sm:justify-center">
             <button
               onClick={() => setAdminTab('command')}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
+              aria-current={adminTab === 'command' ? 'page' : undefined}
+              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'command'
                   ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
                   : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
@@ -211,7 +213,8 @@ function AppContent() {
 
             <button
               onClick={() => setAdminTab('master')}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${adminTab === 'master' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'}`}
+              aria-current={adminTab === 'master' ? 'page' : undefined}
+              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${adminTab === 'master' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'}`}
             >
               <Building2 className="w-4 h-4" />
               <span>Master</span>
@@ -219,7 +222,8 @@ function AppContent() {
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
               onClick={() => setAdminTab('checkpoints')}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
+              aria-current={adminTab === 'checkpoints' ? 'page' : undefined}
+              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'checkpoints'
                   ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
                   : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
@@ -231,7 +235,8 @@ function AppContent() {
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
               onClick={() => setAdminTab('users')}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
+              aria-current={adminTab === 'users' ? 'page' : undefined}
+              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'users'
                   ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
                   : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
@@ -243,7 +248,8 @@ function AppContent() {
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
               onClick={() => setAdminTab('calibration')}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
+              aria-current={adminTab === 'calibration' ? 'page' : undefined}
+              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'calibration'
                   ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
                   : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
@@ -255,7 +261,8 @@ function AppContent() {
 
             <button
               onClick={() => setAdminTab('gallery')}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${adminTab === 'gallery' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'}`}
+              aria-current={adminTab === 'gallery' ? 'page' : undefined}
+              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${adminTab === 'gallery' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'}`}
             >
               <ImageIcon className="w-4 h-4" />
               <span>Galeri</span>
@@ -263,7 +270,8 @@ function AppContent() {
 
             <button
               onClick={() => setAdminTab('audit')}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
+              aria-current={adminTab === 'audit' ? 'page' : undefined}
+              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'audit'
                   ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
                   : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
@@ -292,10 +300,11 @@ function AppContent() {
           {adminTab === 'incidents' && <IncidentView onBack={() => setAdminTab('command')} />}
           {adminTab === 'profile' && <ProfileView onBack={() => setAdminTab('command')} />}
         </div>
-        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Chief">
+        <nav className="ops-mobile-nav fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Chief">
           <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
             <button
               onClick={() => setAdminTab('command')}
+              aria-current={adminTab === 'command' ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'command' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
@@ -305,6 +314,7 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('master')}
+              aria-current={adminTab === 'master' ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'master' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
@@ -314,6 +324,7 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('handovers')}
+              aria-current={adminTab === 'handovers' ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'handovers' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
@@ -323,6 +334,7 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('incidents')}
+              aria-current={adminTab === 'incidents' ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'incidents' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
@@ -332,6 +344,7 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('gallery')}
+              aria-current={adminTab === 'gallery' ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'gallery' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
@@ -341,6 +354,7 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('profile')}
+              aria-current={adminTab === 'profile' ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition ${
                 adminTab === 'profile' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
@@ -370,10 +384,11 @@ function AppContent() {
       </div>
 
       {/* Member Mobile Tactical Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Anggota">
+      <nav className="ops-mobile-nav fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Anggota">
         <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
           <button
             onClick={() => setMemberTab('home')}
+            aria-current={memberTab === 'home' ? 'page' : undefined}
             className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'home'
                 ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
@@ -386,6 +401,7 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('patrol')}
+            aria-current={memberTab === 'patrol' ? 'page' : undefined}
             className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'patrol'
                 ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
@@ -398,6 +414,7 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('handover')}
+            aria-current={memberTab === 'handover' ? 'page' : undefined}
             className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'handover'
                 ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
@@ -410,6 +427,7 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('incidents')}
+            aria-current={memberTab === 'incidents' ? 'page' : undefined}
             className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'incidents'
                 ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
@@ -422,6 +440,7 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('gallery')}
+            aria-current={memberTab === 'gallery' ? 'page' : undefined}
             className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'gallery'
                 ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
@@ -434,6 +453,7 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('profile')}
+            aria-current={memberTab === 'profile' ? 'page' : undefined}
             className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'profile'
                 ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
