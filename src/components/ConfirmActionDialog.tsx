@@ -13,6 +13,7 @@ interface ConfirmActionDialogProps {
   requireText?: string;
   requireTextLabel?: string;
   busy?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
   children?: React.ReactNode;
@@ -34,6 +35,7 @@ export const ConfirmActionDialog: React.FC<ConfirmActionDialogProps> = ({
   requireText,
   requireTextLabel,
   busy = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
   children,
@@ -56,7 +58,7 @@ export const ConfirmActionDialog: React.FC<ConfirmActionDialogProps> = ({
   if (!open) return null;
 
   const normalizedRequired = requireText?.trim() || '';
-  const canConfirm = !busy && (!normalizedRequired || typedValue.trim() === normalizedRequired);
+  const canConfirm = !busy && !confirmDisabled && (!normalizedRequired || typedValue.trim() === normalizedRequired);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3 backdrop-blur-md sm:p-4">
