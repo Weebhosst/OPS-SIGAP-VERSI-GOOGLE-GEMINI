@@ -648,6 +648,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         cancelLabel="BATAL"
         tone="warning"
         busy={actionBusy}
+        confirmDisabled={!closeNote.trim()}
         onCancel={() => { setCloseAlert(null); setCloseNote(''); }}
         onConfirm={async () => {
           if (!closeAlert || !closeNote.trim()) return;
