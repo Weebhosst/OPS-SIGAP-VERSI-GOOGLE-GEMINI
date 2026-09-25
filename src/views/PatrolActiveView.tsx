@@ -634,12 +634,13 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
 
         {/* Active Scan Review & Observation Dialog (After Photo is Taken) */}
         {activeCpForScan && scannedToken && capturedPhoto && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-            <div className="max-h-[90vh] w-full max-w-md space-y-4 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl shadow-black/50">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+            <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-[#08111f]/95 p-4 backdrop-blur">
                 <div>
-                  <h3 className="font-bold text-white text-sm">Konfirmasi Pengamatan Patroli</h3>
-                  <p className="text-xs text-blue-400 font-mono">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">Review Bukti Patroli</p>
+                  <h3 className="mt-1 text-sm font-black text-white">Konfirmasi Pengamatan</h3>
+                  <p className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">
                     {activeCpForScan.code} — {activeCpForScan.name}
                   </p>
                 </div>
@@ -649,86 +650,112 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                     setScannedToken(null);
                     setCapturedPhoto(null);
                   }}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400 transition hover:bg-slate-800 hover:text-white"
                   aria-label="Tutup konfirmasi checkpoint"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Photo Evidence Preview */}
-              <div className="rounded-xl overflow-hidden border border-slate-800 bg-black aspect-video relative">
-                <img
-                  src={capturedPhoto}
-                  alt="Captured Evidence"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-                  FOTO VALID
+              <div className="space-y-4 p-5">
+                {/* Photo Evidence Preview */}
+                <div className="relative aspect-video overflow-hidden rounded-2xl border border-slate-800 bg-black shadow-inner">
+                  <img
+                    src={capturedPhoto}
+                    alt="Captured Evidence"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute left-3 top-3 rounded-full border border-blue-400/30 bg-blue-600/90 px-2.5 py-1 text-[10px] font-black text-white shadow-lg">
+                    BUKTI FOTO
+                  </div>
+                  <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-600/90 px-2.5 py-1 text-[10px] font-black text-white shadow-lg">
+                    <CheckCircle2 className="h-3 w-3" />
+                    FOTO VALID
+                  </div>
                 </div>
-              </div>
 
-              {/* Observation Status Options */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-2">
-                  Status Pengamatan Lapangan:
-                </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['AMAN', 'TEMUAN', 'INSIDEN'] as const).map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => setObservationStatus(status)}
-                      className={`py-2 px-3 rounded-xl font-bold text-xs border transition ${
-                        observationStatus === status
-                          ? status === 'AMAN'
-                            ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
-                            : status === 'TEMUAN'
-                            ? 'bg-amber-600/30 border-amber-500 text-amber-300'
-                            : 'bg-red-600/30 border-red-500 text-red-300'
-                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">QR</p>
+                    <p className="mt-1 text-[11px] font-black text-emerald-300">TERBACA</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">GPS</p>
+                    <p className="mt-1 text-[11px] font-black text-emerald-300">TERCATAT</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">AKURASI</p>
+                    <p className="mt-1 font-mono text-[11px] font-black text-slate-200">±{currentGps.accuracy.toFixed(0)}m</p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Notes */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Catatan Pengamatan {observationStatus !== 'AMAN' ? '(Wajib)' : '(Opsional)'}:
-                </label>
-                <textarea
-                  rows={2}
-                  value={observationNotes}
-                  onChange={(e) => setObservationNotes(e.target.value)}
-                  placeholder={
-                    observationStatus === 'AMAN'
-                      ? 'Kondisi pintu gembok terkunci, area steril aman...'
-                      : 'Jelaskan temuan atau kondisi abnormal yang ditemui...'
-                  }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
+                {/* Observation Status Options */}
+                <div>
+                  <label className="mb-2 block text-xs font-bold text-slate-300">
+                    Status Pengamatan Lapangan
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['AMAN', 'TEMUAN', 'INSIDEN'] as const).map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => setObservationStatus(status)}
+                        className={`min-h-11 rounded-xl border px-3 py-2 text-xs font-black transition focus:outline-none focus:ring-2 focus:ring-blue-400/30 ${
+                          observationStatus === status
+                            ? status === 'AMAN'
+                              ? 'border-emerald-500 bg-emerald-600/25 text-emerald-300'
+                              : status === 'TEMUAN'
+                              ? 'border-amber-500 bg-amber-600/25 text-amber-300'
+                              : 'border-red-500 bg-red-600/25 text-red-300'
+                            : 'border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-              {/* Submit Button */}
-              <button
-                type="button"
-                disabled={submitting || (observationStatus !== 'AMAN' && !observationNotes.trim())}
-                onClick={handleSubmitScan}
-                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-50"
-              >
-                {submitting ? (
-                  <span>Memvalidasi Data...</span>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>KIRIM & VALIDASI CHECKPOINT</span>
-                  </>
-                )}
-              </button>
+                {/* Notes */}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <label className="text-xs font-bold text-slate-300">
+                      Catatan Pengamatan
+                    </label>
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${observationStatus !== 'AMAN' ? 'bg-amber-500/10 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+                      {observationStatus !== 'AMAN' ? 'WAJIB' : 'OPSIONAL'}
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={observationNotes}
+                    onChange={(e) => setObservationNotes(e.target.value)}
+                    placeholder={
+                      observationStatus === 'AMAN'
+                        ? 'Kondisi pintu gembok terkunci, area steril aman...'
+                        : 'Jelaskan temuan atau kondisi abnormal yang ditemui...'
+                    }
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs leading-5 text-white placeholder:text-slate-600 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
+                  />
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="button"
+                  disabled={submitting || (observationStatus !== 'AMAN' && !observationNotes.trim())}
+                  onClick={handleSubmitScan}
+                  className="flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <span>Memvalidasi Data...</span>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>KIRIM & VALIDASI CHECKPOINT</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
