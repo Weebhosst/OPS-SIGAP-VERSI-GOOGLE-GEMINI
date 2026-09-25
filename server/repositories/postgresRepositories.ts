@@ -437,6 +437,25 @@ export const postgresRepositories: RepositoryBundle = {
       if(!result.rows[0]) return undefined;
       return postgresRepositories.users.findById(id);
     },
+    remove: async (id) => transaction(async (client) => {
+      const current = await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE', [id]);
+      if (!current.rows[0]) throw new RepositoryError('USER_NOT_FOUND', 'Pengguna tidak ditemukan.', 404);
+      try {
+        await client.query('DELETE FROM auth_sessions WHERE user_id=$1', [id]);
+        await client.query('DELETE FROM user_assignments WHERE user_id=$1', [id]);
+        const result = await client.query('DELETE FROM users WHERE id=$1 RETURNING *', [id]);
+        return mapUser({ ...result.rows[0], customer_id: null, site_id: null, assignment_history: [] });
+      } catch (error: any) {
+        if (error?.code === '23503') {
+          throw new RepositoryError(
+            'USER_HAS_OPERATIONAL_HISTORY',
+            'Personel sudah memiliki histori operasional dan tidak boleh dihapus permanen. Gunakan Nonaktifkan agar histori tetap utuh.',
+            409,
+          );
+        }
+        throw error;
+      }
+    }),
   },
 
   authSessions: {
