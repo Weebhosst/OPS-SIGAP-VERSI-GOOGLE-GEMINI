@@ -22,6 +22,7 @@ const documentTypeMap: Record<string, string> = { SEMUA: '', SERTIGAS: 'SERTIGAS
 
 export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { user } = useAuth();
+  const isSuperAdminDesktop = user?.role === 'SUPER_ADMIN';
   const jakartaNow = getJakartaDateParts();
   const currentShift = resolveShift();
   const [mediaList, setMediaList] = useState<MediaGalleryItem[]>([]);
@@ -110,7 +111,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <span>{shiftCode}</span>
           <span className="flex items-center gap-2 text-slate-500">{shiftItems.length} foto {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
         </button>
-        {isExpanded ? <div className="mt-2 grid grid-cols-2 gap-2">
+        {isExpanded ? <div className={`mt-2 grid grid-cols-2 gap-2 ${isSuperAdminDesktop ? 'lg:grid-cols-4' : ''}`}>
           {shiftItems.slice(0, 6).map((item) => (
             <button
               key={item.id}
@@ -134,7 +135,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   return (
     <div className="min-h-screen bg-[#020817] pb-28 text-slate-100">
       <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between">
+        <div className={`mx-auto flex items-center justify-between ${isSuperAdminDesktop ? 'max-w-7xl' : 'max-w-md'}`}>
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
@@ -152,7 +153,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md space-y-4 px-4 pt-4">
+      <main className={`mx-auto space-y-4 px-4 pt-4 ${isSuperAdminDesktop ? 'max-w-7xl lg:px-6 lg:pt-6' : 'max-w-md'}`}>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           {[
             { id: 'SEMUA', label: 'SEMUA MEDIA' },
@@ -177,7 +178,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           ))}
         </div>
 
-        <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10">
+        <div className={`space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10 ${isSuperAdminDesktop ? 'lg:grid lg:grid-cols-[180px_1fr_auto] lg:items-end lg:gap-4 lg:space-y-0' : ''}`}>
           <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Filter Histori</div>
           <div className="grid grid-cols-3 gap-2">
             <label className="text-[11px] text-slate-300">
