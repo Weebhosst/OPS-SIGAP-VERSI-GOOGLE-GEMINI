@@ -209,7 +209,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     </span>
                   ) : (
                     <span className="text-[11px] font-medium text-amber-400">
-                      Menunggu Konfirmasi
+                      {user?.role === 'ANGGOTA' ? 'Menunggu Konfirmasi' : 'Menunggu Konfirmasi Petugas Penerima'}
                     </span>
                   )}
                 </div>
