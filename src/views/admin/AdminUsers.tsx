@@ -157,7 +157,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           {users.filter((u) => (!filterCustomerId || u.customerId === filterCustomerId) && (!filterSiteId || u.siteId === filterSiteId)).map((u) => (
             <div
               key={u.id}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm grid grid-cols-1 gap-3 xl:grid-cols-2"
+              className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
@@ -232,7 +232,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </button>
             </div>
 
-            <form onSubmit={handleAddUser} className="grid grid-cols-1 gap-3 xl:grid-cols-2 text-xs">
+            <form onSubmit={handleAddUser} className="space-y-3 text-xs">
               <div>
                 <label className="mb-1.5 block text-xs font-bold text-slate-300">Nama Lengkap:</label>
                 <input
@@ -314,7 +314,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       {/* Confirmation Dialog: Reset Password ke NPK */}
       {confirmResetUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="w-full max-w-sm bg-slate-900 border border-amber-800/80 rounded-2xl p-5 grid grid-cols-1 gap-3 xl:grid-cols-2 text-center">
+          <div className="w-full max-w-sm space-y-3 rounded-3xl border border-amber-800/70 bg-[#0f172a] p-5 text-center shadow-2xl shadow-black/50">
             <KeyRound className="w-10 h-10 text-amber-400 mx-auto" />
             <h3 className="text-sm font-black text-white">Reset Password Petugas?</h3>
             <p className="text-xs text-slate-300">
