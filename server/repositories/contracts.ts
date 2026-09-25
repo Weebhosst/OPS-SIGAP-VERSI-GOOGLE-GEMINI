@@ -139,6 +139,7 @@ export interface AlertRepository {
   findById(id: string): Promise<ValidationAlert | undefined>;
   list(status: ValidationAlertStatus | undefined, page: PageRequest): Promise<Page<ValidationAlert>>;
   transition(id: string, action: 'REVIEW' | 'CLOSE' | 'REOPEN', actorUserId: string, closeNote?: string): Promise<ValidationAlert>;
+  remove(id: string): Promise<ValidationAlert>;
 }
 
 export interface AdminStateRepository {
