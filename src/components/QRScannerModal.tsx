@@ -135,14 +135,14 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md sm:p-4">
+      <div className="ops-dialog flex w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="qr-scanner-title">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 bg-[#08111f] p-4">
           <div className="flex items-center gap-2">
             <Camera className="h-5 w-5 text-blue-300" />
             <div>
-              <h3 className="text-sm font-black text-white">Scanner QR Checkpoint</h3>
+              <h3 id="qr-scanner-title" className="text-sm font-black text-white">Scanner QR Checkpoint</h3>
               {expectedCheckpointCode && (
                 <p className="mt-0.5 font-mono text-[11px] font-bold text-blue-300">
                   Titik: {expectedCheckpointCode} {expectedCheckpointName ? `— ${expectedCheckpointName}` : ''}
@@ -151,6 +151,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Tutup scanner QR"
@@ -159,7 +160,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/60 px-4 py-2.5 text-[10px]">
+        <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/60 px-4 py-2.5 text-[10px]" aria-live="polite">
           <span className="font-bold uppercase tracking-[0.14em] text-slate-500">Pemindaian checkpoint</span>
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-bold ${isScanning && !cameraError ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-800 text-slate-400'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${isScanning && !cameraError ? 'bg-emerald-400' : 'bg-slate-500'}`} />
@@ -168,7 +169,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         </div>
 
         {/* Video / Camera viewfinder */}
-        <div className="relative flex min-h-[300px] max-h-[420px] flex-1 items-center justify-center overflow-hidden bg-black">
+        <div className="relative flex min-h-[240px] max-h-[52dvh] flex-1 items-center justify-center overflow-hidden bg-black sm:min-h-[300px] sm:max-h-[420px]">
           <video
             ref={videoRef}
             className="h-full w-full object-cover"
@@ -198,10 +199,11 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
           {/* Camera Error Message */}
           {cameraError && (
-            <div className="flex flex-col items-center gap-3 p-6 text-center text-slate-300">
+            <div className="flex flex-col items-center gap-3 p-6 text-center text-slate-300" role="alert">
               <AlertTriangle className="h-10 w-10 text-amber-300" />
               <p className="max-w-xs text-sm font-semibold leading-6 text-slate-200">{cameraError}</p>
               <button
+                type="button"
                 onClick={startCamera}
                 className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
               >
@@ -237,6 +239,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           <div>
             <div className="flex gap-2">
               <input
+                aria-label="Token QR manual"
                 type="text"
                 placeholder="Atau masukkan kode token manual..."
                 value={manualToken}
