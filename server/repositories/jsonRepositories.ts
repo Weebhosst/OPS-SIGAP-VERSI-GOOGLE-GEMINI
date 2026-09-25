@@ -285,6 +285,11 @@ export const jsonRepositories: RepositoryBundle = {
       }
       return db.updateValidationAlert(id, updates)!;
     },
+    remove: async (id) => {
+      const removed = db.deleteValidationAlert(id);
+      if (!removed) throw new RepositoryError('ALERT_NOT_FOUND', 'Validation alert tidak ditemukan.', 404);
+      return removed;
+    },
   },
 
   adminState: {
