@@ -54,44 +54,45 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+    <div className="min-h-screen bg-[#020817] pb-28 text-slate-100">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Kembali"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="font-extrabold text-white text-base">Profil Petugas</h1>
+              <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">Account & Sync</p><h1 className="mt-0.5 text-base font-black tracking-tight text-white">Profil Petugas</h1></div>
               <p className="text-[11px] text-slate-400 font-medium">Informasi Akun & Sinkronisasi</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+      <main className="mx-auto max-w-md space-y-4 px-4 pt-4">
         {/* Profile Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+        <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-lg shadow-black/10">
           <div className="flex items-center gap-3.5">
-            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-black text-lg">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-500/40 bg-blue-600/15 text-lg font-black text-blue-300 shadow-lg shadow-blue-950/20">
               {user?.name.charAt(0) || 'U'}
             </div>
             <div>
-              <h2 className="text-base font-bold text-white leading-tight">{user?.name}</h2>
-              <div className="text-xs text-blue-400 font-mono font-semibold mt-0.5">
+              <h2 className="text-base font-black leading-tight text-white">{user?.name}</h2>
+              <div className="mt-1 font-mono text-xs font-bold text-blue-300">
                 NPK: {user?.npk}
               </div>
-              <div className="text-[11px] text-slate-400 font-mono">
+              <div className="font-mono text-[11px] text-slate-400">
                 {user?.role} • Site: {user?.siteId || 'Global'}
               </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-1 font-mono">
+          <div className="grid grid-cols-1 gap-2 border-t border-slate-800 pt-4 font-mono text-xs text-slate-400">
             <div>Email: {user?.email}</div>
             <div>Jabatan: {user?.position || user?.role}</div>
             <div>Customer: {user?.customerId || 'Global'}</div>
@@ -100,11 +101,11 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Riwayat Mutasi / Penugasan</h3>
+        <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10">
+          <h3 className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Riwayat Mutasi / Penugasan</h3>
           {(user?.assignmentHistory || []).length ? (user?.assignmentHistory || []).slice().reverse().map((item, index) => (
-            <div key={`${item.effectiveAt}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs">
-              <div className="font-bold text-slate-200">{item.siteId || 'GLOBAL'}</div>
+            <div key={`${item.effectiveAt}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs">
+              <div className="font-black text-slate-200">{item.siteId || 'GLOBAL'}</div>
               <div className="text-slate-500">Customer {item.customerId || '-'} • {new Date(item.effectiveAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</div>
             </div>
           )) : <p className="text-xs text-slate-500">Belum ada riwayat mutasi.</p>}
@@ -112,10 +113,10 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
         {/* PWA Install Section */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          <h3 className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
             Aplikasi Lapangan (PWA)
           </h3>
-          <p className="text-xs text-slate-300">
+          <p className="text-xs leading-5 text-slate-300">
             Pasang OPS SIGAP ke layar utama HP agar dapat digunakan seperti aplikasi native saat patroli di titik tanpa sinyal.
           </p>
           <div className="pt-2">
@@ -124,16 +125,16 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
 
         {/* Offline Queue Diagnostics */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              <h3 className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
                 Antrean Sinkronisasi Lokal
               </h3>
               <p className="text-[11px] text-slate-500 font-mono">IndexedDB Storage</p>
             </div>
             <span
-              className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${
+              className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-black ${
                 queueItems.length > 0
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                   : 'bg-slate-800 text-slate-400'
@@ -144,18 +145,18 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
 
           {syncStatusMsg && (
-            <div className="p-2.5 bg-blue-950/60 border border-blue-800 text-blue-300 text-xs rounded-xl flex items-center gap-2">
+            <div className="flex items-start gap-2 rounded-xl border border-blue-800/70 bg-blue-950/40 p-3 text-xs text-blue-200">
               <Info className="w-4 h-4 shrink-0" />
               <span>{syncStatusMsg}</span>
             </div>
           )}
 
           {queueItems.length > 0 ? (
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
               {queueItems.map((q) => (
                 <div
                   key={q.idempotencyId}
-                  className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 text-xs flex items-center justify-between"
+                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs gap-3"
                 >
                   <div>
                     <div className="font-bold text-white font-mono">{q.checkpointCode || 'SCAN'}</div>
@@ -178,7 +179,7 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               ))}
             </div>
           ) : (
-            <p className="text-xs text-slate-500 italic">
+            <p className="text-xs italic text-slate-500">
               Semua data di HP telah sinkron dengan server.
             </p>
           )}
@@ -186,7 +187,7 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <button
             onClick={handleManualSync}
             disabled={isSyncing}
-            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-xs font-bold text-slate-200 transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-600"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>{isSyncing ? 'Sinkronisasi...' : 'Sinkronkan Sekarang'}</span>
@@ -196,7 +197,7 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         {/* Logout Button */}
         <button
           onClick={logout}
-          className="w-full py-3 bg-red-950/40 hover:bg-red-950/70 border border-red-900/60 text-red-300 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-xs font-black text-red-300 transition hover:bg-red-950/70 focus:outline-none focus:ring-2 focus:ring-red-800/60"
         >
           <LogOut className="w-4 h-4" />
           <span>Keluar (Logout)</span>
