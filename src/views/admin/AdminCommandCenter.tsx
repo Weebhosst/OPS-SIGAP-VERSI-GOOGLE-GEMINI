@@ -670,6 +670,8 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         confirmLabel="YA, HAPUS"
         cancelLabel="BATAL"
         tone="danger"
+        requireText="HAPUS VALIDATION"
+        requireTextLabel="Ketik HAPUS VALIDATION untuk melanjutkan:"
         busy={actionBusy}
         onCancel={() => setDeleteAlert(null)}
         onConfirm={handleDeleteAlert}
