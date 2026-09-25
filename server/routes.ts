@@ -1892,6 +1892,37 @@ apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: Au
   res.json({ success: true, user: safeUser });
 });
 
+apiRouter.delete('/admin/users/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const target = await repositories.users.findById(req.params.id);
+  if (!target) return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
+
+  if (target.id === req.user!.id) {
+    return res.status(409).json({ success: false, code: 'SELF_DELETE_BLOCKED', error: 'Akun yang sedang digunakan tidak dapat dihapus.' });
+  }
+  if (target.role === 'SUPER_ADMIN') {
+    return res.status(409).json({ success: false, code: 'SUPER_ADMIN_DELETE_BLOCKED', error: 'Akun SUPER_ADMIN tidak dapat dihapus dari menu Petugas. Nonaktifkan atau kelola akun administrator secara terpisah.' });
+  }
+
+  try {
+    const removed = await repositories.users.remove(target.id);
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'USER_DELETE',
+      entityType: 'user',
+      entityId: target.id,
+      oldValue: { name: target.name, npk: target.npk, role: target.role, customerId: target.customerId, siteId: target.siteId, status: target.status },
+      reason: `Hapus personel ${target.name}`,
+    });
+    res.json({ success: true, deletedId: removed.id });
+  } catch (error: any) {
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    console.error('[user] Delete failed:', error instanceof Error ? error.message : 'unknown');
+    res.status(500).json({ success: false, error: 'Personel gagal dihapus karena gangguan database.' });
+  }
+});
+
 // Admin Checkpoint Management
 apiRouter.get('/admin/checkpoints', authMiddleware, async (_req: Request, res: Response) => {
   const page = await repositories.checkpoints.list({ limit: 500, offset: 0 });
