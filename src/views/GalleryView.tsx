@@ -105,8 +105,8 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const isExpanded = !!expanded[key];
 
     return (
-      <div key={shiftCode} className="rounded-2xl border border-slate-800 bg-slate-950/50 p-3">
-        <button type="button" onClick={() => setExpanded((current) => ({ ...current, [key]: !current[key] }))} className="flex w-full items-center justify-between text-xs text-slate-300 font-bold uppercase tracking-wide">
+      <div key={shiftCode} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+        <button type="button" onClick={() => setExpanded((current) => ({ ...current, [key]: !current[key] }))} className="flex min-h-10 w-full items-center justify-between text-xs font-black uppercase tracking-wide text-slate-300">
           <span>{shiftCode}</span>
           <span className="flex items-center gap-2 text-slate-500">{shiftItems.length} foto {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
         </button>
@@ -116,11 +116,11 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               key={item.id}
               type="button"
               onClick={() => setSelectedItem(item)}
-              className="text-left overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+              className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900 text-left transition hover:border-blue-800/70"
             >
               <div className="relative aspect-square">
                 <img loading="lazy" src={item.photoUrl} alt={item.caption} className="h-full w-full object-cover" />
-                <span className="absolute left-2 top-2 rounded bg-slate-950/80 px-1.5 py-0.5 text-[9px] font-bold text-blue-300">
+                <span className="absolute left-2 top-2 rounded-full border border-blue-700/40 bg-slate-950/85 px-2 py-0.5 text-[9px] font-black text-blue-300">
                   {item.documentType || item.sourceModule}
                 </span>
               </div>
@@ -132,27 +132,28 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-[#020817] pb-28 text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Kembali"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="font-extrabold text-white text-base">DOKUMENTASI SESI SHIFT</h1>
+              <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">Media & History</p><h1 className="mt-0.5 text-base font-black tracking-tight text-white">Dokumentasi Shift</h1></div>
               <p className="text-[11px] text-slate-400 font-medium">Hari Ini & Historis</p>
             </div>
           </div>
-          <span className="text-xs font-mono font-bold text-blue-400">{mediaList.length} Foto</span>
+          <span className="rounded-full border border-blue-700/50 bg-blue-900/30 px-2.5 py-1 font-mono text-[10px] font-black text-blue-300">{mediaList.length} Foto</span>
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      <main className="mx-auto max-w-md space-y-4 px-4 pt-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           {[
             { id: 'SEMUA', label: 'SEMUA MEDIA' },
             { id: 'SERTIGAS', label: 'SERTIGAS' },
@@ -165,10 +166,10 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <button
               key={tab.id}
               onClick={() => setActiveFilter(tab.id as any)}
-              className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition ${
+              className={`min-h-10 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-black transition ${
                 activeFilter === tab.id
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
-                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/30'
+                  : 'border border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700 hover:bg-slate-800'
               }`}
             >
               {tab.label} ({counts[documentTypeMap[tab.id] || 'SEMUA'] || 0})
@@ -176,12 +177,12 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           ))}
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 space-y-3">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Filter Histori</div>
+        <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Filter Histori</div>
           <div className="grid grid-cols-3 gap-2">
             <label className="text-[11px] text-slate-300">
               <span className="mb-1 block">Tanggal</span>
-              <select value={selectedDay} onChange={(e) => setSelectedDay(Number(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-2 py-2 text-slate-200">
+              <select value={selectedDay} onChange={(e) => setSelectedDay(Number(e.target.value))} className="min-h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2 text-slate-200 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15">
                 <option value={0}>Semua</option>
                 {Array.from({ length: new Date(selectedYear, selectedMonth, 0).getDate() }, (_, index) => index + 1).map((day) => <option key={day} value={day}>{day}</option>)}
               </select>
@@ -191,7 +192,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-2 py-2 text-slate-200"
+                className="min-h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2 text-slate-200 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
               >
                 {monthNames.map((month, index) => (
                   <option key={month} value={index + 1}>{month}</option>
@@ -203,7 +204,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-2 py-2 text-slate-200"
+                className="min-h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-2 text-slate-200 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
               >
                 {[2024, 2025, 2026].map((year) => (
                   <option key={year} value={year}>{year}</option>
@@ -214,7 +215,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <button
             type="button"
             onClick={applyHistoryFilter}
-            className="w-full rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"
+            className="flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
           >
             TAMPILKAN
           </button>
@@ -223,27 +224,27 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         {loading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-28 rounded-2xl border border-slate-800 bg-slate-900 animate-pulse" />
+              <div key={i} className="h-28 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/90" />
             ))}
           </div>
         ) : null}
 
         {!loading && groupedByDate.length === 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
-            <ImageIcon className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="text-sm font-medium">Belum ada dokumentasi pada periode yang dipilih.</p>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-center text-slate-400 shadow-lg shadow-black/10">
+            <ImageIcon className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+            <p className="text-sm font-bold">Belum ada dokumentasi pada periode yang dipilih.</p>
           </div>
         )}
 
         {!loading && groupedByDate.length > 0 && (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-3 shadow-lg shadow-black/10">
               <button
                 type="button"
                 onClick={() => setExpanded((prev) => ({ ...prev, today: !prev.today }))}
-                className="flex w-full items-center justify-between text-left"
+                className="flex min-h-10 w-full items-center justify-between text-left"
               >
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-slate-300">
                   DOKUMENTASI SESI SHIFT HARI INI
                 </span>
                 {expanded.today ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
@@ -261,13 +262,13 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               const key = `history-${dateKey}`;
               const isExpanded = !!expanded[key];
               return (
-                <div key={key} className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+                <div key={key} className="rounded-2xl border border-slate-800 bg-slate-900/90 p-3 shadow-lg shadow-black/10">
                   <button
                     type="button"
                     onClick={() => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))}
-                    className="flex w-full items-center justify-between text-left"
+                    className="flex min-h-10 w-full items-center justify-between text-left"
                   >
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-slate-300">
                       DOKUMENTASI {new Date(`${dateKey}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </span>
                     {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
@@ -281,31 +282,31 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 </div>
               );
             })}
-            {pagination.hasMore ? <button type="button" onClick={() => void loadMedia(mediaList.length)} className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs font-bold">MUAT LEBIH BANYAK ({mediaList.length}/{pagination.total})</button> : null}
+            {pagination.hasMore ? <button type="button" onClick={() => void loadMedia(mediaList.length)} className="flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs font-black text-slate-300 transition hover:bg-slate-800">MUAT LEBIH BANYAK ({mediaList.length}/{pagination.total})</button> : null}
           </div>
         )}
       </main>
 
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-700/90 bg-[#0f172a] shadow-2xl shadow-black/50">
+            <div className="flex items-center justify-between border-b border-slate-800 bg-[#08111f] p-4">
               <div>
-                <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">
                   {selectedItem.sourceModule} • {selectedItem.category}
                 </span>
-                <p className="text-xs text-white font-semibold truncate">{selectedItem.caption}</p>
+                <p className="mt-1 truncate text-xs font-bold text-white">{selectedItem.caption}</p>
               </div>
-              <button onClick={() => setSelectedItem(null)} className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white">
+              <button onClick={() => setSelectedItem(null)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label="Tutup detail foto">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 bg-black flex items-center justify-center overflow-hidden p-2">
-              <img src={selectedItem.photoUrl} alt={selectedItem.caption} className="max-h-[50vh] max-w-full object-contain rounded-lg" />
+            <div className="flex flex-1 items-center justify-center overflow-hidden bg-black p-2">
+              <img src={selectedItem.photoUrl} alt={selectedItem.caption} className="max-h-[55vh] max-w-full rounded-xl object-contain" />
             </div>
 
-            <div className="p-4 bg-slate-950 border-t border-slate-800 space-y-2 text-xs">
+            <div className="space-y-3 border-t border-slate-800 bg-[#08111f] p-4 text-xs">
               <div className="flex items-center justify-between text-slate-400 font-mono">
                 <span>Waktu: {new Date(selectedItem.eventAt).toLocaleString('id-ID')} WIB</span>
                 <span>Shift: {selectedItem.shiftCode}</span>
@@ -321,7 +322,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
               <button
                 onClick={() => handleDownload(selectedItem)}
-                className="w-full mt-2 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl flex items-center justify-center gap-1.5 transition"
+                className="mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 font-bold text-slate-200 transition hover:bg-slate-700"
               >
                 <Download className="w-4 h-4" />
                 <span>Unduh Foto Resolusi Penuh</span>
