@@ -1554,6 +1554,30 @@ apiRouter.patch('/admin/validation-alerts/:id', authMiddleware, requireAdmin, as
   }
 });
 
+apiRouter.delete('/admin/validation-alerts/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const previous = await repositories.alerts.findById(req.params.id);
+    if (!previous) return res.status(404).json({ success: false, error: 'Validation alert tidak ditemukan.' });
+
+    const removed = await repositories.alerts.remove(previous.id);
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      action: 'VALIDATION_ALERT_DELETE',
+      entityType: 'validation_alert',
+      entityId: previous.id,
+      oldValue: previous,
+      reason: `Hapus validation alert ${previous.alertType || previous.id} dari Command Center`,
+    });
+
+    res.json({ success: true, deletedId: removed.id });
+  } catch (error: any) {
+    const controlled = error instanceof RepositoryError;
+    const code = controlled ? error.code : 'DATABASE_OPERATION_FAILED';
+    console.error('[alert] Delete failed:', error instanceof Error ? error.message : 'unknown');
+    res.status(controlled ? error.status : 500).json({ success: false, code, error: controlled ? error.message : 'Validation alert gagal dihapus karena gangguan database.' });
+  }
+});
+
 // Admin User Management
 apiRouter.get('/admin/users', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
   const page = await repositories.users.list({ limit: 500, offset: 0 });
