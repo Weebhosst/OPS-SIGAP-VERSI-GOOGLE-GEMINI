@@ -121,25 +121,26 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+    <div className="min-h-screen bg-[#020817] pb-28 text-slate-100">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              aria-label="Kembali"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="font-extrabold text-white text-base">Lapor Kejadian</h1>
-              <p className="text-[11px] text-slate-400 font-medium">Insiden, K3, & Keamanan</p>
+              <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-300">Incident Report</p><h1 className="mt-0.5 text-base font-black tracking-tight text-white">Lapor Kejadian</h1></div>
+              <p className="text-[11px] font-medium text-slate-400">Insiden, K3, & Keamanan</p>
             </div>
           </div>
           {canCreate ? <button
             onClick={() => setShowCreateModal(true)}
-            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-lg shadow-amber-950/50"
+            className="flex min-h-10 items-center gap-1.5 rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-amber-950/40 transition hover:bg-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
           >
             <Plus className="w-4 h-4" />
             <span>Lapor Insiden</span>
@@ -147,15 +148,15 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-3">
+      <main className="mx-auto max-w-md space-y-3 px-4 pt-4">
         {incidents.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
-            <AlertTriangle className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="text-sm font-medium">Belum ada laporan kejadian aktif.</p>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-center text-slate-400 shadow-lg shadow-black/10">
+            <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+            <p className="text-sm font-bold">Belum ada laporan kejadian aktif.</p>
             <p className="text-xs text-slate-500 mt-1">Situasi site KM 92 kondusif aman.</p>
             {canCreate ? <button
               onClick={() => setShowCreateModal(true)}
-              className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl inline-flex items-center gap-1.5"
+              className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2 text-xs font-black text-white transition hover:bg-amber-500"
             >
               <Plus className="w-4 h-4" /> Buat Laporan Insiden
             </button> : null}
@@ -164,7 +165,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           incidents.map((inc) => (
             <div
               key={inc.id}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-sm"
+              className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -191,8 +192,8 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                       </span>
                     )}
                   </div>
-                  <h3 className="font-bold text-white text-sm mt-1">{inc.title}</h3>
-                  <div className="text-[11px] text-slate-400 font-mono">
+                  <h3 className="mt-2 text-sm font-black text-white">{inc.title}</h3>
+                  <div className="font-mono text-[11px] text-slate-400">
                     {inc.locationText} • {new Date(inc.incidentAt).toLocaleTimeString('id-ID')} WIB
                   </div>
                 </div>
@@ -213,7 +214,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               {/* Chronology & Initial Action */}
-              <div className="text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1.5">
+              <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs leading-5">
                 <div>
                   <span className="text-slate-400 font-semibold">Kronologi:</span>{' '}
                   <span className="text-slate-200">{inc.chronology}</span>
@@ -231,19 +232,19 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               {inc.photoUrl && (
-                <div className="rounded-xl overflow-hidden border border-slate-800 aspect-video max-h-40">
+                <div className="aspect-video max-h-44 overflow-hidden rounded-xl border border-slate-800">
                   <img src={inc.photoUrl} alt="Bukti Kejadian" className="w-full h-full object-cover" />
                 </div>
               )}
 
               {/* Status Update Quick Toggles */}
-              {canManageStatus ? <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
+              {canManageStatus ? <div className="flex items-center justify-between gap-3 border-t border-slate-800/80 pt-3 text-xs">
                 <span className="text-slate-500">Ubah Status:</span>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap justify-end gap-1.5">
                   {inc.status !== 'OPEN' && (
                     <button
                       onClick={() => handleUpdateStatus(inc.id, 'OPEN')}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-red-300 rounded-lg text-[10px] font-bold"
+                      className="rounded-lg border border-red-800/50 bg-slate-800 px-2.5 py-1.5 text-[10px] font-black text-red-300 transition hover:bg-slate-700"
                     >
                       OPEN
                     </button>
@@ -251,7 +252,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   {inc.status !== 'FOLLOW_UP' && (
                     <button
                       onClick={() => handleUpdateStatus(inc.id, 'FOLLOW_UP')}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg text-[10px] font-bold"
+                      className="rounded-lg border border-amber-800/50 bg-slate-800 px-2.5 py-1.5 text-[10px] font-black text-amber-300 transition hover:bg-slate-700"
                     >
                       FOLLOW UP
                     </button>
@@ -259,7 +260,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   {inc.status !== 'CLOSED' && (
                     <button
                       onClick={() => handleUpdateStatus(inc.id, 'CLOSED')}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg text-[10px] font-bold"
+                      className="rounded-lg border border-emerald-800/50 bg-slate-800 px-2.5 py-1.5 text-[10px] font-black text-emerald-300 transition hover:bg-slate-700"
                     >
                       SELESAI (CLOSED)
                     </button>
@@ -273,23 +274,23 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Create Incident Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-sm">Formulir Laporan Kejadian Lapangan</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-black text-white">Formulir Laporan Kejadian Lapangan</h3>
+              <button onClick={() => setShowCreateModal(false)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label="Tutup formulir laporan kejadian">
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateIncident} className="space-y-3 text-xs">
-              <div className="rounded-xl bg-slate-950 p-3 text-slate-300"><div>Member: <b>{user?.name}</b> ({user?.npk})</div><div>Customer: {activeSession?.customerId}</div><div>Site: {activeSession?.siteId}</div><div>{activeSession?.shiftCode} • Operational Date {activeSession?.shiftDate}</div><div>Session ID: {activeSession?.id}</div></div>
+            <form onSubmit={handleCreateIncident} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-slate-300"><div>Member: <b>{user?.name}</b> ({user?.npk})</div><div>Customer: {activeSession?.customerId}</div><div>Site: {activeSession?.siteId}</div><div>{activeSession?.shiftCode} • Operational Date {activeSession?.shiftDate}</div><div>Session ID: {activeSession?.id}</div></div>
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Kategori Kejadian:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Kategori Kejadian:</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as IncidentCategory)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15"
                 >
                   <option value="INSIDENTIL">INSIDENTIL</option>
                   <option value="MENONJOL">MENONJOL (Perlu Atensi Super Admin)</option>
@@ -303,7 +304,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Tingkat Keparahan (Severity):</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Tingkat Keparahan (Severity):</label>
                 <div className="grid grid-cols-4 gap-1.5">
                   {(['RENDAH', 'SEDANG', 'TINGGI', 'KRITIS'] as IncidentSeverity[]).map((s) => (
                     <button
@@ -329,63 +330,63 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Judul Ringkas Kejadian:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Judul Ringkas Kejadian:</label>
                 <input
                   type="text"
                   required
                   placeholder="Contoh: Pagar kawat perimeter timur ditemukan kendur"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">AREA KEJADIAN:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">AREA KEJADIAN:</label>
                 <input
                   type="text"
                   required
                   placeholder="Gerbang Utama / Jalur A / Rest Area / Pos Barat"
                   value={locationText}
                   onChange={(e) => setLocationText(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15"
                 />
               </div>
 
-              <div><label className="font-semibold text-slate-300 block mb-1">Catatan:</label><textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-white" /></div>
+              <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Catatan:</label><textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-white" /></div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Kronologi Kejadian Lengkap:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Kronologi Kejadian Lengkap:</label>
                 <textarea
                   rows={2}
                   required
                   value={chronology}
                   onChange={(e) => setChronology(e.target.value)}
                   placeholder="Uraikan waktu, kronologi kejadian, dan indikasi awal..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Tindakan Awal yang Diambil:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Tindakan Awal yang Diambil:</label>
                 <textarea
                   rows={2}
                   required
                   value={initialAction}
                   onChange={(e) => setInitialAction(e.target.value)}
                   placeholder="Langkah pengamanan awal yang telah dilakukan petugas di TKP..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15"
                 />
               </div>
 
               {/* Escalation & Police Report Fields */}
-              <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+              <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={escalated}
                     onChange={(e) => setEscalated(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-0"
+                    className="h-4 w-4 rounded text-blue-600 focus:ring-0"
                   />
                   <span className="font-semibold text-slate-300">Eskalasi ke Pihak Luar / Supervisor</span>
                 </label>
@@ -398,7 +399,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                       value={escalatedTo}
                       onChange={(e) => setEscalatedTo(e.target.value)}
                       placeholder="Supervisor Operasional / Polsek Patokbeusi / Babinsa"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-amber-500"
                     />
                   </div>
                 )}
@@ -411,7 +412,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                       value={policeReportNo}
                       onChange={(e) => setPoliceReportNo(e.target.value)}
                       placeholder="LP/B/..."
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-amber-500"
                     />
                   </div>
                 )}
@@ -419,7 +420,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
               {/* Photo Evidence Capture */}
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Dokumentasi Foto (minimum 3, maksimum 5):</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Dokumentasi Foto (minimum 3, maksimum 5):</label>
                 <div className="grid grid-cols-3 gap-2">{photoUrls.map((photo, index) => <div key={index} className="relative aspect-square overflow-hidden rounded-xl"><img src={photo} alt={`Bukti ${index + 1}`} className="h-full w-full object-cover" /><button type="button" onClick={() => setPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded bg-black/70 px-1">✕</button></div>)}</div>
                 <button type="button" disabled={photoUrls.length >= 5} onClick={() => setShowCameraModal(true)} className="mt-2 w-full rounded-xl border-2 border-dashed border-slate-700 py-2.5 text-slate-400 disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />Tambah Foto ({photoUrls.length}/5)</button>
                 {photoUrls.length < 3 ? <p className="mt-1 text-amber-300">Dokumentasi kejadian minimal 3 foto.</p> : <p className="mt-1 text-emerald-300">Dokumentasi valid.</p>}
