@@ -23,6 +23,7 @@ import {
   Sliders,
   History,
   LogOut,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
