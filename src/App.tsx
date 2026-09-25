@@ -13,7 +13,6 @@ import {
   User as UserIcon,
   Users,
   QrCode,
-  Sliders,
   History,
   Home,
   LogOut,
@@ -52,7 +51,7 @@ function AppContent() {
     const key = `ops:lastRoute:${user.id}`;
     try {
       const saved = JSON.parse(sessionStorage.getItem(key) || '{}');
-      const adminAllowed = ['command', 'master', 'checkpoints', 'users', 'calibration', 'audit', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
+      const adminAllowed = ['command', 'master', 'checkpoints', 'users', 'audit', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
       const chiefAllowed = ['command', 'master', 'handovers', 'incidents', 'gallery', 'profile'];
       const memberAllowed = ['home', 'patrol', 'handover', 'incidents', 'gallery', 'profile'];
       if (user.role === 'ANGGOTA' && memberAllowed.includes(saved.view)) setMemberTab(saved.view);
@@ -130,7 +129,6 @@ function AppContent() {
                 { id: 'master', label: 'Master Monitoring', icon: Building2 },
                 { id: 'checkpoints', label: 'Titik QR', icon: QrCode },
                 { id: 'users', label: 'Petugas', icon: Users },
-                { id: 'calibration', label: 'Kalibrasi Radius', icon: Sliders },
                 { id: 'gallery', label: 'Galeri', icon: ImageIcon },
                 { id: 'audit', label: 'Audit Trail', icon: History },
               ].map((item) => {
@@ -244,19 +242,6 @@ function AppContent() {
             >
               <Users className="w-4 h-4" />
               <span>Petugas</span>
-            </button>}
-
-            {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
-              onClick={() => setAdminTab('calibration')}
-              aria-current={adminTab === 'calibration' ? 'page' : undefined}
-              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
-                adminTab === 'calibration'
-                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
-                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
-              }`}
-            >
-              <Sliders className="w-4 h-4" />
-              <span>Radius</span>
             </button>}
 
             <button
