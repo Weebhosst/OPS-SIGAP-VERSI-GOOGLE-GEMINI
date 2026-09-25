@@ -63,7 +63,6 @@ export interface CustomerRepository {
   list(page: PageRequest): Promise<Page<Customer>>;
   create(customer: Customer): Promise<Customer>;
   update(id: string, updates: Partial<Customer>): Promise<Customer | undefined>;
-  remove(id: string): Promise<Customer>;
 }
 
 export interface SiteRepository {
