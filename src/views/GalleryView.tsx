@@ -111,15 +111,15 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <span>{shiftCode}</span>
           <span className="flex items-center gap-2 text-slate-500">{shiftItems.length} foto {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
         </button>
-        {isExpanded ? <div className={`mt-2 grid grid-cols-2 gap-2 ${isSuperAdminDesktop ? 'lg:grid-cols-4' : ''}`}>
-          {shiftItems.slice(0, 6).map((item) => (
+        {isExpanded ? <div className={`mt-2 grid grid-cols-2 gap-2 ${isSuperAdminDesktop ? 'md:grid-cols-4 xl:grid-cols-6' : ''}`}>
+          {shiftItems.slice(0, isSuperAdminDesktop ? 12 : 6).map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setSelectedItem(item)}
               className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900 text-left transition hover:border-blue-800/70"
             >
-              <div className="relative aspect-square">
+              <div className={`relative ${isSuperAdminDesktop ? 'aspect-[4/3]' : 'aspect-square'}`}>
                 <img loading="lazy" src={item.photoUrl} alt={item.caption} className="h-full w-full object-cover" />
                 <span className="absolute left-2 top-2 rounded-full border border-blue-700/40 bg-slate-950/85 px-2 py-0.5 text-[9px] font-black text-blue-300">
                   {item.documentType || item.sourceModule}
