@@ -654,6 +654,14 @@ class DatabaseStore {
     return alert;
   }
 
+  public deleteValidationAlert(id: string): ValidationAlert | undefined {
+    const index = this.data.validation_alerts.findIndex((alert) => alert.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.validation_alerts.splice(index, 1);
+    this.save();
+    return removed;
+  }
+
   // -------------------------------------------------------------
   // HANDOVERS
   // -------------------------------------------------------------
