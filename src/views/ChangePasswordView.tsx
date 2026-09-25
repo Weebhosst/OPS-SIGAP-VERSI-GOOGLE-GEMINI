@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyRound, Lock, ShieldCheck, LogOut } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, KeyRound, Lock, LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const ChangePasswordView: React.FC = () => {
@@ -7,6 +7,8 @@ export const ChangePasswordView: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPasswords, setShowNewPasswords] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,86 +40,118 @@ export const ChangePasswordView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center justify-center shrink-0">
-            <KeyRound className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-black text-white">Ganti Password Wajib</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Password sementara harus diganti sebelum OPS SIGAP dapat digunakan.
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-blue-950/30 border border-blue-900/50 p-3 text-xs text-blue-100 flex gap-2">
-          <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-blue-400" />
-          <span>Gunakan minimal 8 karakter dengan kombinasi huruf dan angka. Password baru tidak boleh sama dengan NPK.</span>
-        </div>
-
-        {error && (
-          <div className="rounded-xl border border-red-800 bg-red-950/50 p-3 text-xs text-red-200">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <label className="block text-xs font-semibold text-slate-300">
-            Password Saat Ini
-            <div className="relative mt-1">
-              <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 py-2.5 pl-9 pr-3 text-sm text-white focus:border-blue-500 focus:outline-none"
-              />
+    <main className="min-h-screen bg-slate-100 text-slate-900">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-8 sm:px-6">
+        <section
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-6"
+          aria-labelledby="change-password-title"
+        >
+          <header className="flex items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+              <KeyRound className="h-6 w-6" />
             </div>
-          </label>
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-700">Keamanan Akun</p>
+              <h1 id="change-password-title" className="mt-1 text-xl font-black tracking-tight text-slate-950">
+                Ubah Password
+              </h1>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Password sementara harus diganti sebelum OPS SIGAP dapat digunakan.
+              </p>
+            </div>
+          </header>
 
-          <label className="block text-xs font-semibold text-slate-300">
-            Password Baru
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-            />
-          </label>
+          <div className="mt-5 flex gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Gunakan minimal 8 karakter dengan kombinasi huruf dan angka. Password baru tidak boleh sama dengan NPK.</span>
+          </div>
 
-          <label className="block text-xs font-semibold text-slate-300">
-            Konfirmasi Password Baru
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-            />
-          </label>
+          {error && (
+            <div
+              role="alert"
+              className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold text-slate-700">Password Saat Ini</span>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-12 text-base text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword((value) => !value)}
+                  className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  aria-label={showCurrentPassword ? 'Sembunyikan password saat ini' : 'Tampilkan password saat ini'}
+                  aria-pressed={showCurrentPassword}
+                >
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold text-slate-700">Password Baru</span>
+              <div className="relative">
+                <input
+                  type={showNewPasswords ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-3 pr-12 text-base text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPasswords((value) => !value)}
+                  className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  aria-label={showNewPasswords ? 'Sembunyikan password baru' : 'Tampilkan password baru'}
+                  aria-pressed={showNewPasswords}
+                >
+                  {showNewPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold text-slate-700">Konfirmasi Password Baru</span>
+              <input
+                type={showNewPasswords ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? 'Menyimpan...' : 'Simpan Password Baru'}
+            </button>
+          </form>
 
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-2.5 text-sm font-black text-white transition"
+            type="button"
+            onClick={() => void logout()}
+            className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-200"
           >
-            {loading ? 'Menyimpan...' : 'SIMPAN PASSWORD BARU'}
+            <LogOut className="h-4 w-4" />
+            Keluar dari akun
           </button>
-        </form>
-
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="w-full flex items-center justify-center gap-2 text-xs font-semibold text-slate-400 hover:text-slate-200"
-        >
-          <LogOut className="w-4 h-4" />
-          Keluar dari akun
-        </button>
+        </section>
       </div>
-    </div>
+    </main>
   );
 };
