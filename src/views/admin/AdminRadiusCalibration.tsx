@@ -76,24 +76,25 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-[#020817] pb-10 text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Kembali"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="font-extrabold text-white text-base">Kalibrasi Radius Geofence</h1>
+              <h1 className="text-base font-black tracking-tight text-white">Kalibrasi Radius Geofence</h1>
               <p className="text-[11px] text-slate-400 font-medium">Pengujian Toleransi Jarak Lapangan</p>
             </div>
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-lg shadow-blue-950/50"
+            className="flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Tes</span>
@@ -101,10 +102,10 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+      <main className="mx-auto max-w-7xl space-y-4 px-4 pt-4 lg:px-6 lg:pt-6">
         {/* Verification Summary Banner */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs text-slate-300 space-y-1">
-          <div className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+        <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-xs text-slate-300 shadow-lg shadow-black/10">
+          <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-white">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>Verifikasi Riwayat UAT BB92</span>
           </div>
@@ -114,15 +115,15 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
         </div>
 
         {/* Calibration Logs */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {calibrations.map((cal) => (
             <div
               key={cal.id}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-2.5"
+              className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10"
             >
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-white text-sm bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                  <span className="font-mono text-sm font-black text-white bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
                     {cal.checkpointId}
                   </span>
                   <div>
@@ -147,7 +148,7 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
                 </span>
               </div>
 
-              <div className="text-xs bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-mono text-slate-400 flex items-center justify-between">
+              <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 font-mono text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   Koordinat: {cal.latitude?.toFixed(6)}, {cal.longitude?.toFixed(6)}
                 </span>
@@ -160,10 +161,10 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
 
       {/* Add Calibration Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-sm">Catat Uji Kalibrasi Radius</h3>
+              <h3 className="text-sm font-black text-white">Catat Uji Kalibrasi Radius</h3>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
                 ✕
               </button>
@@ -171,11 +172,11 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
 
             <form onSubmit={handleAdd} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Kode Checkpoint:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Kode Checkpoint:</label>
                 <select
                   value={checkpointId}
                   onChange={(e) => setCheckpointId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                 >
                   <option value="CP01">CP01 — LOKASI UJUNG BB92 (15m)</option>
                   <option value="CP02">CP02 — LOKASI TENGAH BB92 (15m)</option>
@@ -186,24 +187,24 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Jarak Terukur (Meter):</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Jarak Terukur (Meter):</label>
                 <input
                   type="number"
                   step="0.01"
                   required
                   value={measuredDistanceM}
                   onChange={(e) => setMeasuredDistanceM(parseFloat(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Hasil Uji yang Diharapkan:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Hasil Uji yang Diharapkan:</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setExpectedStatus('VALID')}
-                    className={`py-2 rounded-xl font-bold border ${
+                    className={`min-h-11 rounded-xl border px-3 py-2 text-xs font-black transition ${
                       expectedStatus === 'VALID'
                         ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
                         : 'bg-slate-800 border-slate-700 text-slate-400'
@@ -214,7 +215,7 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
                   <button
                     type="button"
                     onClick={() => setExpectedStatus('REJECTED')}
-                    className={`py-2 rounded-xl font-bold border ${
+                    className={`min-h-11 rounded-xl border px-3 py-2 text-xs font-black transition ${
                       expectedStatus === 'REJECTED'
                         ? 'bg-red-600/30 border-red-500 text-red-300'
                         : 'bg-slate-800 border-slate-700 text-slate-400'
@@ -226,29 +227,29 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Perangkat / HP:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Perangkat / HP:</label>
                 <input
                   type="text"
                   value={deviceModel}
                   onChange={(e) => setDeviceModel(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300 block mb-1">Catatan Uji:</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-300">Catatan Uji:</label>
                 <input
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg transition"
+                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-50"
               >
                 {submitting ? 'Menyimpan...' : 'Simpan Data Kalibrasi'}
               </button>
