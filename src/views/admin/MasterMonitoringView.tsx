@@ -722,6 +722,7 @@ export const MasterMonitoringView: React.FC<{
         confirmLabel="FORCE CLOSE"
         tone="danger"
         busy={actionBusy}
+        confirmDisabled={!reason.trim()}
         onCancel={() => { setForceTarget(null); setReason(''); }}
         onConfirm={forceClose}
       >
