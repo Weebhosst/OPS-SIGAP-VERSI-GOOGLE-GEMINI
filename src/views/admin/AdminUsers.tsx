@@ -224,10 +224,10 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       {/* Add User Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
+          <div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="admin-user-create-title">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-sm font-black text-white">Tambah Petugas Baru</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
+              <h3 id="admin-user-create-title" className="text-sm font-black text-white">Tambah Petugas Baru</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Tutup tambah petugas">
                 ✕
               </button>
             </div>
@@ -314,9 +314,9 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       {/* Confirmation Dialog: Reset Password ke NPK */}
       {confirmResetUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="w-full max-w-sm space-y-3 rounded-3xl border border-amber-800/70 bg-[#0f172a] p-5 text-center shadow-2xl shadow-black/50">
+          <div className="ops-dialog w-full max-w-sm space-y-3 overflow-y-auto rounded-3xl border border-amber-800/70 bg-[#0f172a] p-5 text-center shadow-2xl shadow-black/50" role="alertdialog" aria-modal="true" aria-labelledby="reset-password-title">
             <KeyRound className="w-10 h-10 text-amber-400 mx-auto" />
-            <h3 className="text-sm font-black text-white">Reset Password Petugas?</h3>
+            <h3 id="reset-password-title" className="text-sm font-black text-white">Reset Password Petugas?</h3>
             <p className="text-xs text-slate-300">
               Password untuk <strong>{confirmResetUser.name}</strong> akan direset kembali ke nomor NPK:{' '}
               <span className="font-mono text-amber-300 font-bold">{confirmResetUser.npk}</span>.
