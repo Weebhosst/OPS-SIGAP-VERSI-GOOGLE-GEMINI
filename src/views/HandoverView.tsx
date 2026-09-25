@@ -41,6 +41,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [handedTo, setHandedTo] = useState('');
   const [isTaruna, setIsTaruna] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const loadHandovers = async () => {
     try {
@@ -92,7 +93,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         await loadHandovers();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan serah terima jaga');
+      setStatusMsg(err.message || 'Gagal menyimpan serah terima jaga.');
     } finally {
       setSubmitting(false);
     }
@@ -106,7 +107,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setStartPhotoUrl(null);
       await loadHandovers();
       setActiveTab('SERTIGAS');
-    } catch (error: any) { alert(error.message || 'Gagal menyimpan Sertigas Naik Jaga.'); }
+    } catch (error: any) { setStatusMsg(error.message || 'Gagal menyimpan Sertigas Naik Jaga.'); }
     finally { setSubmitting(false); }
   };
 
@@ -120,7 +121,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         await loadHandovers();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mengonfirmasi');
+      setStatusMsg(err.message || 'Gagal mengonfirmasi serah terima.');
     }
   };
 
@@ -151,6 +152,15 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </button> : null}
         </div>
       </header>
+
+      {statusMsg ? (
+        <div className="mx-auto mt-3 flex max-w-md items-center justify-between gap-3 px-4">
+          <div className="flex w-full items-center justify-between gap-3 rounded-2xl border border-blue-800/70 bg-blue-950/30 p-3 text-xs text-blue-100" role="status" aria-live="polite">
+            <span>{statusMsg}</span>
+            <button type="button" onClick={() => setStatusMsg(null)} className="shrink-0 rounded-lg px-2 py-1 font-black text-blue-300 hover:bg-blue-900/40">TUTUP</button>
+          </div>
+        </div>
+      ) : null}
 
       <main className="mx-auto max-w-md space-y-3 px-4 pt-4">
         <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-2 shadow-lg shadow-black/10"><button onClick={() => setActiveTab('SERTIGAS')} className={`min-h-10 rounded-xl px-3 py-2 text-xs font-black transition ${activeTab === 'SERTIGAS' ? 'bg-blue-600' : 'text-slate-400'}`}>SERTIGAS</button><button onClick={() => setActiveTab('BARANG')} className={`min-h-10 rounded-xl px-3 py-2 text-xs font-black transition ${activeTab === 'BARANG' ? 'bg-blue-600' : 'text-slate-400'}`}>SERAH TERIMA BARANG</button></div>
