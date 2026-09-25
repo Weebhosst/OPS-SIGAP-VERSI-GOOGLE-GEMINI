@@ -219,30 +219,31 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-[#020817] pb-10 text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Kembali"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="font-extrabold text-white text-base">Master Checkpoint</h1>
+              <h1 className="text-base font-black tracking-tight text-white">Master Checkpoint</h1>
               <p className="text-[11px] text-slate-400 font-medium">Radius Geofence, Koordinat & QR Card</p>
             </div>
           </div>
-          <button onClick={() => setShowAddModal(true)} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold"><Plus className="mr-1 inline h-4 w-4" />Tambah</button>
+          <button onClick={() => setShowAddModal(true)} className="flex min-h-10 items-center rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"><Plus className="mr-1 inline h-4 w-4" />Tambah</button>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
-        <div className="grid gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-xs sm:grid-cols-4"><label>Customer<select value={newCustomerId} onChange={(e) => { setNewCustomerId(e.target.value); setNewSiteId(sites.find((site) => site.customerId === e.target.value)?.id || ''); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2">{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label><label>Site<select value={newSiteId} onChange={(e) => setNewSiteId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2">{sites.filter((site) => site.customerId === newCustomerId).map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label><label>Jumlah Checkpoint<input readOnly value={checkpoints.filter((checkpoint) => checkpoint.siteId === newSiteId).length} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2" /></label><label>Target Ronde / Shift<div className="mt-1 flex gap-1"><input type="number" min="1" max="20" value={targetRounds} onChange={(e) => setTargetRounds(Math.max(1, Number(e.target.value)))} className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 p-2" /><button onClick={() => void saveTargetRounds()} className="rounded-lg bg-blue-600 px-2 font-bold">Simpan</button></div></label></div>
+      <main className="mx-auto max-w-7xl space-y-4 px-4 pt-4 lg:px-6 lg:pt-6">
+        <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-xs shadow-lg shadow-black/10 md:grid-cols-2 xl:grid-cols-4"><label>Customer<select value={newCustomerId} onChange={(e) => { setNewCustomerId(e.target.value); setNewSiteId(sites.find((site) => site.customerId === e.target.value)?.id || ''); }} className="mt-1.5 min-h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15">{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label><label>Site<select value={newSiteId} onChange={(e) => setNewSiteId(e.target.value)} className="mt-1.5 min-h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15">{sites.filter((site) => site.customerId === newCustomerId).map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label><label>Jumlah Checkpoint<input readOnly value={checkpoints.filter((checkpoint) => checkpoint.siteId === newSiteId).length} className="mt-1.5 min-h-10 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-300" /></label><label>Target Ronde / Shift<div className="mt-1 flex gap-1"><input type="number" min="1" max="20" value={targetRounds} onChange={(e) => setTargetRounds(Math.max(1, Number(e.target.value)))} className="min-h-10 min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 outline-none transition focus:border-blue-500" /><button onClick={() => void saveTargetRounds()} className="rounded-xl bg-blue-600 px-3 font-black text-white transition hover:bg-blue-500">Simpan</button></div></label></div>
         {statusMsg && (
           <div className="p-3 bg-emerald-950/70 border border-emerald-700 text-emerald-200 text-xs rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>{statusMsg}</span>
             </div>
@@ -253,23 +254,23 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
         )}
 
         {/* Checkpoint Table / Cards */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {checkpoints.filter((checkpoint) => checkpoint.siteId === newSiteId).map((cp) => (
             <div
               key={cp.id}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3"
+              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm grid grid-cols-1 gap-3 xl:grid-cols-2"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/40 text-blue-400 font-mono font-black text-sm flex items-center justify-center shrink-0">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600/15 font-mono text-sm font-black text-blue-300">
                     {cp.code}
                   </div>
                   <div>
-                    <h3 className="font-bold text-white text-sm">{cp.name}</h3>
+                    <h3 className="text-sm font-black text-white">{cp.name}</h3>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">
                       Site: {cp.siteId} • Urutan: #{cp.sequenceOrder}
                     </p>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-mono">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-xs text-slate-400">
                       <span className="text-blue-400 font-semibold">Radius: {cp.radiusMeters}m</span>
                       <span>•</span>
                       <span>
@@ -279,7 +280,7 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     onClick={() => cp.qrStatus === 'ACTIVE' && handleOpenPrint(cp)}
                     disabled={cp.qrStatus !== 'ACTIVE'}
@@ -300,13 +301,13 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
               </div>
 
               {/* QR Token & Security Bar */}
-              <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-3 border-t border-slate-800/80 pt-3 font-mono text-xs lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className={`rounded px-2 py-1 font-bold ${cp.qrToken ? 'bg-amber-950 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>{cp.qrToken ? 'TOKEN READY' : 'TOKEN NOT GENERATED'}</span>
                   <span className={`rounded px-2 py-1 font-bold ${cp.qrStatus === 'ACTIVE' ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>{cp.qrStatus === 'ACTIVE' ? 'QR READY' : 'QR NOT GENERATED'}</span>
                   {cp.coordinateMethod === 'GPS' ? <span className={`rounded px-2 py-1 font-bold ${(cp.gpsAccuracyM || 999) <= 25 ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'}`}>{(cp.gpsAccuracyM || 999) <= 25 ? 'GPS GOOD' : 'GPS LOW ACCURACY'}</span> : null}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button onClick={() => void handleGenerateToken(cp)} className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"><RefreshCw className="w-3 h-3" /><span>Generate Token</span></button>
                   <button disabled={!cp.qrToken} onClick={() => void handleGenerateQr(cp)} className="text-blue-400 hover:text-blue-300 disabled:opacity-40 font-semibold flex items-center gap-1"><QrCode className="w-3 h-3" /><span>Generate QR</span></button>
                   <button disabled={cp.qrStatus !== 'ACTIVE'} onClick={() => void downloadQrCard(cp)} className="text-emerald-400 disabled:opacity-40"><Download className="inline h-3 w-3" /> JPG</button>
@@ -318,19 +319,19 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
       </main>
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="max-h-[90vh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md"><div className="max-h-[90vh] w-full max-w-2xl grid grid-cols-1 gap-3 xl:grid-cols-2 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5">
           <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold">Tambah Checkpoint Site</h3><p className="text-[11px] text-slate-400">Checkpoint dibuat tanpa token. Generate token lalu QR setelah data lokasi benar.</p></div><button type="button" onClick={() => setShowAddModal(false)}>✕</button></div>
           <div className="grid grid-cols-2 gap-2 text-xs"><label>Customer<select value={newCustomerId} onChange={(e) => { const customerId = e.target.value; setNewCustomerId(customerId); setNewSiteId(sites.find((site) => site.customerId === customerId)?.id || ''); }} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2">{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label><label>Site<select required value={newSiteId} onChange={(e) => setNewSiteId(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2">{sites.filter((site) => site.customerId === newCustomerId).map((site) => <option key={site.id} value={site.id}>{site.id} — {site.name}</option>)}</select></label><label>Jumlah Checkpoint<input readOnly value={checkpoints.filter((checkpoint) => checkpoint.siteId === newSiteId).length} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 p-2" /></label><button type="button" onClick={() => setNewRows((rows) => [...rows, emptyCheckpointRow()])} className="self-end rounded-xl bg-blue-600 p-2 font-bold"><Plus className="mr-1 inline h-4 w-4" />ADD ROW</button></div>
-          <div className="space-y-3">{newRows.map((row, index) => <fieldset key={index} className="space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs"><legend className="px-2 font-black text-blue-300">CHECKPOINT #{checkpoints.filter((checkpoint) => checkpoint.siteId === newSiteId).length + index + 1}</legend><label className="block font-semibold">Nama Titik Checkpoint<input required value={row.name} onChange={(e) => updateNewRow(index, { name: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label><div><span className="block font-semibold">Metode Koordinat</span><div className="mt-1 grid grid-cols-2 gap-2"><button type="button" onClick={() => updateNewRow(index, { coordinateMethod: 'MANUAL', accuracy: null, capturedAt: null, gpsMessage: null })} className={`rounded-lg p-2 font-bold ${row.coordinateMethod === 'MANUAL' ? 'bg-blue-600' : 'bg-slate-800'}`}>INPUT MANUAL</button><button type="button" onClick={() => captureGps(index)} className={`rounded-lg p-2 font-bold ${row.coordinateMethod === 'GPS' ? 'bg-blue-600' : 'bg-slate-800'}`}>📍 AMBIL GPS SAAT INI</button></div></div><div className="grid grid-cols-2 gap-2"><label className="font-semibold">Latitude<input required type="number" step="any" value={row.latitude} readOnly={row.coordinateMethod === 'GPS'} onChange={(e) => updateNewRow(index, { latitude: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label><label className="font-semibold">Longitude<input required type="number" step="any" value={row.longitude} readOnly={row.coordinateMethod === 'GPS'} onChange={(e) => updateNewRow(index, { longitude: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label></div><div className="grid grid-cols-2 gap-2"><div><span className="font-semibold">Akurasi GPS</span><div className={`mt-1 rounded-lg border p-2 ${row.accuracy !== null && row.accuracy > 25 ? 'border-amber-700 bg-amber-950 text-amber-200' : 'border-slate-800 bg-slate-900 text-slate-400'}`}>{row.accuracy !== null ? `± ${row.accuracy} meter` : '— (Input Manual)'}{row.capturedAt ? <div className="mt-1 text-[10px]">{new Date(row.capturedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</div> : null}</div></div><label className="font-semibold">Radius Geofence (meter)<input required type="number" min="1" value={row.radiusMeters} onChange={(e) => updateNewRow(index, { radiusMeters: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label></div>{row.gpsMessage ? <div className={`rounded-lg p-2 ${row.accuracy !== null && row.accuracy > 25 ? 'bg-amber-950 text-amber-200' : 'bg-emerald-950 text-emerald-200'}`}>{row.gpsMessage}{row.accuracy !== null && row.accuracy > 25 ? <button type="button" onClick={() => captureGps(index)} className="ml-2 rounded bg-amber-700 px-2 py-1 font-bold">COBA GPS LAGI</button> : null}</div> : null}<button type="button" disabled={saving} onClick={() => void handleCreateCheckpoint(index)} className="w-full rounded-xl bg-emerald-700 p-2 font-bold disabled:opacity-40">SIMPAN CHECKPOINT</button><div className="grid grid-cols-4 gap-1"><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">GENERATE TOKEN</button><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">GENERATE QR</button><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">VIEW QR</button><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">DOWNLOAD JPG</button></div></fieldset>)}</div>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{newRows.map((row, index) => <fieldset key={index} className="space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs"><legend className="px-2 font-black text-blue-300">CHECKPOINT #{checkpoints.filter((checkpoint) => checkpoint.siteId === newSiteId).length + index + 1}</legend><label className="block font-semibold">Nama Titik Checkpoint<input required value={row.name} onChange={(e) => updateNewRow(index, { name: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label><div><span className="block font-semibold">Metode Koordinat</span><div className="mt-1 grid grid-cols-2 gap-2"><button type="button" onClick={() => updateNewRow(index, { coordinateMethod: 'MANUAL', accuracy: null, capturedAt: null, gpsMessage: null })} className={`rounded-lg p-2 font-bold ${row.coordinateMethod === 'MANUAL' ? 'bg-blue-600' : 'bg-slate-800'}`}>INPUT MANUAL</button><button type="button" onClick={() => captureGps(index)} className={`rounded-lg p-2 font-bold ${row.coordinateMethod === 'GPS' ? 'bg-blue-600' : 'bg-slate-800'}`}>📍 AMBIL GPS SAAT INI</button></div></div><div className="grid grid-cols-2 gap-2"><label className="font-semibold">Latitude<input required type="number" step="any" value={row.latitude} readOnly={row.coordinateMethod === 'GPS'} onChange={(e) => updateNewRow(index, { latitude: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label><label className="font-semibold">Longitude<input required type="number" step="any" value={row.longitude} readOnly={row.coordinateMethod === 'GPS'} onChange={(e) => updateNewRow(index, { longitude: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label></div><div className="grid grid-cols-2 gap-2"><div><span className="font-semibold">Akurasi GPS</span><div className={`mt-1 rounded-lg border p-2 ${row.accuracy !== null && row.accuracy > 25 ? 'border-amber-700 bg-amber-950 text-amber-200' : 'border-slate-800 bg-slate-900 text-slate-400'}`}>{row.accuracy !== null ? `± ${row.accuracy} meter` : '— (Input Manual)'}{row.capturedAt ? <div className="mt-1 text-[10px]">{new Date(row.capturedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</div> : null}</div></div><label className="font-semibold">Radius Geofence (meter)<input required type="number" min="1" value={row.radiusMeters} onChange={(e) => updateNewRow(index, { radiusMeters: Number(e.target.value) })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-normal" /></label></div>{row.gpsMessage ? <div className={`rounded-lg p-2 ${row.accuracy !== null && row.accuracy > 25 ? 'bg-amber-950 text-amber-200' : 'bg-emerald-950 text-emerald-200'}`}>{row.gpsMessage}{row.accuracy !== null && row.accuracy > 25 ? <button type="button" onClick={() => captureGps(index)} className="ml-2 rounded bg-amber-700 px-2 py-1 font-bold">COBA GPS LAGI</button> : null}</div> : null}<button type="button" disabled={saving} onClick={() => void handleCreateCheckpoint(index)} className="w-full rounded-xl bg-emerald-700 p-2 font-bold disabled:opacity-40">SIMPAN CHECKPOINT</button><div className="grid grid-cols-4 gap-1"><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">GENERATE TOKEN</button><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">GENERATE QR</button><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">VIEW QR</button><button type="button" disabled className="rounded bg-slate-800 p-2 opacity-40">DOWNLOAD JPG</button></div></fieldset>)}</div>
         </div></div>
       )}
 
       {/* Edit Checkpoint Modal */}
       {showEditModal && selectedCp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4">
+          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-sm">Edit Checkpoint {selectedCp.code}</h3>
+              <h3 className="text-sm font-black text-white">Edit Checkpoint {selectedCp.code}</h3>
               <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white">
                 ✕
               </button>
@@ -394,7 +395,7 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg transition"
+                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-50"
               >
                 {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
               </button>
@@ -419,7 +420,7 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
             {/* Tactical printable card preview */}
             <div
               id="printable-card"
-              className="border-4 border-slate-900 p-5 rounded-2xl bg-white space-y-3"
+              className="border-4 border-slate-900 p-5 rounded-2xl bg-white grid grid-cols-1 gap-3 xl:grid-cols-2"
             >
               <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2">
                 <div className="text-left">
