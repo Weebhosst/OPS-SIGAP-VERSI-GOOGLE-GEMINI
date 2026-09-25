@@ -162,10 +162,10 @@ export const AdminRadiusCalibration: React.FC<{ onBack: () => void }> = ({ onBac
       {/* Add Calibration Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="max-h-[92vh] w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50">
+          <div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700/90 bg-[#0f172a] p-5 shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="radius-test-title">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-sm font-black text-white">Catat Uji Kalibrasi Radius</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
+              <h3 id="radius-test-title" className="text-sm font-black text-white">Catat Uji Kalibrasi Radius</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Tutup uji kalibrasi">
                 ✕
               </button>
             </div>
