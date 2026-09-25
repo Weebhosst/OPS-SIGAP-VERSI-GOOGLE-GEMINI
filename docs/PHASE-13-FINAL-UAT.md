@@ -361,3 +361,40 @@ BLOCKER        : 0
 HIGH           : 0
 FINAL STATUS   : RELEASE CANDIDATE / BLOCKED
 ```
+
+## 12. Final UAT Sign-off — 25 September 2026
+
+Hasil final UAT pada branch `uiux-v2-refactor`:
+
+```text
+AUTOMATED GATE : PASS
+ANGGOTA MOBILE : PASS
+CHIEF MOBILE   : PASS
+SUPER ADMIN    : PASS
+RESPONSIVE     : PASS
+ACCESSIBILITY  : PASS
+BLOCKER        : 0
+HIGH           : 0
+FINAL STATUS   : RELEASE CANDIDATE
+```
+
+Catatan:
+
+- Automated gate telah menjalankan `npm run lint`, `npm test`, dan `npm run build` tanpa failure.
+- Domain test: 25/25 PASS.
+- Repository, media storage, security integration, dan production build PASS.
+- CHIEF Mobile UAT PASS.
+- SUPER_ADMIN Desktop UAT PASS.
+- ANGGOTA Mobile UAT PASS.
+- Warning Vite terkait `__dirname` dan bundle >500 kB dicatat sebagai technical debt non-blocking dan bukan release blocker.
+- Tidak ada perubahan backend, API, database schema, permission model, QR/GPS validation logic, patrol rules, atau production infrastructure sebagai bagian dari Phase 13.
+
+### Release Candidate Guard
+
+Sebelum merge/deploy production:
+
+1. Pastikan working tree lokal bersih atau perubahan lokal yang disengaja sudah dipisahkan.
+2. Jangan ikut meng-commit file development-only seperti perubahan Quick Tunnel pada `vite.config.ts` kecuali memang diputuskan menjadi konfigurasi repository.
+3. Jangan ikut membawa perubahan data lokal pada `data/ops-sigap.json`.
+4. Lakukan final compare branch terhadap `main`.
+5. Merge dan deployment production hanya dilakukan setelah approval eksplisit.
