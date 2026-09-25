@@ -101,6 +101,28 @@ export const jsonRepositories: RepositoryBundle = {
       mustChangePassword: false,
       passwordChangedAt: changedAt,
     }),
+    remove: async (id) => {
+      const user = db.findUserById(id);
+      if (!user) throw new RepositoryError('USER_NOT_FOUND', 'Pengguna tidak ditemukan.', 404);
+      const hasDependencies =
+        db.getPatrolSessions({ userId: id }).length > 0 ||
+        db.getPatrolLogs().some((log) => log.userId === id) ||
+        db.getHandovers({ userId: id }).length > 0 ||
+        db.getIncidents({ userId: id }).length > 0 ||
+        db.getMedia({ userId: id }).length > 0 ||
+        db.getRadiusCalibrations().some((entry) => entry.testedByUserId === id);
+      if (hasDependencies) {
+        throw new RepositoryError(
+          'USER_HAS_OPERATIONAL_HISTORY',
+          'Personel sudah memiliki histori operasional dan tidak boleh dihapus permanen. Gunakan Nonaktifkan agar histori tetap utuh.',
+          409,
+        );
+      }
+      for (const [tokenHash, session] of jsonAuthSessions.entries()) {
+        if (session.userId === id) jsonAuthSessions.delete(tokenHash);
+      }
+      return db.deleteUser(id)!;
+    },
   },
 
   authSessions: {
