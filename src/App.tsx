@@ -73,11 +73,11 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center animate-pulse">
+      <div className="min-h-screen bg-[#020817] flex flex-col items-center justify-center p-4">
+        <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-300 flex items-center justify-center animate-pulse shadow-xl shadow-blue-950/30">
           <Shield className="w-6 h-6" />
         </div>
-        <div className="mt-4 text-xs text-slate-400 font-mono">Memuat OPS SIGAP...</div>
+        <div className="mt-4 text-sm text-slate-400 font-semibold">Memuat OPS SIGAP...</div>
       </div>
     );
   }
@@ -101,13 +101,13 @@ function AppContent() {
   }
 
   if (routeReadyUserId !== user.id) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-xs font-mono text-slate-400">Memulihkan tampilan terakhir...</div>;
+    return <div className="min-h-screen bg-[#020817] flex items-center justify-center text-sm font-semibold text-slate-400">Memulihkan tampilan terakhir...</div>;
   }
 
   // SUPER ADMIN / ADMIN WORKSPACE
   if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      <div className="min-h-screen bg-[#020817] text-slate-100 flex flex-col">
         <OfflineBanner />
 
         <div className="flex-1">
@@ -134,14 +134,14 @@ function AppContent() {
           )}
         </div>
 
-        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-2 py-1.5 shadow-2xl">
-          <div className="max-w-xl mx-auto flex items-center justify-around">
+        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Admin">
+          <div className="mx-auto flex max-w-3xl items-center gap-1 overflow-x-auto sm:justify-center">
             <button
               onClick={() => setAdminTab('command')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-bold transition ${
+              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'command'
-                  ? 'text-blue-400 bg-blue-950/50'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <Activity className="w-4 h-4" />
@@ -150,7 +150,7 @@ function AppContent() {
 
             <button
               onClick={() => setAdminTab('master')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-bold transition ${adminTab === 'master' ? 'text-blue-400 bg-blue-950/50' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${adminTab === 'master' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'}`}
             >
               <Building2 className="w-4 h-4" />
               <span>Master</span>
@@ -158,10 +158,10 @@ function AppContent() {
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
               onClick={() => setAdminTab('checkpoints')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-bold transition ${
+              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'checkpoints'
-                  ? 'text-blue-400 bg-blue-950/50'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <QrCode className="w-4 h-4" />
@@ -170,10 +170,10 @@ function AppContent() {
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
               onClick={() => setAdminTab('users')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-bold transition ${
+              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'users'
-                  ? 'text-blue-400 bg-blue-950/50'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <Users className="w-4 h-4" />
@@ -182,10 +182,10 @@ function AppContent() {
 
             {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
               onClick={() => setAdminTab('calibration')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-bold transition ${
+              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'calibration'
-                  ? 'text-blue-400 bg-blue-950/50'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <Sliders className="w-4 h-4" />
@@ -194,7 +194,7 @@ function AppContent() {
 
             <button
               onClick={() => setAdminTab('gallery')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-bold transition ${adminTab === 'gallery' ? 'text-blue-400 bg-blue-950/50' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${adminTab === 'gallery' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'}`}
             >
               <ImageIcon className="w-4 h-4" />
               <span>Galeri</span>
@@ -202,10 +202,10 @@ function AppContent() {
 
             <button
               onClick={() => setAdminTab('audit')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl text-[10px] font-bold transition ${
+              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
                 adminTab === 'audit'
-                  ? 'text-blue-400 bg-blue-950/50'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <History className="w-4 h-4" />
@@ -221,7 +221,7 @@ function AppContent() {
   // CHIEF WORKSPACE (READ-ONLY MONITORING)
   if (user.role === 'CHIEF') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      <div className="min-h-screen bg-[#020817] text-slate-100 flex flex-col">
         <OfflineBanner />
         <div className="flex-1">
           {adminTab === 'command' && <AdminCommandCenter onNavigateTab={(tab: any) => setAdminTab(tab)} />}
@@ -231,12 +231,12 @@ function AppContent() {
           {adminTab === 'incidents' && <IncidentView onBack={() => setAdminTab('command')} />}
           {adminTab === 'profile' && <ProfileView onBack={() => setAdminTab('command')} />}
         </div>
-        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-2 py-2 shadow-2xl">
-          <div className="max-w-md mx-auto flex items-center justify-around">
+        <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Utama">
+          <div className="mx-auto grid max-w-lg grid-cols-4 gap-1">
             <button
               onClick={() => setAdminTab('command')}
-              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
-                adminTab === 'command' ? 'text-blue-400 bg-blue-950/60' : 'text-slate-400 hover:text-slate-200'
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+                adminTab === 'command' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <Home className="w-4 h-4" />
@@ -244,8 +244,8 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('master')}
-              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
-                adminTab === 'master' ? 'text-blue-400 bg-blue-950/60' : 'text-slate-400 hover:text-slate-200'
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+                adminTab === 'master' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <Building2 className="w-4 h-4" />
@@ -253,8 +253,8 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('gallery')}
-              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
-                adminTab === 'gallery' ? 'text-blue-400 bg-blue-950/60' : 'text-slate-400 hover:text-slate-200'
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+                adminTab === 'gallery' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <ImageIcon className="w-4 h-4" />
@@ -262,8 +262,8 @@ function AppContent() {
             </button>
             <button
               onClick={() => setAdminTab('profile')}
-              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
-                adminTab === 'profile' ? 'text-blue-400 bg-blue-950/60' : 'text-slate-400 hover:text-slate-200'
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
+                adminTab === 'profile' ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30' : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <UserIcon className="w-4 h-4" />
@@ -277,7 +277,7 @@ function AppContent() {
 
   // MEMBER / GUARD WORKSPACE
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#020817] text-slate-100 flex flex-col">
       <OfflineBanner />
 
       {/* Member View Router */}
@@ -291,14 +291,14 @@ function AppContent() {
       </div>
 
       {/* Member Mobile Tactical Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-2 py-2 shadow-2xl">
-        <div className="max-w-md mx-auto flex items-center justify-around">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#08111f]/95 px-2 py-2 shadow-[0_-12px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl" aria-label="Navigasi Anggota">
+        <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
           <button
             onClick={() => setMemberTab('home')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
+            className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'home'
-                ? 'text-blue-400 bg-blue-950/60'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
             }`}
           >
             <Home className="w-4 h-4" />
@@ -307,10 +307,10 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('patrol')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
+            className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'patrol'
-                ? 'text-blue-400 bg-blue-950/60'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
             }`}
           >
             <Shield className="w-4 h-4" />
@@ -319,10 +319,10 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('handover')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
+            className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'handover'
-                ? 'text-blue-400 bg-blue-950/60'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
             }`}
           >
             <FileText className="w-4 h-4" />
@@ -331,10 +331,10 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('incidents')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
+            className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'incidents'
-                ? 'text-blue-400 bg-blue-950/60'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
             }`}
           >
             <AlertTriangle className="w-4 h-4" />
@@ -343,10 +343,10 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('gallery')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
+            className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'gallery'
-                ? 'text-blue-400 bg-blue-950/60'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
             }`}
           >
             <ImageIcon className="w-4 h-4" />
@@ -355,10 +355,10 @@ function AppContent() {
 
           <button
             onClick={() => setMemberTab('profile')}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-bold transition ${
+            className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${
               memberTab === 'profile'
-                ? 'text-blue-400 bg-blue-950/60'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
+                : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
             }`}
           >
             <UserIcon className="w-4 h-4" />
