@@ -44,6 +44,7 @@ interface AdminCommandCenterProps {
 
 export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNavigateTab }) => {
   const { user, logout } = useAuth();
+  const isChief = user?.role === 'CHIEF';
   const [filterState, setFilterState] = useState<AdminFilterState | null>(null);
   const [kpis, setKpis] = useState<AdminKpis>({
     patroliAktif: 0,
@@ -160,23 +161,23 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   };
 
   return (
-    <div className="min-h-screen bg-[#020817] pb-28 text-slate-100 lg:pb-8">
+    <div className={`min-h-screen bg-[#020817] text-slate-100 ${isChief ? 'pb-28' : 'pb-28 lg:pb-8'}`}>
       {/* Tactical Top Header */}
       <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
+        <div className={`mx-auto flex items-center justify-between ${isChief ? 'max-w-md' : 'max-w-7xl'}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-black">
               <Shield className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-black text-white text-base tracking-tight">COMMAND CENTER</h1>
-                <span className="text-[10px] bg-red-950/80 border border-red-800 text-red-300 font-mono px-2 py-0.5 rounded font-bold">
-                  SUPER ADMIN
+                <h1 className="font-black text-white text-base tracking-tight">{isChief ? 'MONITOR OPERASIONAL' : 'COMMAND CENTER'}</h1>
+                <span className={`rounded border px-2 py-0.5 font-mono text-[10px] font-bold ${isChief ? 'border-blue-800 bg-blue-950/70 text-blue-300' : 'border-red-800 bg-red-950/80 text-red-300'}`}>
+                  {isChief ? 'CHIEF • READ ONLY' : 'SUPER ADMIN'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium">
-                OPS SIGAP — Security Operations System
+              <p className="text-xs font-medium text-slate-400">
+                {isChief ? 'Monitoring site, patroli, insiden & serah terima' : 'OPS SIGAP — Security Operations System'}
               </p>
             </div>
           </div>
@@ -200,7 +201,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-5 px-4 pt-4 lg:px-6 lg:pt-6">
+      <main className={`mx-auto space-y-5 px-4 pt-4 ${isChief ? 'max-w-md' : 'max-w-7xl lg:px-6 lg:pt-6'}`}>
         {/* Active Filter Indicator Bar */}
         <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-3 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-xs">
@@ -226,6 +227,35 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
             )}
           </div>
         </div>
+
+        {isChief && (
+          <section className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('handovers')}
+              className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 px-2 text-[10px] font-black text-slate-300 shadow-sm transition hover:border-blue-800 hover:bg-slate-800"
+            >
+              <FileText className="h-4 w-4 text-blue-300" />
+              <span>Mutasi</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('incidents')}
+              className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 px-2 text-[10px] font-black text-slate-300 shadow-sm transition hover:border-amber-800 hover:bg-slate-800"
+            >
+              <AlertTriangle className="h-4 w-4 text-amber-300" />
+              <span>Insiden</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('gallery')}
+              className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 px-2 text-[10px] font-black text-slate-300 shadow-sm transition hover:border-violet-800 hover:bg-slate-800"
+            >
+              <ImageIcon className="h-4 w-4 text-violet-300" />
+              <span>Galeri</span>
+            </button>
+          </section>
+        )}
 
         {/* 4 TOP KPI CARDS */}
         <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
