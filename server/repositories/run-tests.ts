@@ -380,7 +380,8 @@ try {
   // MEMBER-02 security critical regression guards.
   assert.doesNotMatch(patrolViewSource, /setSimulationGps|GPS Simulasi|Set GPS 0m|14\.86m \(VALID\)|16\.3m \(REJECT\)|Default around CP02|Menggunakan koordinat area site BB92/);
   assert.match(patrolViewSource, /GPS BELUM SIAP/);
-  assert.match(patrolViewSource, /disabled=\{!currentGps\}/);
+  assert.match(patrolViewSource, /disabled=\{!!scanLockReason \|\| !nextCheckpoint\}/);
+  assert.match(patrolViewSource, /!currentGps[\s\S]+Menunggu GPS perangkat/);
 
   assert.doesNotMatch(qrScannerSource, /manualToken|availableTokens|Simulasi Scan Cepat Lapangan|masukkan kode token manual/);
   assert.match(qrScannerSource, /harus dipindai langsung melalui kamera perangkat di lokasi/);
@@ -440,6 +441,21 @@ try {
   assert.match(memberHomeSource, /siteInfo\?\.name/);
   assert.doesNotMatch(memberHomeSource, /Ronde Berjalan:/);
 
+  // MEMBER-04 guided patrol experience regression guards.
+  assert.match(patrolViewSource, /Checkpoint Berikutnya/);
+  assert.match(patrolViewSource, /CHECKPOINT TERKUNCI/);
+  assert.match(patrolViewSource, /cp\.id !== nextCheckpoint\.id/);
+  assert.match(patrolViewSource, /Datangi titik checkpoint hingga berada di dalam radius/);
+  assert.match(patrolViewSource, /Anda berada di dalam radius\. Scan QR checkpoint fisik sekarang/);
+  assert.match(patrolViewSource, /Rute Patroli/);
+  assert.match(patrolViewSource, /Urutan checkpoint wajib/);
+  assert.match(patrolViewSource, /PENDING SYNC/);
+  assert.match(patrolViewSource, /Jangan lanjut ke checkpoint berikutnya sampai server menyelesaikan validasi/);
+  assert.match(patrolViewSource, /TURUN JAGA & SELESAIKAN SHIFT/);
+  assert.match(patrolViewSource, /Progress Seluruh Shift/);
+  assert.doesNotMatch(patrolViewSource, /handleStartNewRound/);
+  assert.match(patrolServiceSource, /WRONG_CHECKPOINT_SEQUENCE/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -457,6 +473,7 @@ try {
   console.log('PASS CHIEF customer-level assignment and monitoring scope guards');
   console.log('PASS MEMBER-02 security critical anti-bypass regression guards');
   console.log('PASS MEMBER-03 next-action dashboard and live status regression guards');
+  console.log('PASS MEMBER-04 guided patrol next-checkpoint and route-lock regression guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
