@@ -1,6 +1,6 @@
 /**
  * OPS SIGAP — IndexedDB Offline Queue Manager
- * Reliable, idempotent offline-first sync for guards in low-connectivity areas
+ * Reliable, idempotent offline-first sync for field patrol scans.
  */
 
 import { api } from './api';
@@ -8,6 +8,7 @@ import { api } from './api';
 export interface OfflineQueueItem {
   idempotencyId: string;
   type: 'PATROL_SCAN';
+  userId?: string;
   sessionId: string;
   qrToken: string;
   checkpointCode?: string;
@@ -21,7 +22,16 @@ export interface OfflineQueueItem {
   clientCapturedAt: string;
   syncStatus: 'PENDING_SYNC' | 'SYNCING' | 'SYNCED' | 'SYNC_FAILED';
   errorMessage?: string;
+  attemptCount?: number;
+  lastAttemptAt?: number;
   createdAt: number;
+}
+
+export interface OfflineQueueSummary {
+  total: number;
+  pending: number;
+  failed: number;
+  syncing: number;
 }
 
 const DB_NAME = 'ops_sigap_offline_db';
@@ -31,31 +41,47 @@ const STORE_NAME = 'queue';
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
-      return reject(new Error('IndexedDB not supported'));
+      reject(new Error('IndexedDB tidak tersedia pada perangkat ini.'));
+      return;
     }
+
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'idempotencyId' });
       }
     };
 
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(request.error || new Error('IndexedDB gagal dibuka.'));
+  });
+}
+
+async function waitTransaction(tx: IDBTransaction): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('Transaksi IndexedDB gagal.'));
+    tx.onabort = () => reject(tx.error || new Error('Transaksi IndexedDB dibatalkan.'));
   });
 }
 
 class OfflineQueueManager {
-  private listeners: Set<() => void> = new Set();
+  private listeners = new Set<() => void>();
   private isSyncing = false;
+  private activeUserId: string | null = null;
 
   constructor() {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
-        console.log('[OPS SIGAP Offline] Connection restored, auto-syncing queue...');
-        this.syncNow();
+        if (!this.activeUserId) return;
+        console.log('[OPS SIGAP Offline] Connection restored, recovering queue...');
+        void this.recoverInterruptedSync(this.activeUserId)
+          .then(() => this.syncNow(this.activeUserId!))
+          .catch((error) => {
+            console.warn('[OPS SIGAP Offline] Auto recovery failed:', error);
+          });
       });
     }
   }
@@ -69,7 +95,13 @@ class OfflineQueueManager {
     this.listeners.forEach((cb) => cb());
   }
 
-  public async enqueuePatrolScan(item: Omit<OfflineQueueItem, 'syncStatus' | 'createdAt'>): Promise<void> {
+  public setActiveUser(userId: string | null) {
+    this.activeUserId = userId;
+  }
+
+  public async enqueuePatrolScan(
+    item: Omit<OfflineQueueItem, 'syncStatus' | 'createdAt' | 'attemptCount' | 'lastAttemptAt'>,
+  ): Promise<void> {
     try {
       const db = await openDb();
       const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -78,20 +110,22 @@ class OfflineQueueManager {
       const record: OfflineQueueItem = {
         ...item,
         syncStatus: 'PENDING_SYNC',
+        attemptCount: 0,
         createdAt: Date.now(),
       };
 
       store.put(record);
-      await new Promise<void>((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-
+      await waitTransaction(tx);
+      db.close();
       this.notify();
 
-      // If currently online, attempt immediate background sync
-      if (typeof navigator !== 'undefined' && navigator.onLine) {
-        this.syncNow().catch(() => {});
+      if (
+        typeof navigator !== 'undefined'
+        && navigator.onLine
+        && item.userId
+        && item.userId === this.activeUserId
+      ) {
+        void this.syncNow(item.userId);
       }
     } catch (err) {
       console.error('[OPS SIGAP Offline] Failed to enqueue item:', err);
@@ -99,35 +133,117 @@ class OfflineQueueManager {
     }
   }
 
-  public async getQueueItems(): Promise<OfflineQueueItem[]> {
+  public async getQueueItems(userId?: string): Promise<OfflineQueueItem[]> {
     try {
       const db = await openDb();
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();
 
-      return new Promise((resolve) => {
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => resolve([]);
+      const items = await new Promise<OfflineQueueItem[]>((resolve, reject) => {
+        req.onsuccess = () => resolve((req.result || []) as OfflineQueueItem[]);
+        req.onerror = () => reject(req.error || new Error('Antrean lokal gagal dibaca.'));
       });
-    } catch {
+      await waitTransaction(tx);
+      db.close();
+
+      const scoped = userId
+        ? items.filter((item) => item.userId === userId)
+        : items;
+
+      return scoped.sort((a, b) => a.createdAt - b.createdAt);
+    } catch (error) {
+      console.warn('[OPS SIGAP Offline] Failed to read queue:', error);
       return [];
     }
   }
 
-  public async getPendingCount(): Promise<number> {
-    const items = await this.getQueueItems();
-    return items.filter((i) => i.syncStatus === 'PENDING_SYNC' || i.syncStatus === 'SYNC_FAILED').length;
+  public async getSummary(userId?: string): Promise<OfflineQueueSummary> {
+    const items = await this.getQueueItems(userId);
+    return {
+      total: items.length,
+      pending: items.filter((item) => item.syncStatus === 'PENDING_SYNC').length,
+      failed: items.filter((item) => item.syncStatus === 'SYNC_FAILED').length,
+      syncing: items.filter((item) => item.syncStatus === 'SYNCING').length,
+    };
   }
 
-  public async getPendingForSession(sessionId: string): Promise<OfflineQueueItem[]> {
-    const items = await this.getQueueItems();
+  public async getPendingCount(userId?: string): Promise<number> {
+    const summary = await this.getSummary(userId);
+    return summary.pending + summary.failed + summary.syncing;
+  }
+
+  public async getPendingForSession(sessionId: string, userId?: string): Promise<OfflineQueueItem[]> {
+    const items = await this.getQueueItems(userId);
     return items.filter(
-      (i) => i.sessionId === sessionId && (i.syncStatus === 'PENDING_SYNC' || i.syncStatus === 'SYNC_FAILED')
+      (item) =>
+        item.sessionId === sessionId
+        && ['PENDING_SYNC', 'SYNC_FAILED', 'SYNCING'].includes(item.syncStatus),
     );
   }
 
-  public async syncNow(): Promise<{ synced: number; failed: number }> {
+  public async claimLegacyItemsForSession(sessionId: string, userId: string): Promise<number> {
+    const all = await this.getQueueItems();
+    const legacy = all.filter((item) => !item.userId && item.sessionId === sessionId);
+    if (legacy.length === 0) return 0;
+
+    const db = await openDb();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    legacy.forEach((item) => {
+      store.put({ ...item, userId });
+    });
+    await waitTransaction(tx);
+    db.close();
+    this.notify();
+    return legacy.length;
+  }
+
+  public async recoverInterruptedSync(userId: string): Promise<number> {
+    const items = await this.getQueueItems(userId);
+    const interrupted = items.filter((item) => item.syncStatus === 'SYNCING');
+    if (interrupted.length === 0) return 0;
+
+    const db = await openDb();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    interrupted.forEach((item) => {
+      store.put({
+        ...item,
+        syncStatus: 'PENDING_SYNC',
+        errorMessage: 'Sinkronisasi sebelumnya terputus. Data dipulihkan dan siap dicoba kembali.',
+      });
+    });
+    await waitTransaction(tx);
+    db.close();
+    this.notify();
+    return interrupted.length;
+  }
+
+  public async retryItem(idempotencyId: string, userId: string): Promise<{ synced: number; failed: number }> {
+    const items = await this.getQueueItems(userId);
+    const item = items.find((candidate) => candidate.idempotencyId === idempotencyId);
+    if (!item) return { synced: 0, failed: 0 };
+
+    const db = await openDb();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({
+      ...item,
+      syncStatus: 'PENDING_SYNC',
+      errorMessage: undefined,
+    });
+    await waitTransaction(tx);
+    db.close();
+    this.notify();
+
+    return this.syncNow(userId, [idempotencyId]);
+  }
+
+  public async syncNow(
+    userId: string | null = this.activeUserId,
+    onlyIds?: string[],
+  ): Promise<{ synced: number; failed: number }> {
+    if (!userId) return { synced: 0, failed: 0 };
     if (this.isSyncing) return { synced: 0, failed: 0 };
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       return { synced: 0, failed: 0 };
@@ -140,63 +256,100 @@ class OfflineQueueManager {
     let failed = 0;
 
     try {
-      const items = await this.getQueueItems();
-      const pending = items.filter((i) => i.syncStatus === 'PENDING_SYNC' || i.syncStatus === 'SYNC_FAILED');
+      await this.recoverInterruptedSync(userId);
+
+      const items = await this.getQueueItems(userId);
+      const targetIds = onlyIds ? new Set(onlyIds) : null;
+      const pending = items
+        .filter(
+          (item) =>
+            ['PENDING_SYNC', 'SYNC_FAILED'].includes(item.syncStatus)
+            && (!targetIds || targetIds.has(item.idempotencyId)),
+        )
+        .sort((a, b) => a.createdAt - b.createdAt);
 
       if (pending.length === 0) {
-        this.isSyncing = false;
-        this.notify();
         return { synced: 0, failed: 0 };
       }
 
-      // Mark as syncing in DB
+      const attemptAt = Date.now();
       const db = await openDb();
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      pending.forEach((p) => {
-        p.syncStatus = 'SYNCING';
-        store.put(p);
+      const markTx = db.transaction(STORE_NAME, 'readwrite');
+      const markStore = markTx.objectStore(STORE_NAME);
+      pending.forEach((item) => {
+        markStore.put({
+          ...item,
+          syncStatus: 'SYNCING',
+          errorMessage: undefined,
+          attemptCount: (item.attemptCount || 0) + 1,
+          lastAttemptAt: attemptAt,
+        });
       });
-      await new Promise<void>((res) => (tx.oncomplete = () => res()));
+      await waitTransaction(markTx);
 
-      // Send to server
       const response = await api.syncQueue(pending);
+      const resultById = new Map(
+        (response.results || []).map((result: any) => [String(result.idempotencyId), result]),
+      );
 
-      // Process results
-      const tx2 = db.transaction(STORE_NAME, 'readwrite');
-      const store2 = tx2.objectStore(STORE_NAME);
+      const resultTx = db.transaction(STORE_NAME, 'readwrite');
+      const resultStore = resultTx.objectStore(STORE_NAME);
 
-      if (response.success && response.results) {
-        for (const res of response.results) {
-          if (res.status === 'SYNCED') {
-            store2.delete(res.idempotencyId);
-            synced++;
-          } else {
-            const item = pending.find((p) => p.idempotencyId === res.idempotencyId);
-            if (item) {
-              item.syncStatus = 'SYNC_FAILED';
-              item.errorMessage = res.message || res.error;
-              store2.put(item);
-            }
-            failed++;
-          }
+      for (const item of pending) {
+        const result: any = resultById.get(item.idempotencyId);
+        if (result?.status === 'SYNCED') {
+          resultStore.delete(item.idempotencyId);
+          synced += 1;
+          continue;
         }
+
+        resultStore.put({
+          ...item,
+          syncStatus: 'SYNC_FAILED',
+          attemptCount: (item.attemptCount || 0) + 1,
+          lastAttemptAt: attemptAt,
+          errorMessage:
+            result?.message
+            || result?.error
+            || 'Server tidak mengembalikan hasil sinkronisasi untuk data ini.',
+        });
+        failed += 1;
       }
 
-      await new Promise<void>((res) => (tx2.oncomplete = () => res()));
+      await waitTransaction(resultTx);
+      db.close();
     } catch (err: any) {
       console.error('[OPS SIGAP Offline] Sync batch error:', err);
-      // Revert syncing items to PENDING_SYNC
+      const errorMessage = err?.message || 'Koneksi ke server terputus saat sinkronisasi.';
+
       try {
-        const db = await openDb();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const all = await this.getQueueItems();
-        all.filter((i) => i.syncStatus === 'SYNCING').forEach((i) => {
-          i.syncStatus = 'PENDING_SYNC';
-          store.put(i);
-        });
-      } catch {}
+        const items = await this.getQueueItems(userId);
+        const targetIds = onlyIds ? new Set(onlyIds) : null;
+        const affected = items.filter(
+          (item) =>
+            item.syncStatus === 'SYNCING'
+            && (!targetIds || targetIds.has(item.idempotencyId)),
+        );
+
+        if (affected.length > 0) {
+          const db = await openDb();
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          affected.forEach((item) => {
+            store.put({
+              ...item,
+              syncStatus: 'SYNC_FAILED',
+              errorMessage,
+              lastAttemptAt: Date.now(),
+            });
+          });
+          await waitTransaction(tx);
+          db.close();
+          failed += affected.length;
+        }
+      } catch (recoveryError) {
+        console.error('[OPS SIGAP Offline] Failed to persist sync error:', recoveryError);
+      }
     } finally {
       this.isSyncing = false;
       this.notify();
