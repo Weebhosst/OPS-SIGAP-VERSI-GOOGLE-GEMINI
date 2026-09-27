@@ -32,6 +32,7 @@ type UserFormState = {
   email: string;
   role: Role;
   position: string;
+  customerId: string;
   siteId: string;
 };
 
@@ -41,6 +42,7 @@ const emptyForm: UserFormState = {
   email: '',
   role: 'ANGGOTA',
   position: 'ANGGOTA SECURITY',
+  customerId: '',
   siteId: '',
 };
 
@@ -117,23 +119,27 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       customers
         .filter((customer) => !filterCustomerId || customer.id === filterCustomerId)
         .map((customer) => {
+          const chiefs = filteredUsers.filter(
+            (person) => person.role === 'CHIEF' && person.customerId === customer.id && !person.siteId,
+          );
           const customerSites = sites
             .filter((site) => site.customerId === customer.id)
             .map((site) => ({
               site,
               people: filteredUsers.filter((person) => person.siteId === site.id),
             }));
-          const totalPeople = customerSites.reduce((sum, item) => sum + item.people.length, 0);
-          return { customer, customerSites, totalPeople };
+          const sitePeople = customerSites.reduce((sum, item) => sum + item.people.length, 0);
+          const totalPeople = chiefs.length + sitePeople;
+          return { customer, chiefs, customerSites, totalPeople };
         })
-        .filter(({ customerSites, totalPeople }) => {
-          if (!search.trim() && !filterRole && !filterStatus) return customerSites.length > 0;
+        .filter(({ chiefs, customerSites, totalPeople }) => {
+          if (!search.trim() && !filterRole && !filterStatus) return customerSites.length > 0 || chiefs.length > 0;
           return totalPeople > 0;
         }),
     [customers, sites, filteredUsers, filterCustomerId, search, filterRole, filterStatus],
   );
 
-  const globalUsers = filteredUsers.filter((person) => !person.siteId);
+  const globalUsers = filteredUsers.filter((person) => !person.siteId && !person.customerId);
 
   const activeSiteOptions = sites.filter((site) => site.status === 'ACTIVE');
 
@@ -146,7 +152,11 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const openAddUser = () => {
     const defaultSite = activeSiteOptions[0]?.id || '';
     setEditingUser(null);
-    setUserForm({ ...emptyForm, siteId: defaultSite });
+    setUserForm({
+      ...emptyForm,
+      customerId: customers[0]?.id || '',
+      siteId: defaultSite,
+    });
     setShowUserForm(true);
   };
 
@@ -158,6 +168,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       email: person.email,
       role: person.role,
       position: person.position || (person.role === 'ANGGOTA' ? 'ANGGOTA SECURITY' : person.role.replace('_', ' ')),
+      customerId: person.customerId || '',
       siteId: person.siteId || '',
     });
     setShowUserForm(true);
@@ -166,10 +177,18 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const submitUser = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
-    if (userForm.role !== 'SUPER_ADMIN' && !userForm.siteId) {
+    if (userForm.role === 'CHIEF' && !userForm.customerId) {
+      setNotice({
+        title: 'Customer Wajib Dipilih',
+        message: 'CHIEF wajib terhubung ke Customer dan akan memonitor seluruh Site di bawah Customer tersebut.',
+        tone: 'warning',
+      });
+      return;
+    }
+    if (!['SUPER_ADMIN', 'CHIEF'].includes(userForm.role) && !userForm.siteId) {
       setNotice({
         title: 'Site Wajib Dipilih',
-        message: 'Role selain Super Admin wajib terhubung ke Site.',
+        message: 'Role ini wajib terhubung ke Site.',
         tone: 'warning',
       });
       return;
@@ -183,7 +202,8 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           email: userForm.email,
           role: userForm.role,
           position: userForm.position,
-          siteId: userForm.role === 'SUPER_ADMIN' ? null : userForm.siteId,
+          customerId: userForm.role === 'CHIEF' ? userForm.customerId : userForm.role === 'SUPER_ADMIN' ? null : undefined,
+          siteId: ['SUPER_ADMIN', 'CHIEF'].includes(userForm.role) ? null : userForm.siteId,
         });
         setNotice({
           title: 'Petugas Diperbarui',
@@ -197,7 +217,8 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           email: userForm.email || `${userForm.npk}@sigap.local`,
           role: userForm.role,
           position: userForm.position,
-          siteId: userForm.role === 'SUPER_ADMIN' ? null : userForm.siteId,
+          customerId: userForm.role === 'CHIEF' ? userForm.customerId : userForm.role === 'SUPER_ADMIN' ? null : undefined,
+          siteId: ['SUPER_ADMIN', 'CHIEF'].includes(userForm.role) ? null : userForm.siteId,
           status: 'ACTIVE',
         });
         setNotice({
@@ -469,7 +490,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
         ) : (
           <div className="space-y-3">
-            {customerGroups.map(({ customer, customerSites, totalPeople }) => {
+            {customerGroups.map(({ customer, chiefs, customerSites, totalPeople }) => {
               const customerExpanded = !!expandedCustomers[customer.id];
               return (
                 <article key={customer.id} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
@@ -491,7 +512,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                       <div className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-300">CUSTOMER</div>
                       <div className="truncate text-sm font-black text-white">{customer.name}</div>
                       <div className="mt-0.5 text-[10px] text-slate-500">
-                        {customer.code} • {customerSites.length} Site • {totalPeople} Petugas
+                        {customer.code} • {chiefs.length} Chief • {customerSites.length} Site • {totalPeople} Petugas
                       </div>
                     </div>
                     {customerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -499,6 +520,21 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
                   {customerExpanded ? (
                     <div className="space-y-2 border-t border-slate-800 bg-slate-950/30 p-3">
+                      {chiefs.length > 0 ? (
+                        <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/15 p-2.5">
+                          <div className="mb-2 flex items-center gap-2 px-1">
+                            <Shield className="h-4 w-4 text-cyan-300" />
+                            <div>
+                              <div className="text-[9px] font-black uppercase tracking-[0.14em] text-cyan-300">CHIEF CUSTOMER</div>
+                              <div className="text-[10px] text-slate-500">Monitoring seluruh Site di bawah {customer.name}</div>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            {chiefs.map(renderPersonCard)}
+                          </div>
+                        </div>
+                      ) : null}
+
                       {customerSites.map(({ site, people }) => {
                         const siteExpanded = !!expandedSites[site.id];
                         return (
@@ -630,12 +666,24 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 value={userForm.role}
                 onChange={(event) => {
                   const role = event.target.value as Role;
-                  setUserForm((current) => ({
-                    ...current,
-                    role,
-                    position: current.position || (role === 'ANGGOTA' ? 'ANGGOTA SECURITY' : role.replace('_', ' ')),
-                    siteId: role === 'SUPER_ADMIN' ? '' : current.siteId || activeSiteOptions[0]?.id || '',
-                  }));
+                  setUserForm((current) => {
+                    const nextSiteId = ['SUPER_ADMIN', 'CHIEF'].includes(role)
+                      ? ''
+                      : current.siteId || activeSiteOptions[0]?.id || '';
+                    const siteCustomerId = sites.find((site) => site.id === nextSiteId)?.customerId || '';
+                    return {
+                      ...current,
+                      role,
+                      position: current.position || (role === 'ANGGOTA' ? 'ANGGOTA SECURITY' : role.replace('_', ' ')),
+                      customerId:
+                        role === 'SUPER_ADMIN'
+                          ? ''
+                          : role === 'CHIEF'
+                            ? current.customerId || siteCustomerId || customers[0]?.id || ''
+                            : siteCustomerId,
+                      siteId: nextSiteId,
+                    };
+                  });
                 }}
                 className="ops-input mt-1 px-3"
               >
@@ -656,18 +704,50 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </label>
           </div>
 
-          {userForm.role !== 'SUPER_ADMIN' ? (
+          {userForm.role === 'CHIEF' ? (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-300">
+                Customer Penugasan CHIEF
+                <select
+                  required
+                  value={userForm.customerId}
+                  onChange={(event) =>
+                    setUserForm((current) => ({ ...current, customerId: event.target.value, siteId: '' }))
+                  }
+                  className="ops-input mt-1 px-3"
+                >
+                  <option value="">Pilih Customer</option>
+                  {customers.filter((customer) => customer.status === 'ACTIVE').map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.code} - {customer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-3 text-xs leading-5 text-cyan-100">
+                CHIEF tidak ditempatkan pada satu Site. Akses monitoring otomatis mencakup seluruh Site milik Customer yang dipilih.
+              </div>
+            </div>
+          ) : userForm.role !== 'SUPER_ADMIN' ? (
             <label className="block text-xs font-bold text-slate-300">
               Customer / Site Penugasan
               <select
                 required
                 value={userForm.siteId}
-                onChange={(event) => setUserForm((current) => ({ ...current, siteId: event.target.value }))}
+                onChange={(event) => {
+                  const nextSiteId = event.target.value;
+                  const nextCustomerId = sites.find((site) => site.id === nextSiteId)?.customerId || '';
+                  setUserForm((current) => ({
+                    ...current,
+                    siteId: nextSiteId,
+                    customerId: nextCustomerId,
+                  }));
+                }}
                 className="ops-input mt-1 px-3"
               >
                 <option value="">Pilih Site</option>
                 {customers.map((customer) => (
-                  <optgroup key={customer.id} label={`${customer.code} — ${customer.name}`}>
+                  <optgroup key={customer.id} label={`${customer.code} - ${customer.name}`}>
                     {activeSiteOptions
                       .filter((site) => site.customerId === customer.id)
                       .map((site) => (
@@ -679,7 +759,7 @@ export const AdminUsers: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </label>
           ) : (
             <div className="rounded-xl border border-purple-900/60 bg-purple-950/20 p-3 text-xs leading-5 text-purple-200">
-              Super Admin menggunakan akses global dan tidak dikunci ke Site tertentu.
+              Super Admin menggunakan akses global dan tidak dikunci ke Customer atau Site tertentu.
             </div>
           )}
         </form>
