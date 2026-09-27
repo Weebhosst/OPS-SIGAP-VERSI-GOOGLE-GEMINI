@@ -462,7 +462,7 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
         isOpen={showCameraModal}
         onClose={() => setShowCameraModal(false)}
         onCapture={(base64) => { if (cameraTarget === 'START') setStartPhotoUrl(base64); else setPhotoUrls((items) => items.length < 5 ? [...items, base64] : items); }}
-        siteLabel={activeSession?.siteId}
+        siteLabel={siteInfo?.code || siteInfo?.id || activeSession?.siteId}
       />
     </div>
   );
