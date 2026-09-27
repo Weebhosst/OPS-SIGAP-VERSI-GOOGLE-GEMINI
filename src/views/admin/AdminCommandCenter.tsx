@@ -26,7 +26,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { OpsNoticeDialog, type OpsDialogTone } from '../../components/OpsDialog';
+import { OpsDangerConfirmDialog, OpsDialog, OpsNoticeDialog, type OpsDialogTone } from '../../components/OpsDialog';
 import { api } from '../../lib/api';
 import {
   AdminFilterState,
@@ -81,6 +81,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   const [loading, setLoading] = useState(true);
   const [detailAlert, setDetailAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeAlert, setCloseAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
+  const [deleteAlert, setDeleteAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeNote, setCloseNote] = useState('');
   const [notice, setNotice] = useState<{ title: string; message: string; tone: OpsDialogTone } | null>(null);
 
@@ -149,6 +150,28 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
       await loadDashboard();
     } catch (error: any) {
       setNotice({ title: 'Validation Alert Gagal', message: error.message || 'Gagal memperbarui validation alert.', tone: 'danger' });
+    }
+  };
+
+  const removeValidationAlert = async (alert: ValidationAlert) => {
+    try {
+      await api.deleteValidationAlert(alert.id, `HAPUS ${alert.id}`);
+      setDeleteAlert(null);
+      setDetailAlert(null);
+      await loadDashboard();
+      setNotice({
+        title: 'Validation Dihapus',
+        message: `Validation alert ${alert.id} berhasil dihapus dari data aktif. Jejak penghapusan tetap dicatat di Audit Trail.`,
+        tone: 'success',
+      });
+    } catch (error: any) {
+      setDeleteAlert(null);
+      await loadDashboard();
+      setNotice({
+        title: 'Hapus Validation Gagal',
+        message: error.message || 'Validation alert gagal dihapus.',
+        tone: 'danger',
+      });
     }
   };
 
@@ -600,9 +623,139 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         )}
       </main>
 
-      {detailAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-detail-title"><div className="flex justify-between gap-3"><h3 id="validation-detail-title" className="font-black">DETAIL VALIDATION ALERT</h3><button type="button" onClick={() => setDetailAlert(null)} aria-label="Tutup detail validation alert">✕</button></div><div className="mt-4 space-y-2 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div><div>Site: {detailAlert.siteId}</div><div>Jenis: {detailAlert.alertType}</div><div>Detail: {detailAlert.message}</div><div>Status: {detailAlert.status}</div>{detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}</div></div></div> : null}
+      <OpsDialog
+        isOpen={!!detailAlert}
+        onClose={() => setDetailAlert(null)}
+        title="DETAIL VALIDATION ALERT"
+        description="Detail hasil validasi lapangan dan status workflow."
+        tone={detailAlert?.patrolLog?.validationStatus === 'REJECTED' ? 'danger' : 'warning'}
+        size="md"
+        footer={
+          detailAlert ? (
+            <div className={`grid gap-2 ${isAdministrator(user?.role) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <button type="button" onClick={() => setDetailAlert(null)} className="ops-btn-secondary px-4">
+                TUTUP
+              </button>
+              {isAdministrator(user?.role) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteAlert(detailAlert);
+                    setDetailAlert(null);
+                  }}
+                  className="ops-btn-danger px-4"
+                >
+                  HAPUS VALIDATION
+                </button>
+              ) : null}
+            </div>
+          ) : null
+        }
+      >
+        {detailAlert ? (
+          <div className="space-y-3 text-xs">
+            <div className="grid gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-2">
+              <div><span className="text-slate-500">Petugas</span><div className="mt-0.5 font-bold text-white">{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</div></div>
+              <div><span className="text-slate-500">NPK</span><div className="mt-0.5 font-mono text-slate-200">{options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div></div>
+              <div><span className="text-slate-500">Site</span><div className="mt-0.5 font-mono text-slate-200">{detailAlert.siteId}</div></div>
+              <div><span className="text-slate-500">Jenis</span><div className="mt-0.5 font-mono text-slate-200">{detailAlert.alertType}</div></div>
+              <div><span className="text-slate-500">Status</span><div className="mt-0.5 font-bold text-slate-200">{detailAlert.status}</div></div>
+              <div><span className="text-slate-500">Validation ID</span><div className="mt-0.5 break-all font-mono text-slate-300">{detailAlert.id}</div></div>
+            </div>
+            <div className="rounded-2xl border border-red-950/80 bg-red-950/20 p-3 leading-5 text-red-200">
+              {detailAlert.message}
+            </div>
+            {detailAlert.patrolLog ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-slate-300">
+                Jarak terhitung: <b>{detailAlert.patrolLog.calculatedDistanceM.toFixed(1)} m</b>
+                {detailAlert.patrolLog.isLowGpsAccuracy ? <div className="mt-1 font-bold text-amber-300">GPS LOW ACCURACY</div> : null}
+              </div>
+            ) : null}
+            {detailAlert.closeNote ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <span className="text-slate-500">Catatan Penyelesaian</span>
+                <div className="mt-1 leading-5 text-slate-200">{detailAlert.closeNote}</div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </OpsDialog>
 
-      {closeAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-red-900 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-close-title"><h3 id="validation-close-title" className="font-black text-red-300">TUTUP VALIDATION ALERT</h3><div className="my-3 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div><div>Site: {closeAlert.siteId}</div><div>Jenis: {closeAlert.alertType}</div><div className="mt-2">Detail: {closeAlert.message}</div></div><label className="font-bold">Catatan Penyelesaian<textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal" /></label><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => setCloseAlert(null)} className="rounded-xl bg-slate-800 p-2 font-bold">BATAL</button><button disabled={!closeNote.trim()} onClick={() => void mutateAlert(closeAlert, 'CLOSE')} className="rounded-xl bg-red-700 p-2 font-bold disabled:opacity-40">CLOSE ALERT</button></div></div></div> : null}
+      <OpsDialog
+        isOpen={!!closeAlert}
+        onClose={() => {
+          setCloseAlert(null);
+          setCloseNote('');
+        }}
+        title="TUTUP VALIDATION ALERT"
+        description="Masukkan catatan penyelesaian sebelum menutup alert."
+        tone="danger"
+        size="md"
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCloseAlert(null);
+                setCloseNote('');
+              }}
+              className="ops-btn-secondary px-4"
+            >
+              BATAL
+            </button>
+            <button
+              type="button"
+              disabled={!closeAlert || !closeNote.trim()}
+              onClick={() => closeAlert && void mutateAlert(closeAlert, 'CLOSE')}
+              className="ops-btn-danger px-4 disabled:opacity-40"
+            >
+              CLOSE ALERT
+            </button>
+          </div>
+        }
+      >
+        {closeAlert ? (
+          <div className="space-y-3 text-xs">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+              <div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div>
+              <div className="mt-1 text-slate-400">NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div>
+              <div className="mt-1 text-slate-400">Site: {closeAlert.siteId}</div>
+              <div className="mt-1 text-slate-400">Jenis: {closeAlert.alertType}</div>
+              <div className="mt-2 leading-5 text-red-200">{closeAlert.message}</div>
+            </div>
+            <label className="block font-bold text-slate-300">
+              Catatan Penyelesaian
+              <textarea
+                data-autofocus="true"
+                required
+                value={closeNote}
+                onChange={(event) => setCloseNote(event.target.value)}
+                placeholder="Tuliskan alasan atau hasil pemeriksaan"
+                className="ops-input mt-2 min-h-28 p-3 font-normal"
+              />
+            </label>
+          </div>
+        ) : null}
+      </OpsDialog>
+
+      <OpsDangerConfirmDialog
+        isOpen={!!deleteAlert}
+        onCancel={() => setDeleteAlert(null)}
+        onConfirm={() => deleteAlert ? removeValidationAlert(deleteAlert) : Promise.resolve()}
+        title="HAPUS VALIDATION"
+        message="Validation alert akan dihapus dari data aktif. Patrol Log, session, foto, dan histori patroli tidak ikut dihapus."
+        confirmationText={deleteAlert ? `HAPUS ${deleteAlert.id}` : ''}
+        entityLabel="ID validation"
+        confirmLabel="HAPUS VALIDATION"
+      >
+        {deleteAlert ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-xs">
+            <div className="font-bold text-white">{options.users.find((u) => u.id === deleteAlert.userId)?.name || deleteAlert.userId}</div>
+            <div className="mt-1 text-slate-400">{deleteAlert.alertType} • {deleteAlert.siteId}</div>
+            <div className="mt-2 break-words leading-5 text-red-200">{deleteAlert.message}</div>
+          </div>
+        ) : null}
+      </OpsDangerConfirmDialog>
 
       <OpsNoticeDialog
         isOpen={!!notice}
