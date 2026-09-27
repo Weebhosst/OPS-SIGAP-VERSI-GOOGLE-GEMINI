@@ -76,7 +76,19 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       const res = await api.getCurrentSession();
       if (res.success && res.hasOpenSession && res.session) {
         setSession(res.session);
-        setCheckpoints(res.checkpoints);
+        const pendingOffline = await offlineQueue.getPendingForSession(res.session.id);
+        const pendingCodes = new Set(
+          pendingOffline
+            .map((item) => item.checkpointCode)
+            .filter((code): code is string => !!code),
+        );
+        setCheckpoints(
+          res.checkpoints.map((checkpoint: any) =>
+            checkpoint.statusInRound !== 'VALID' && pendingCodes.has(checkpoint.code)
+              ? { ...checkpoint, statusInRound: 'PENDING_SYNC', isOfflinePending: true }
+              : checkpoint,
+          ),
+        );
         if (res.logs) setLogs(res.logs);
         setRounds(res.rounds || []);
         setCurrentRound(res.currentRound || 1);
@@ -96,11 +108,17 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
   };
 
   useEffect(() => {
-    loadSession();
+    void loadSession();
 
-    // Start GPS watch
+    const unsubscribeQueue = offlineQueue.subscribe(() => {
+      if (!offlineQueue.isCurrentlySyncing()) {
+        void loadSession();
+      }
+    });
+
+    let watchId: number | null = null;
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      const watchId = navigator.geolocation.watchPosition(
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
           setCurrentGps({
             latitude: pos.coords.latitude,
@@ -116,14 +134,17 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
       );
-
-      return () => {
-        navigator.geolocation.clearWatch(watchId);
-      };
+    } else {
+      setCurrentGps(null);
+      setGpsError('Perangkat atau browser ini tidak menyediakan GPS. Scan checkpoint tidak dapat dilakukan.');
     }
 
-    setCurrentGps(null);
-    setGpsError('Perangkat atau browser ini tidak menyediakan GPS. Scan checkpoint tidak dapat dilakukan.');
+    return () => {
+      if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      unsubscribeQueue();
+    };
   }, []);
 
   const triggerConfetti = () => {
@@ -249,42 +270,48 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
     };
 
     if (!isOnline) {
-      // Offline fallback: save into IndexedDB queue
-      await offlineQueue.enqueuePatrolScan({
-        idempotencyId,
-        type: 'PATROL_SCAN',
-        sessionId: session.id,
-        qrToken: scannedToken,
-        checkpointCode: activeCpForScan.code,
-        checkpointName: activeCpForScan.name,
-        latitude: currentGps.latitude,
-        longitude: currentGps.longitude,
-        gpsAccuracyM: currentGps.accuracy,
-        photoUrl: capturedPhoto || undefined,
-        observationStatus,
-        notes: observationNotes,
-        clientCapturedAt,
-      });
+      try {
+        await offlineQueue.enqueuePatrolScan({
+          idempotencyId,
+          type: 'PATROL_SCAN',
+          sessionId: session.id,
+          qrToken: scannedToken,
+          checkpointCode: activeCpForScan.code,
+          checkpointName: activeCpForScan.name,
+          latitude: currentGps.latitude,
+          longitude: currentGps.longitude,
+          gpsAccuracyM: currentGps.accuracy,
+          photoUrl: capturedPhoto || undefined,
+          observationStatus,
+          notes: observationNotes,
+          clientCapturedAt,
+        });
 
-      // Update optimistic local UI
-      setCheckpoints((prev) =>
-        prev.map((c) =>
-          c.id === activeCpForScan.id
-            ? { ...c, statusInRound: 'VALID', isOfflinePending: true }
-            : c
-        )
-      );
+        setCheckpoints((prev) =>
+          prev.map((checkpoint) =>
+            checkpoint.id === activeCpForScan.id
+              ? { ...checkpoint, statusInRound: 'PENDING_SYNC', isOfflinePending: true }
+              : checkpoint
+          )
+        );
 
-      setValidationAlert({
-        type: 'warning',
-        title: 'Tersimpan di Perangkat (Offline)',
-        message: `Scan ${activeCpForScan.code} tersimpan di antrean HP dan akan tervalidasi server saat koneksi pulih.`,
-      });
-
-      setActiveCpForScan(null);
-      setScannedToken(null);
-      setCapturedPhoto(null);
-      setSubmitting(false);
+        setValidationAlert({
+          type: 'warning',
+          title: 'PENDING SYNC',
+          message: `Scan ${activeCpForScan.code} baru tersimpan di perangkat dan BELUM VALID. Server akan memvalidasi QR, GPS, urutan, radius, dan foto saat koneksi pulih.`,
+        });
+      } catch (error: any) {
+        setValidationAlert({
+          type: 'error',
+          title: 'PENYIMPANAN OFFLINE GAGAL',
+          message: error?.message || 'Data checkpoint tidak tersimpan. Jangan meninggalkan lokasi sebelum mencoba kembali.',
+        });
+      } finally {
+        setActiveCpForScan(null);
+        setScannedToken(null);
+        setCapturedPhoto(null);
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -493,6 +520,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
             const isValid = cp.statusInRound === 'VALID';
             const isRejected = cp.statusInRound === 'REJECTED';
             const isReview = cp.statusInRound === 'REVIEW';
+            const isPendingSync = cp.statusInRound === 'PENDING_SYNC' || cp.isOfflinePending === true;
 
             // Calculate distance to current GPS
             const distanceNow = currentGps
@@ -560,6 +588,10 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300">
                         <AlertCircle className="w-3.5 h-3.5" /> REVIEW
                       </span>
+                    ) : isPendingSync ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-300">
+                        <Clock className="w-3.5 h-3.5" /> PENDING SYNC
+                      </span>
                     ) : (
                       <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-400">
                         BELUM
@@ -582,6 +614,10 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                     {isValid ? (
                       <span className="text-xs text-slate-500 font-medium italic">
                         Sudah Tervalidasi
+                      </span>
+                    ) : isPendingSync ? (
+                      <span className="text-xs font-semibold text-blue-300">
+                        Menunggu validasi server
                       </span>
                     ) : (
                       <button
