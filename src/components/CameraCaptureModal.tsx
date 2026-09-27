@@ -16,6 +16,7 @@ interface CameraCaptureModalProps {
   latitude?: number;
   longitude?: number;
   gpsAccuracyM?: number;
+  siteLabel?: string;
 }
 
 export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
@@ -27,6 +28,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   latitude,
   longitude,
   gpsAccuracyM,
+  siteLabel,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -110,7 +112,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     const { dateString, timeString } = getJakartaDateParts();
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 15px monospace';
-    ctx.fillText(`OPS SIGAP EVIDENCE • BB92`, 16, height - bannerHeight + 22);
+    ctx.fillText(`OPS SIGAP EVIDENCE • ${siteLabel || 'FIELD'}`, 16, height - bannerHeight + 22);
 
     ctx.font = '12px monospace';
     ctx.fillStyle = '#94a3b8';
@@ -193,7 +195,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
               {/* Watermark overlay preview */}
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 text-left">
                 <div className="font-mono text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-300">
-                  LIVE OVERLAY • KM 92
+                  LIVE OVERLAY • {siteLabel || 'FIELD'}
                 </div>
                 <div className="mt-1 font-mono text-[10px] text-slate-300">
                   {checkpointCode} {checkpointName ? `— ${checkpointName}` : ''}
