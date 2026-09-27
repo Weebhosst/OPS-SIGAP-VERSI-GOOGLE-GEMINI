@@ -437,6 +437,51 @@ export const postgresRepositories: RepositoryBundle = {
       if(!result.rows[0]) return undefined;
       return postgresRepositories.users.findById(id);
     },
+    remove: async (id) => {
+      const target = await postgresRepositories.users.findById(id);
+      if (!target) return undefined;
+
+      return transaction(async (client) => {
+        await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [id]);
+
+        const dependencyResult = await client.query<{ in_use: boolean }>(
+          `SELECT (
+            EXISTS(SELECT 1 FROM shift_sessions WHERE user_id=$1 OR force_closed_by=$1)
+            OR EXISTS(SELECT 1 FROM patrol_logs WHERE user_id=$1)
+            OR EXISTS(SELECT 1 FROM validation_alerts WHERE user_id=$1 OR reviewed_by=$1 OR closed_by=$1 OR reopened_by=$1)
+            OR EXISTS(SELECT 1 FROM incident_reports WHERE user_id=$1 OR created_by=$1)
+            OR EXISTS(SELECT 1 FROM handovers WHERE from_user_id=$1 OR to_user_id=$1 OR created_by=$1)
+            OR EXISTS(SELECT 1 FROM shift_documentation WHERE created_by=$1)
+            OR EXISTS(SELECT 1 FROM media WHERE user_id=$1)
+            OR EXISTS(SELECT 1 FROM radius_calibrations WHERE tested_by_user_id=$1)
+          ) AS in_use`,
+          [id],
+        );
+
+        if (dependencyResult.rows[0]?.in_use) {
+          throw new RepositoryError(
+            'USER_IN_USE',
+            'Personel sudah memiliki histori operasional dan tidak dapat dihapus. Nonaktifkan personel sebagai gantinya.',
+            409,
+          );
+        }
+
+        await client.query('DELETE FROM user_assignments WHERE user_id=$1', [id]);
+        try {
+          const deleted = await client.query('DELETE FROM users WHERE id=$1 RETURNING id', [id]);
+          return deleted.rows[0] ? target : undefined;
+        } catch (error: any) {
+          if (error?.code === '23503') {
+            throw new RepositoryError(
+              'USER_IN_USE',
+              'Personel masih terhubung ke data sistem dan tidak dapat dihapus. Nonaktifkan personel sebagai gantinya.',
+              409,
+            );
+          }
+          throw error;
+        }
+      });
+    },
   },
 
   authSessions: {
