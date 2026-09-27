@@ -984,7 +984,6 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     itemQuantity,
     itemCondition,
     handedFrom,
-    handedTo: recipient.name,
     isTaruna,
   } = req.body;
 
@@ -1024,8 +1023,8 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
   const evidencePhotos = Array.isArray(photoUrls)
     ? photoUrls.filter((item: unknown) => typeof item === 'string' && item)
     : (photoUrl ? [photoUrl] : []);
-  if (!itemName || !itemQuantity || !itemCondition || !handedFrom || !handedTo) {
-    return res.status(400).json({ success: false, error: 'Nama barang, jumlah, kondisi, pihak penyerah, dan penerima wajib diisi.' });
+  if (!itemName || !itemQuantity || !itemCondition || !handedFrom) {
+    return res.status(400).json({ success: false, error: 'Nama barang, jumlah, kondisi, dan pihak penyerah wajib diisi.' });
   }
   if (!isTaruna && evidencePhotos.length < 1) {
     return res.status(400).json({ success: false, error: 'Dokumentasi Serah Terima Barang wajib diisi.' });
@@ -1074,7 +1073,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     itemQuantity: String(itemQuantity),
     itemCondition,
     handedFrom,
-    handedTo,
+    handedTo: recipient.name,
     isTaruna: !!isTaruna,
     conditionStatus: conditionStatus || 'BAIK',
     personnelStatus: personnelStatus || 'Lengkap sesuai regu',
