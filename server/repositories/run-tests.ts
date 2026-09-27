@@ -323,6 +323,7 @@ try {
   const handoverViewSource = fs.readFileSync(path.resolve('src/views/HandoverView.tsx'), 'utf8');
   const incidentViewSource = fs.readFileSync(path.resolve('src/views/IncidentView.tsx'), 'utf8');
   const offlineQueueSource = fs.readFileSync(path.resolve('src/lib/offlineQueue.ts'), 'utf8');
+  const apiSource = fs.readFileSync(path.resolve('src/lib/api.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -456,6 +457,31 @@ try {
   assert.doesNotMatch(patrolViewSource, /handleStartNewRound/);
   assert.match(patrolServiceSource, /WRONG_CHECKPOINT_SEQUENCE/);
 
+  // MEMBER-05 start / close shift regression guards.
+  assert.match(handoverViewSource, /Step 2 dari 3/);
+  assert.match(handoverViewSource, /SIMPAN & MULAI PATROLI/);
+  assert.match(handoverViewSource, /onProceedPatrol/);
+  assert.match(handoverViewSource, /Patroli QR tetap terkunci sampai foto ini tersimpan di server/);
+  assert.match(appSource, /onProceedPatrol=\{\(\) => setMemberTab\('patrol'\)\}/);
+
+  assert.match(routeSource, /START_DOCUMENTATION_REQUIRED/);
+  assert.match(routeSource, /SPECIAL_HANDOVER_RECIPIENT_REQUIRED/);
+  assert.match(routeSource, /SPECIAL_HANDOVER_RECIPIENT_INVALID/);
+  assert.match(routeSource, /specialRecipient = await repositories\.users\.findById/);
+  assert.match(routeSource, /toUserId: specialRecipient!\.id/);
+  assert.match(routeSource, /handedTo: specialRecipient!\.name/);
+
+  assert.match(apiSource, /specialToUserId\?: string/);
+  assert.match(patrolViewSource, /Final Step/);
+  assert.match(patrolViewSource, /TURUN JAGA/);
+  assert.match(patrolViewSource, /KONFIRMASI TURUN JAGA & SELESAIKAN SHIFT/);
+  assert.match(patrolViewSource, /Penerima/);
+  assert.match(patrolViewSource, /specialToUserId/);
+  assert.match(patrolViewSource, /KONEKSI DIPERLUKAN/);
+  assert.match(patrolViewSource, /SHIFT SELESAI/);
+  assert.match(patrolViewSource, /Session Completed/);
+  assert.match(patrolViewSource, /completedSession/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -474,6 +500,7 @@ try {
   console.log('PASS MEMBER-02 security critical anti-bypass regression guards');
   console.log('PASS MEMBER-03 next-action dashboard and live status regression guards');
   console.log('PASS MEMBER-04 guided patrol next-checkpoint and route-lock regression guards');
+  console.log('PASS MEMBER-05 guided naik-jaga and guarded close-shift regression guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
