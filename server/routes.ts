@@ -2259,7 +2259,7 @@ apiRouter.post('/admin/radius-calibrations', authMiddleware, requireAdmin, async
 });
 
 // Admin Audit Logs
-apiRouter.get('/admin/audit-logs', authMiddleware, requireAdmin, async (_req: Request, res: Response) => {
+apiRouter.get('/admin/audit-logs', authMiddleware, requireSuperAdmin, async (_req: Request, res: Response) => {
   const page = await repositories.audit.list({ limit: 100, offset: 0 });
   res.json({ success: true, logs: page.items });
 });
