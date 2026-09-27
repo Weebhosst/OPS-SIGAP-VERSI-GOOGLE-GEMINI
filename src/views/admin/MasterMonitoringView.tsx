@@ -17,6 +17,11 @@ export const MasterMonitoringView: React.FC<{ onBack: () => void; onNavigate: (t
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<MasterTab>(() => {
+    const queryTab = new URLSearchParams(window.location.search).get('tab')?.toUpperCase();
+    const normalizedQueryTab = queryTab === 'ACTIVE_SESSION' ? 'ACTIVE_SESSION' : queryTab;
+    if (normalizedQueryTab && ['CUSTOMER_SITE', 'PERSONNEL', 'CHECKPOINT', 'ACTIVE_SESSION'].includes(normalizedQueryTab)) {
+      return normalizedQueryTab as MasterTab;
+    }
     if (!user) return 'CUSTOMER_SITE';
     const saved = sessionStorage.getItem(`ops:masterTab:${user.id}`);
     return ['CUSTOMER_SITE', 'PERSONNEL', 'CHECKPOINT', 'ACTIVE_SESSION'].includes(saved || '') ? saved as MasterTab : 'CUSTOMER_SITE';
