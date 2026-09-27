@@ -1298,8 +1298,14 @@ apiRouter.get('/media/:id/content', authMiddleware, async (req: AuthenticatedReq
   const ref = await repositories.media.findObjectRef(req.params.id);
   if (!ref) return res.status(404).json({ success: false, error: 'Media tidak ditemukan.' });
 
-  const canViewGlobal = isAdministrator(req.user!.role) || req.user!.role === 'CHIEF';
-  if (!canViewGlobal && (ref.userId !== req.user!.id || ref.siteId !== req.user!.siteId)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    const mediaSite = await repositories.sites.findById(ref.siteId);
+    if (!mediaSite || mediaSite.customerId !== customerId) {
+      return res.status(403).json({ success: false, error: 'Media berada di luar Customer penugasan Chief.' });
+    }
+  } else if (!isAdministrator(req.user!.role) && (ref.userId !== req.user!.id || ref.siteId !== req.user!.siteId)) {
     return res.status(403).json({ success: false, error: 'Anda tidak memiliki akses ke media ini.' });
   }
 
@@ -1333,10 +1339,14 @@ apiRouter.get('/admin/media-storage/health', authMiddleware, requireAdmin, async
 // -------------------------------------------------------------
 
 apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-  const canViewGlobal = isAdministrator(req.user!.role) || req.user!.role === 'CHIEF';
   const filter: any = {};
 
-  if (!canViewGlobal) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+  } else if (!isAdministrator(req.user!.role)) {
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
     filter.userId = req.user!.id;
   } else {
@@ -1394,16 +1404,25 @@ apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res:
   });
 });
 
-apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, async (_req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const [sitePage, activeSessions] = await Promise.all([
     repositories.sites.list({ limit: 500, offset: 0 }),
-    repositories.sessions.listFiltered({ status: 'ACTIVE' }, { limit: 500, offset: 0 }),
+    repositories.sessions.listFiltered(
+      { status: 'ACTIVE', ...(customerId ? { customerId } : {}) },
+      { limit: 500, offset: 0 },
+    ),
   ]);
+  const scopedSites = customerId
+    ? sitePage.items.filter((site) => site.customerId === customerId)
+    : sitePage.items;
   const uniqueUserIds = [...new Set(activeSessions.items.map((session) => session.userId))];
   const userEntries = await Promise.all(uniqueUserIds.map(async (id) => [id, await repositories.users.findById(id)] as const));
   const users = new Map(userEntries);
 
-  const sites = sitePage.items.map((site) => {
+  const sites = scopedSites.map((site) => {
     const sessions = activeSessions.items
       .filter((session) => session.siteId === site.id)
       .map((session) => {
