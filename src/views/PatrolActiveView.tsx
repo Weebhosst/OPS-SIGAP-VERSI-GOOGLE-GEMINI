@@ -3,7 +3,7 @@
  * Complete patrol flow: QR scan + GPS geofence + live camera evidence photo + server-authoritative validation
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Shield,
@@ -15,11 +15,13 @@ import {
   AlertCircle,
   XCircle,
   Clock,
-  RotateCcw,
   Sparkles,
-  Radio,
   LocateFixed,
   AlertTriangle,
+  Lock,
+  Navigation,
+  ChevronRight,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -70,6 +72,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
     title: string;
     message: string;
   } | null>(null);
+  const celebratedSessionRef = useRef<string | null>(null);
 
   // Load active session and checkpoints
   const loadSession = async () => {
@@ -95,13 +98,17 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         setRounds(res.rounds || []);
         setCurrentRound(res.currentRound || 1);
 
-        // Check if round was just completed
-        if (res.session.status === 'COMPLETED' || res.session.totalValid >= res.session.totalRequired) {
+        if (
+          res.session.totalValid >= res.session.totalRequired
+          && celebratedSessionRef.current !== res.session.id
+        ) {
+          celebratedSessionRef.current = res.session.id;
           triggerConfetti();
         }
       } else {
         setSession(null);
         setSiteInfo(res.site || null);
+        celebratedSessionRef.current = null;
       }
     } catch (err: any) {
       console.warn('Error loading patrol session:', err);
@@ -161,28 +168,86 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
     } catch {}
   };
 
-  // Start new round
-  const handleStartNewRound = async () => {
-    setLoading(true);
-    try {
-      const res = await api.startPatrolSession();
-      if (res.success && res.session) {
-        await loadSession();
-      }
-    } catch (err: any) {
-      setValidationAlert({
-        type: 'error',
-        title: 'Gagal Memulai Ronde',
-        message: err.message || 'Tidak dapat memulai ronde baru',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const activeCheckpoints = useMemo(
+    () =>
+      checkpoints
+        .filter((checkpoint) => checkpoint.status === 'ACTIVE')
+        .sort((a, b) =>
+          String(a.code).localeCompare(String(b.code), undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          }),
+        ),
+    [checkpoints],
+  );
+
+  const activeRound = useMemo(
+    () => rounds.find((round) => round.roundNumber === currentRound) || null,
+    [currentRound, rounds],
+  );
+
+  const roundCompleted = activeRound?.completed
+    ?? activeCheckpoints.filter((checkpoint) => checkpoint.statusInRound === 'VALID').length;
+  const roundRequired = activeRound?.required || activeCheckpoints.length;
+  const roundPct = roundRequired > 0
+    ? Math.min(100, Math.round((roundCompleted / roundRequired) * 100))
+    : 0;
+
+  const nextCheckpoint = useMemo(
+    () => activeCheckpoints.find((checkpoint) => checkpoint.statusInRound !== 'VALID') || null,
+    [activeCheckpoints],
+  );
+
+  const nextCheckpointIndex = nextCheckpoint
+    ? activeCheckpoints.findIndex((checkpoint) => checkpoint.id === nextCheckpoint.id)
+    : -1;
+
+  const nextDistanceM = currentGps && nextCheckpoint
+    ? calculateDistanceMeters(
+        currentGps.latitude,
+        currentGps.longitude,
+        nextCheckpoint.latitude,
+        nextCheckpoint.longitude,
+      )
+    : null;
+
+  const nextWithinRadius = nextCheckpoint && nextDistanceM !== null
+    ? nextDistanceM <= nextCheckpoint.radiusMeters
+    : false;
+
+  const nextPendingSync = !!nextCheckpoint
+    && (nextCheckpoint.statusInRound === 'PENDING_SYNC' || nextCheckpoint.isOfflinePending === true);
+
+  const patrolComplete = !!session && session.totalValid >= session.totalRequired;
+  const startDocumentationReady = !!session?.startDocumentationCompleted;
+
+  const scanLockReason = !session
+    ? 'Session patroli belum aktif.'
+    : !startDocumentationReady
+      ? 'Naik Jaga wajib diselesaikan terlebih dahulu.'
+      : patrolComplete
+        ? 'Target patroli shift sudah tercapai.'
+        : nextPendingSync
+          ? 'Checkpoint ini menunggu validasi server dari antrean offline.'
+          : !currentGps
+            ? 'Menunggu GPS perangkat.'
+            : !nextWithinRadius
+              ? 'Datangi titik checkpoint hingga berada di dalam radius.'
+              : null;
 
   // Step 1: Guard clicks Scan on a checkpoint
   const handleInitiateScan = (cp: any) => {
     if (cp.statusInRound === 'VALID') return;
+    if (!nextCheckpoint || cp.id !== nextCheckpoint.id) {
+      setValidationAlert({
+        type: 'warning',
+        title: 'CHECKPOINT TERKUNCI',
+        message: nextCheckpoint
+          ? `Urutan patroli berikutnya adalah ${nextCheckpoint.code} - ${nextCheckpoint.name}.`
+          : 'Tidak ada checkpoint yang dapat dipindai saat ini.',
+      });
+      return;
+    }
     if (!currentGps) {
       setValidationAlert({
         type: 'error',
@@ -301,8 +366,9 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         setValidationAlert({
           type: 'warning',
           title: 'PENDING SYNC',
-          message: `Scan ${activeCpForScan.code} baru tersimpan di perangkat dan BELUM VALID. Server akan memvalidasi QR, GPS, urutan, radius, dan foto saat koneksi pulih.`,
+          message: `Scan ${activeCpForScan.code} tersimpan di perangkat dan BELUM VALID. Jangan lanjut ke checkpoint berikutnya sampai server menyelesaikan validasi.`,
         });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (error: any) {
         setValidationAlert({
           type: 'error',
@@ -324,8 +390,10 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       if (res.status === 'VALID') {
         setValidationAlert({
           type: 'success',
-          title: 'Checkpoint VALID!',
-          message: `${res.checkpointCode || activeCpForScan.code} berhasil tervalidasi (Jarak ${res.calculatedDistanceM.toFixed(1)}m). Progress: ${res.totalValid}/${res.totalRequired}.`,
+          title: 'CHECKPOINT VALID',
+          message: res.sessionCompleted
+            ? `${res.checkpointCode || activeCpForScan.code} valid. Target patroli shift selesai, lanjutkan Turun Jaga.`
+            : `${res.checkpointCode || activeCpForScan.code} valid pada jarak ${res.calculatedDistanceM.toFixed(1)}m. Lanjutkan ke checkpoint berikutnya.`,
         });
 
         if (res.sessionCompleted) {
@@ -333,6 +401,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         }
 
         await loadSession();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else if (res.status === 'REJECTED') {
         setValidationAlert({
           type: 'error',
@@ -340,6 +409,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
           message: res.rejectionMessage || 'Scan tidak memenuhi kriteria validasi.',
         });
         await loadSession();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         setValidationAlert({
           type: 'warning',
@@ -347,6 +417,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
           message: res.rejectionMessage || 'Bukti foto atau data belum lengkap.',
         });
         await loadSession();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } catch (err: any) {
       setValidationAlert({
@@ -404,69 +475,29 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       </header>
 
       <main className="mx-auto max-w-md space-y-4 px-4 pt-4">
-        {/* GPS Live Telemetry */}
-        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/90 shadow-lg shadow-black/10">
-          <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className={`flex h-9 w-9 items-center justify-center rounded-xl border ${currentGps ? 'border-emerald-700/60 bg-emerald-900/25 text-emerald-300' : 'border-amber-700/60 bg-amber-900/25 text-amber-300'}`}>
-                <LocateFixed className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Verifikasi Lokasi</p>
-                <p className="mt-0.5 text-sm font-black text-white">{currentGps ? 'GPS Perangkat Aktif' : 'Menunggu GPS Perangkat'}</p>
-              </div>
-            </div>
-            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${!currentGps ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : currentGps.accuracy > 20 ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
-              {currentGps ? `±${currentGps.accuracy.toFixed(1)} m` : 'BELUM SIAP'}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 px-4 py-3 text-xs">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Latitude</p>
-              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps ? currentGps.latitude.toFixed(6) : '-'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Longitude</p>
-              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps ? currentGps.longitude.toFixed(6) : '-'}</p>
-            </div>
-          </div>
-          {currentGps && currentGps.accuracy > 20 ? (
-            <div className="border-t border-amber-900/60 bg-amber-950/30 px-4 py-2.5 text-[11px] font-semibold text-amber-300">
-              Akurasi GPS rendah. Tunggu posisi membaik sebelum melakukan scan checkpoint.
-            </div>
-          ) : null}
-        </section>
-
-        {gpsError && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-800/80 bg-amber-950/40 p-3 text-xs text-amber-200">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-            <span>{gpsError}</span>
-          </div>
-        )}
-
-        {/* Validation Feedback Banner */}
         {validationAlert && (
           <div
             className={`flex items-start gap-3 rounded-2xl border p-4 shadow-lg animate-fade-in ${
               validationAlert.type === 'success'
-                ? 'bg-emerald-950/70 border-emerald-700 text-emerald-100'
+                ? 'border-emerald-700 bg-emerald-950/70 text-emerald-100'
                 : validationAlert.type === 'error'
-                ? 'bg-red-950/70 border-red-700 text-red-100'
-                : 'bg-amber-950/70 border-amber-700 text-amber-100'
+                  ? 'border-red-700 bg-red-950/70 text-red-100'
+                  : 'border-amber-700 bg-amber-950/70 text-amber-100'
             }`}
           >
             {validationAlert.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
             ) : validationAlert.type === 'error' ? (
-              <XCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
             )}
-            <div className="flex-1">
-              <h4 className="font-bold text-sm">{validationAlert.title}</h4>
-              <p className="text-xs opacity-90 mt-0.5">{validationAlert.message}</p>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-sm font-black">{validationAlert.title}</h4>
+              <p className="mt-0.5 text-xs leading-5 opacity-90">{validationAlert.message}</p>
             </div>
             <button
+              type="button"
               onClick={() => setValidationAlert(null)}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold opacity-60 transition hover:bg-white/5 hover:opacity-100"
               aria-label="Tutup notifikasi"
@@ -476,174 +507,277 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
           </div>
         )}
 
-        {session && !session.startDocumentationCompleted ? <div className="rounded-2xl border border-amber-700/70 bg-amber-950/40 p-4 text-xs leading-5 text-amber-200">Sertigas Naik Jaga belum disimpan. Kembali ke Buku Mutasi untuk mengambil foto wajib sebelum scan checkpoint.</div> : null}
-
-        {session ? <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-black tracking-wide">PROGRESS RONDE</h2><span className="rounded-full border border-blue-800/70 bg-blue-950/70 px-2.5 py-1 text-[10px] font-bold text-blue-300">RONDE AKTIF {currentRound}</span></div><div className="grid gap-2 sm:grid-cols-2">{rounds.map((round) => { const complete = round.completed >= round.required; const completedCodes = checkpoints.filter((checkpoint) => round.checkpointIds.includes(checkpoint.id)); const pendingCodes = checkpoints.filter((checkpoint) => !round.checkpointIds.includes(checkpoint.id)); return <div key={round.roundNumber} className={`rounded-xl border p-3 text-xs ${complete ? 'border-emerald-800 bg-emerald-950/20' : round.roundNumber === currentRound ? 'border-blue-800 bg-blue-950/20' : 'border-slate-800 bg-slate-950'}`}><div className="flex justify-between font-black"><span>RONDE {round.roundNumber}</span><span>{round.completed}/{round.required} {complete ? 'COMPLETE' : ''}</span></div>{completedCodes.length ? <div className="mt-2 text-emerald-300">Completed: {completedCodes.map((checkpoint) => `${checkpoint.code} ✓`).join(', ')}</div> : null}{pendingCodes.length ? <div className="mt-1 text-slate-400">Pending: {pendingCodes.map((checkpoint) => checkpoint.code).join(', ')}</div> : null}</div>; })}</div></section> : null}
-
-        {/* Target checkpoint achieved; normal close still requires Turun Jaga. */}
-        {session && session.totalValid >= session.totalRequired && (
-          <div className="rounded-3xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 p-5 text-center shadow-2xl shadow-emerald-950/30">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-300">
-              <Sparkles className="w-7 h-7" />
-            </div>
-            <h2 className="text-lg font-black text-white">TARGET CHECKPOINT TERCAPAI</h2>
-            <p className="text-xs text-emerald-300 mt-1 font-medium">
-              {session.totalValid} dari {session.totalRequired} checkpoint terverifikasi. Lanjutkan Close Shift dan Turun Jaga.
+        {!session ? (
+          <section className="rounded-3xl border border-slate-800 bg-slate-900/90 p-5 text-center shadow-xl shadow-black/10">
+            <Shield className="mx-auto h-9 w-9 text-slate-500" />
+            <h2 className="mt-3 text-base font-black text-white">BELUM ADA SESSION PATROLI</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Mulai Shift dari Beranda terlebih dahulu agar urutan checkpoint dapat dibuka.
             </p>
-            <div className="text-[11px] text-slate-400 font-mono mt-2">
-              Session tetap ACTIVE sampai dokumentasi Turun Jaga tersimpan.
-            </div>
-
             <button
-              onClick={handleOpenCloseShift}
-              className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-950/50 transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+              type="button"
+              onClick={onBack}
+              className="mt-4 min-h-11 w-full rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>CLOSE SHIFT</span>
+              KEMBALI KE BERANDA
             </button>
-          </div>
-        )}
-
-        {session && session.totalValid < session.totalRequired ? <button onClick={handleOpenCloseShift} className="w-full rounded-2xl border border-slate-700 bg-slate-900/90 p-3 text-xs font-bold text-slate-300 shadow-sm transition hover:border-slate-600 hover:bg-slate-800">CLOSE SHIFT ({session.totalValid}/{session.totalRequired})</button> : null}
-
-        {/* Checkpoints Header */}
-        <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-300">QR + GPS Radius</p>
-            <h2 className="mt-1 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-300">
-              Titik Checkpoint {session?.siteId || ''} ({checkpoints.length} Titik Wajib)
-            </h2>
-          </div>
-          <span className="rounded-lg border border-slate-800 bg-slate-900/80 px-2 py-1 font-mono text-[10px] text-slate-400">
-            Radius sesuai konfigurasi checkpoint
-          </span>
-        </div>
-
-        {/* 5 Checkpoints List */}
-        <div className="space-y-3">
-          {checkpoints.map((cp, idx) => {
-            const isValid = cp.statusInRound === 'VALID';
-            const isRejected = cp.statusInRound === 'REJECTED';
-            const isReview = cp.statusInRound === 'REVIEW';
-            const isPendingSync = cp.statusInRound === 'PENDING_SYNC' || cp.isOfflinePending === true;
-
-            // Calculate distance to current GPS
-            const distanceNow = currentGps
-              ? calculateDistanceMeters(
-                  currentGps.latitude,
-                  currentGps.longitude,
-                  cp.latitude,
-                  cp.longitude
-                )
-              : null;
-
-            return (
-              <div
-                key={cp.id}
-                className={`rounded-2xl border bg-slate-900/90 p-4 shadow-sm transition-all ${
-                  isValid
-                    ? 'border-emerald-700/50 bg-emerald-950/10'
-                    : isRejected
-                    ? 'border-red-700/60 bg-red-950/10'
-                    : 'border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-mono text-xs font-black ${
-                        isValid
-                          ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40'
-                          : isRejected
-                          ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-                          : 'bg-slate-800 text-slate-300 border border-slate-700'
-                      }`}
-                    >
-                      {cp.code}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-black leading-tight text-white">{cp.name}</h3>
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                        <span className="rounded-lg border border-slate-700 bg-slate-950/70 px-2 py-1 font-mono text-slate-400">
-                          Radius {cp.radiusMeters}m
-                        </span>
-                        <span className={`rounded-lg border px-2 py-1 font-mono font-bold ${distanceNow === null ? 'border-slate-700 bg-slate-950/70 text-slate-500' : distanceNow <= cp.radiusMeters ? 'border-emerald-700/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-700/60 bg-amber-950/30 text-amber-300'}`}>
-                          Jarak HP {distanceNow === null ? '-' : `${distanceNow.toFixed(1)}m`}
-                        </span>
-                        <span className={`rounded-lg border px-2 py-1 text-[10px] font-black ${distanceNow === null ? 'border-slate-700 bg-slate-800 text-slate-400' : distanceNow <= cp.radiusMeters ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>
-                          {distanceNow === null ? 'GPS BELUM SIAP' : distanceNow <= cp.radiusMeters ? 'DALAM RADIUS' : 'DI LUAR RADIUS'}
-                        </span>
-                      </div>
+          </section>
+        ) : !session.startDocumentationCompleted ? (
+          <section className="rounded-3xl border border-amber-700/70 bg-amber-950/35 p-5 shadow-xl shadow-amber-950/10">
+            <div className="flex items-start gap-3">
+              <ClipboardCheck className="mt-0.5 h-6 w-6 shrink-0 text-amber-300" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-300">Patroli Dikunci</p>
+                <h2 className="mt-1 text-base font-black text-white">LENGKAPI NAIK JAGA</h2>
+                <p className="mt-1 text-xs leading-5 text-amber-100/80">
+                  Foto Sertigas Naik Jaga wajib disimpan sebelum CP pertama dapat dipindai.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onBack}
+              className="mt-4 min-h-11 w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-black text-white"
+            >
+              KEMBALI KE BERANDA
+            </button>
+          </section>
+        ) : patrolComplete ? (
+          <section className="rounded-3xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 p-5 text-center shadow-2xl shadow-emerald-950/30">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-300">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Patroli Shift Selesai</p>
+            <h2 className="mt-1 text-lg font-black text-white">SEMUA CHECKPOINT VALID</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-300">
+              {session.totalValid}/{session.totalRequired} validasi tersimpan. Session tetap ACTIVE sampai dokumentasi Turun Jaga selesai.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenCloseShift}
+              className="mt-4 flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-950/50 transition hover:bg-emerald-500"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              TURUN JAGA & SELESAIKAN SHIFT
+            </button>
+          </section>
+        ) : (
+          <>
+            <section className="overflow-hidden rounded-3xl border border-blue-800/60 bg-gradient-to-br from-blue-950/55 via-slate-900 to-slate-900 shadow-2xl shadow-blue-950/20">
+              <div className="border-b border-slate-800/80 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-300">Checkpoint Berikutnya</p>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="font-mono text-3xl font-black text-white">{nextCheckpoint?.code || '-'}</span>
+                      <span className="text-sm font-black text-slate-200">{nextCheckpoint?.name || 'Menunggu data'}</span>
                     </div>
                   </div>
-
-                  {/* Status Badge */}
-                  <div className="sm:ml-auto">
-                    {isValid ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> VALID
-                      </span>
-                    ) : isRejected ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300">
-                        <XCircle className="w-3.5 h-3.5" /> REJECTED
-                      </span>
-                    ) : isReview ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300">
-                        <AlertCircle className="w-3.5 h-3.5" /> REVIEW
-                      </span>
-                    ) : isPendingSync ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-300">
-                        <Clock className="w-3.5 h-3.5" /> PENDING SYNC
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                        BELUM
-                      </span>
-                    )}
-                  </div>
+                  <span className="rounded-full border border-blue-700/60 bg-blue-950/70 px-2.5 py-1 text-[10px] font-black text-blue-300">
+                    RONDE {currentRound}
+                  </span>
                 </div>
+              </div>
 
-                {/* Last scan rejection message if present */}
-                {isRejected && cp.lastScanLog?.rejectionMessage && (
-                  <div className="mt-3 p-2.5 bg-red-950/40 border border-red-900/60 rounded-xl text-xs text-red-300">
-                    <strong>Catatan Penolakan:</strong> {cp.lastScanLog.rejectionMessage}
+              <div className="grid grid-cols-3 border-b border-slate-800/80">
+                <div className="border-r border-slate-800 px-3 py-3">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">GPS</p>
+                  <p className={`mt-1 text-[10px] font-black ${currentGps ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {currentGps ? `±${currentGps.accuracy.toFixed(0)}m` : 'BELUM SIAP'}
+                  </p>
+                </div>
+                <div className="border-r border-slate-800 px-3 py-3">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Jarak</p>
+                  <p className={`mt-1 font-mono text-[10px] font-black ${nextWithinRadius ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {nextDistanceM === null ? '-' : `${nextDistanceM.toFixed(1)}m`}
+                  </p>
+                </div>
+                <div className="px-3 py-3">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Radius</p>
+                  <p className="mt-1 font-mono text-[10px] font-black text-slate-200">
+                    {nextCheckpoint ? `${nextCheckpoint.radiusMeters}m` : '-'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 p-4">
+                {gpsError ? (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-800/70 bg-amber-950/35 p-3 text-[11px] leading-5 text-amber-200">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                    <span>{gpsError}</span>
+                  </div>
+                ) : null}
+
+                {scanLockReason ? (
+                  <div className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-950/60 p-3 text-[11px] leading-5 text-slate-300">
+                    {nextPendingSync ? (
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-blue-300" />
+                    ) : (
+                      <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                    )}
+                    <span>{scanLockReason}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-800/60 bg-emerald-950/25 p-3 text-[11px] font-bold text-emerald-200">
+                    <LocateFixed className="h-4 w-4 shrink-0" />
+                    Anda berada di dalam radius. Scan QR checkpoint fisik sekarang.
                   </div>
                 )}
 
-                {/* Actions Bar */}
-                <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/80 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                  {/* Main Scan Trigger */}
-                  <div className="sm:ml-auto">
-                    {isValid ? (
-                      <span className="text-xs text-slate-500 font-medium italic">
-                        Sudah Tervalidasi
-                      </span>
-                    ) : isPendingSync ? (
-                      <span className="text-xs font-semibold text-blue-300">
-                        Menunggu validasi server
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleInitiateScan(cp)}
-                        disabled={!currentGps}
-                        className={`flex min-h-[38px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-black shadow transition focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none ${
-                          isRejected
-                            ? 'bg-red-600 hover:bg-red-500 text-white'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white'
-                        }`}
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                        <span>{isRejected ? 'Scan Ulang' : 'Scan Checkpoint'}</span>
-                      </button>
-                    )}
+                <button
+                  type="button"
+                  disabled={!!scanLockReason || !nextCheckpoint}
+                  onClick={() => nextCheckpoint && handleInitiateScan(nextCheckpoint)}
+                  className="flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
+                >
+                  <QrCode className="h-5 w-5" />
+                  {nextCheckpoint?.statusInRound === 'REJECTED' || nextCheckpoint?.statusInRound === 'REVIEW'
+                    ? `SCAN ULANG ${nextCheckpoint?.code || ''}`
+                    : `SCAN ${nextCheckpoint?.code || 'CHECKPOINT'}`}
+                </button>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-2 py-2">
+                    <p className="text-[9px] font-black text-blue-300">1. QR</p>
+                    <p className="mt-0.5 text-[8px] text-slate-500">Scan fisik</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-2 py-2">
+                    <p className="text-[9px] font-black text-emerald-300">2. FOTO</p>
+                    <p className="mt-0.5 text-[8px] text-slate-500">Kamera live</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-2 py-2">
+                    <p className="text-[9px] font-black text-violet-300">3. VALIDASI</p>
+                    <p className="mt-0.5 text-[8px] text-slate-500">Server</p>
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Progress Ronde</p>
+                  <h2 className="mt-1 text-sm font-black text-white">RONDE {currentRound}</h2>
+                </div>
+                <span className="font-mono text-xs font-black text-blue-300">{roundCompleted}/{roundRequired} CP</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${roundPct}%` }} />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[9px] text-slate-500">
+                <span>{roundPct}% ronde selesai</span>
+                <span>Shift {session.totalValid}/{session.totalRequired}</span>
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-2.5 flex items-center justify-between px-1">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Rute Patroli</p>
+                  <h2 className="mt-0.5 text-xs font-black text-slate-300">Urutan checkpoint wajib</h2>
+                </div>
+                <span className="text-[9px] font-mono text-slate-600">{activeCheckpoints.length} TITIK</span>
+              </div>
+
+              <div className="space-y-2">
+                {activeCheckpoints.map((checkpoint, index) => {
+                  const isValid = checkpoint.statusInRound === 'VALID';
+                  const isCurrent = nextCheckpoint?.id === checkpoint.id;
+                  const isPending = checkpoint.statusInRound === 'PENDING_SYNC' || checkpoint.isOfflinePending === true;
+                  const isRejected = checkpoint.statusInRound === 'REJECTED';
+                  const isReview = checkpoint.statusInRound === 'REVIEW';
+                  const locked = !isValid && !isCurrent;
+
+                  return (
+                    <div
+                      key={checkpoint.id}
+                      className={`flex items-center gap-3 rounded-2xl border p-3 transition ${
+                        isValid
+                          ? 'border-emerald-800/60 bg-emerald-950/20'
+                          : isCurrent
+                            ? 'border-blue-700/70 bg-blue-950/25 shadow-lg shadow-blue-950/10'
+                            : 'border-slate-800 bg-slate-900/70'
+                      }`}
+                    >
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border font-mono text-[11px] font-black ${
+                        isValid
+                          ? 'border-emerald-600/50 bg-emerald-600/15 text-emerald-300'
+                          : isCurrent
+                            ? 'border-blue-500/50 bg-blue-600/15 text-blue-300'
+                            : 'border-slate-700 bg-slate-800 text-slate-500'
+                      }`}>
+                        {isValid ? <CheckCircle2 className="h-4 w-4" /> : locked ? <Lock className="h-4 w-4" /> : checkpoint.code}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] font-black text-slate-400">{checkpoint.code}</span>
+                          <h3 className={`truncate text-xs font-black ${locked ? 'text-slate-500' : 'text-white'}`}>
+                            {checkpoint.name}
+                          </h3>
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-slate-500">
+                          {isValid
+                            ? 'Sudah tervalidasi'
+                            : isPending
+                              ? 'Menunggu sinkronisasi server'
+                              : isRejected
+                                ? checkpoint.lastScanLog?.rejectionMessage || 'Scan terakhir ditolak, ulangi checkpoint ini'
+                                : isReview
+                                  ? 'Perlu scan ulang setelah review'
+                                  : isCurrent
+                                    ? 'Checkpoint yang harus dikunjungi sekarang'
+                                    : `Terbuka setelah ${activeCheckpoints[index - 1]?.code || 'checkpoint sebelumnya'} valid`}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0">
+                        {isValid ? (
+                          <span className="rounded-full border border-emerald-700/60 bg-emerald-950/40 px-2 py-1 text-[9px] font-black text-emerald-300">VALID</span>
+                        ) : isPending ? (
+                          <span className="rounded-full border border-blue-700/60 bg-blue-950/40 px-2 py-1 text-[9px] font-black text-blue-300">SYNC</span>
+                        ) : isCurrent ? (
+                          <ChevronRight className="h-4 w-4 text-blue-300" />
+                        ) : (
+                          <span className="text-[9px] font-black text-slate-600">LOCK</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {rounds.length > 1 ? (
+              <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Progress Seluruh Shift</p>
+                <div className="mt-3 grid grid-cols-5 gap-1.5">
+                  {rounds.map((round) => {
+                    const complete = round.completed >= round.required;
+                    const active = round.roundNumber === currentRound;
+                    return (
+                      <div
+                        key={round.roundNumber}
+                        className={`rounded-xl border px-1 py-2 text-center ${
+                          complete
+                            ? 'border-emerald-800 bg-emerald-950/30'
+                            : active
+                              ? 'border-blue-700 bg-blue-950/30'
+                              : 'border-slate-800 bg-slate-950/60'
+                        }`}
+                      >
+                        <p className={`text-[9px] font-black ${complete ? 'text-emerald-300' : active ? 'text-blue-300' : 'text-slate-600'}`}>
+                          R{round.roundNumber}
+                        </p>
+                        <p className="mt-0.5 font-mono text-[8px] text-slate-500">{round.completed}/{round.required}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+          </>
+        )}
 
         {/* Active Scan Review & Observation Dialog (After Photo is Taken) */}
         {activeCpForScan && scannedToken && capturedPhoto && (
