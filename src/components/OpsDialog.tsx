@@ -82,7 +82,16 @@ export const OpsDialog: React.FC<OpsDialogProps> = ({
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const closeOnEscapeRef = useRef(closeOnEscape);
+  const busyRef = useRef(busy);
   const toneStyle = toneStyles[tone];
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    closeOnEscapeRef.current = closeOnEscape;
+    busyRef.current = busy;
+  }, [onClose, closeOnEscape, busy]);
 
   useEffect(() => {
     if (!isOpen || typeof document === 'undefined') return;
@@ -103,9 +112,9 @@ export const OpsDialog: React.FC<OpsDialogProps> = ({
       const panel = panelRef.current;
       if (!panel) return;
 
-      if (event.key === 'Escape' && closeOnEscape && !busy) {
+      if (event.key === 'Escape' && closeOnEscapeRef.current && !busyRef.current) {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -140,7 +149,7 @@ export const OpsDialog: React.FC<OpsDialogProps> = ({
       document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
     };
-  }, [busy, closeOnEscape, isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen || typeof document === 'undefined') return null;
 
