@@ -327,6 +327,7 @@ try {
   const mainSource = fs.readFileSync(path.resolve('src/main.tsx'), 'utf8');
   const offlineBannerSource = fs.readFileSync(path.resolve('src/components/OfflineBanner.tsx'), 'utf8');
   const profileViewSource = fs.readFileSync(path.resolve('src/views/ProfileView.tsx'), 'utf8');
+  const galleryViewSource = fs.readFileSync(path.resolve('src/views/GalleryView.tsx'), 'utf8');
   const serviceWorkerSource = fs.readFileSync(path.resolve('public/sw.js'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
@@ -553,6 +554,31 @@ try {
   assert.match(serviceWorkerSource, /request\.mode === 'navigate'/);
   assert.match(serviceWorkerSource, /cacheApplicationShell/);
 
+  // MEMBER-08 Gallery & History regression guards.
+  assert.match(mediaServiceSource, /enrichOperationalMedia/);
+  assert.match(mediaServiceSource, /checkpointCode/);
+  assert.match(mediaServiceSource, /validationStatus/);
+  assert.match(mediaServiceSource, /handoverStatus/);
+  assert.match(mediaServiceSource, /incidentSeverity/);
+  assert.match(routeSource, /const enrichedMedia = await enrichOperationalMedia\(page\.items\)/);
+  assert.match(routeSource, /media: enrichedMedia/);
+
+  assert.match(galleryViewSource, /Galeri & Riwayat/);
+  assert.match(galleryViewSource, /Bukti operasional/);
+  assert.match(galleryViewSource, /sourceContextLabel/);
+  assert.match(galleryViewSource, /Riwayat Patroli/);
+  assert.match(galleryViewSource, /Riwayat Serah Terima/);
+  assert.match(galleryViewSource, /Riwayat Kejadian/);
+  assert.match(galleryViewSource, /sourceContext\?\.checkpointName/);
+  assert.match(galleryViewSource, /sourceContext\?\.handoverStatus/);
+  assert.match(galleryViewSource, /sourceContext\?\.incidentStatus/);
+  assert.match(galleryViewSource, /loading="lazy"/);
+  assert.match(galleryViewSource, /limit: '48'/);
+  assert.match(galleryViewSource, /loadingMore/);
+  assert.match(galleryViewSource, /const byId = new Map/);
+  assert.match(galleryViewSource, /MUAT LEBIH BANYAK/);
+  assert.match(galleryViewSource, /BULAN INI/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -574,6 +600,7 @@ try {
   console.log('PASS MEMBER-05 guided naik-jaga and guarded close-shift regression guards');
   console.log('PASS MEMBER-06 handover integrity and guided incident regression guards');
   console.log('PASS MEMBER-07 offline queue, cold-start recovery, and retry regression guards');
+  console.log('PASS MEMBER-08 gallery source-context, history, and pagination regression guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
