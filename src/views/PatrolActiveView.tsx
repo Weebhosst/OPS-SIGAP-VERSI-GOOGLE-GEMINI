@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { PatrolSession, Checkpoint, PatrolLog, calculateDistanceMeters } from '../types/ops';
+import { PatrolSession, Checkpoint, PatrolLog, Site, calculateDistanceMeters } from '../types/ops';
 import { QRScannerModal } from '../components/QRScannerModal';
 import { CameraCaptureModal } from '../components/CameraCaptureModal';
 import { offlineQueue } from '../lib/offlineQueue';
@@ -35,6 +35,7 @@ interface PatrolActiveViewProps {
 export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) => {
   const { user } = useAuth();
   const [session, setSession] = useState<PatrolSession | null>(null);
+  const [siteInfo, setSiteInfo] = useState<Site | null>(null);
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
   const [logs, setLogs] = useState<PatrolLog[]>([]);
   const [rounds, setRounds] = useState<Array<{ roundNumber: number; completed: number; required: number; checkpointIds: string[] }>>([]);
@@ -76,6 +77,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       const res = await api.getCurrentSession();
       if (res.success && res.hasOpenSession && res.session) {
         setSession(res.session);
+        setSiteInfo(res.site || null);
         const pendingOffline = await offlineQueue.getPendingForSession(res.session.id);
         const pendingCodes = new Set(
           pendingOffline
@@ -99,6 +101,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         }
       } else {
         setSession(null);
+        setSiteInfo(res.site || null);
       }
     } catch (err: any) {
       console.warn('Error loading patrol session:', err);
@@ -381,7 +384,9 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Site BB92 • KM 92</p>
+              <p className="text-[11px] text-slate-400 font-medium">
+                {siteInfo?.name || session?.siteId || 'Site Penugasan'}
+              </p>
             </div>
           </div>
 
@@ -510,7 +515,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
             </h2>
           </div>
           <span className="rounded-lg border border-slate-800 bg-slate-900/80 px-2 py-1 font-mono text-[10px] text-slate-400">
-            Radius Ketat 10-15m
+            Radius sesuai konfigurasi checkpoint
           </span>
         </div>
 
@@ -791,6 +796,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         latitude={currentGps?.latitude}
         longitude={currentGps?.longitude}
         gpsAccuracyM={currentGps?.accuracy}
+        siteLabel={siteInfo?.code || siteInfo?.id || session?.siteId}
       />
     </div>
   );
