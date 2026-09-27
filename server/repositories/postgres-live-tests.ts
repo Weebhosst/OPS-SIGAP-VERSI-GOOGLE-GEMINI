@@ -51,6 +51,49 @@ try {
   assert.ok(importedSites.total > 0, 'JSON import harus menghasilkan site di PostgreSQL.');
   assert.ok(importedCheckpoints.total > 0, 'JSON import harus menghasilkan checkpoint di PostgreSQL.');
 
+  const disposableCustomer = await repositories.customers.create({
+    id: `CUST-PG-DELETE-${suffix}`,
+    code: `PGD${suffix.slice(-5)}`,
+    name: 'PostgreSQL Disposable Customer',
+    status: 'ACTIVE',
+    createdAt: now,
+    updatedAt: now,
+  });
+  const disposableSite = await repositories.sites.create({
+    id: `SITE-PG-DELETE-${suffix}`,
+    code: `SITE-PG-DELETE-${suffix}`,
+    name: 'PostgreSQL Disposable Site',
+    customerId: disposableCustomer.id,
+    personnelCapacity: 1,
+    targetRoundsPerShift: 1,
+    timezone: 'Asia/Jakarta',
+    status: 'ACTIVE',
+    createdAt: now,
+    updatedAt: now,
+  });
+  const disposableNpk = `92${suffix.slice(-6)}9`;
+  const disposableUser = await repositories.users.create({
+    id: `USR-PG-DELETE-${suffix}`,
+    name: 'PostgreSQL Disposable User',
+    npk: disposableNpk,
+    email: `delete-${suffix}@integration.local`,
+    role: 'ANGGOTA',
+    customerId: disposableCustomer.id,
+    siteId: disposableSite.id,
+    position: 'ANGGOTA SECURITY',
+    assignmentHistory: [{ customerId: disposableCustomer.id, siteId: disposableSite.id, effectiveAt: now, changedBy: null }],
+    status: 'ACTIVE',
+    passwordHash: bcrypt.hashSync(disposableNpk, 4),
+    createdAt: now,
+    updatedAt: now,
+  });
+  assert.equal((await repositories.users.remove(disposableUser.id))?.id, disposableUser.id);
+  assert.equal(await repositories.users.findById(disposableUser.id), undefined);
+  assert.equal((await repositories.sites.remove(disposableSite.id))?.id, disposableSite.id);
+  assert.equal(await repositories.sites.findById(disposableSite.id), undefined);
+  assert.equal((await repositories.customers.remove(disposableCustomer.id))?.id, disposableCustomer.id);
+  assert.equal(await repositories.customers.findById(disposableCustomer.id), undefined);
+
   const customerId = `CUST-PG-${suffix}`;
   const siteId = `SITE-PG-${suffix}`;
   const userOneId = `USR-PG-A-${suffix}`;
