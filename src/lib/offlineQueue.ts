@@ -35,8 +35,21 @@ export interface OfflineQueueSummary {
 }
 
 const DB_NAME = 'ops_sigap_offline_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'queue';
+const SNAPSHOT_STORE_NAME = 'patrol_snapshots';
+
+export interface PatrolOfflineSnapshot {
+  userId: string;
+  session: any;
+  site: any | null;
+  checkpoints: any[];
+  logs: any[];
+  rounds: Array<{ roundNumber: number; completed: number; required: number; checkpointIds: string[] }>;
+  currentRound: number;
+  targetRounds: number;
+  capturedAt: number;
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -51,6 +64,9 @@ function openDb(): Promise<IDBDatabase> {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'idempotencyId' });
+      }
+      if (!db.objectStoreNames.contains(SNAPSHOT_STORE_NAME)) {
+        db.createObjectStore(SNAPSHOT_STORE_NAME, { keyPath: 'userId' });
       }
     };
 
@@ -155,6 +171,55 @@ class OfflineQueueManager {
     } catch (error) {
       console.warn('[OPS SIGAP Offline] Failed to read queue:', error);
       return [];
+    }
+  }
+
+  public async savePatrolSnapshot(
+    userId: string,
+    snapshot: Omit<PatrolOfflineSnapshot, 'userId' | 'capturedAt'>,
+  ): Promise<void> {
+    try {
+      const db = await openDb();
+      const tx = db.transaction(SNAPSHOT_STORE_NAME, 'readwrite');
+      tx.objectStore(SNAPSHOT_STORE_NAME).put({
+        ...snapshot,
+        userId,
+        capturedAt: Date.now(),
+      } satisfies PatrolOfflineSnapshot);
+      await waitTransaction(tx);
+      db.close();
+    } catch (error) {
+      console.warn('[OPS SIGAP Offline] Failed to save patrol snapshot:', error);
+    }
+  }
+
+  public async getPatrolSnapshot(userId: string): Promise<PatrolOfflineSnapshot | null> {
+    try {
+      const db = await openDb();
+      const tx = db.transaction(SNAPSHOT_STORE_NAME, 'readonly');
+      const request = tx.objectStore(SNAPSHOT_STORE_NAME).get(userId);
+      const snapshot = await new Promise<PatrolOfflineSnapshot | null>((resolve, reject) => {
+        request.onsuccess = () => resolve((request.result as PatrolOfflineSnapshot | undefined) || null);
+        request.onerror = () => reject(request.error || new Error('Snapshot patroli gagal dibaca.'));
+      });
+      await waitTransaction(tx);
+      db.close();
+      return snapshot;
+    } catch (error) {
+      console.warn('[OPS SIGAP Offline] Failed to read patrol snapshot:', error);
+      return null;
+    }
+  }
+
+  public async clearPatrolSnapshot(userId: string): Promise<void> {
+    try {
+      const db = await openDb();
+      const tx = db.transaction(SNAPSHOT_STORE_NAME, 'readwrite');
+      tx.objectStore(SNAPSHOT_STORE_NAME).delete(userId);
+      await waitTransaction(tx);
+      db.close();
+    } catch (error) {
+      console.warn('[OPS SIGAP Offline] Failed to clear patrol snapshot:', error);
     }
   }
 
