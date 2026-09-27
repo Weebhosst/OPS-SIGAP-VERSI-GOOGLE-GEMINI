@@ -153,7 +153,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-center text-slate-400 shadow-lg shadow-black/10">
             <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-slate-600" />
             <p className="text-sm font-bold">Belum ada laporan kejadian aktif.</p>
-            <p className="text-xs text-slate-500 mt-1">Situasi site KM 92 kondusif aman.</p>
+            <p className="text-xs text-slate-500 mt-1">Situasi site {user?.siteId || 'penugasan'} terpantau kondusif.</p>
             {canCreate ? <button
               onClick={() => setShowCreateModal(true)}
               className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2 text-xs font-black text-white transition hover:bg-amber-500"
@@ -442,6 +442,7 @@ export const IncidentView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         isOpen={showCameraModal}
         onClose={() => setShowCameraModal(false)}
         onCapture={(base64) => setPhotoUrls((items) => items.length < 5 ? [...items, base64] : items)}
+        siteLabel={activeSession?.siteId}
       />
     </div>
   );
