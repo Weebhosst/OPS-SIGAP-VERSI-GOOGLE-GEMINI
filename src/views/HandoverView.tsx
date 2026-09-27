@@ -2,7 +2,7 @@
  * OPS SIGAP — Handover / Serah Terima Jaga Module
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText,
   ArrowLeft,
@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { ShiftHandover, ConditionStatus, PatrolSession, Site } from '../types/ops';
 import { CameraCaptureModal } from '../components/CameraCaptureModal';
-import { OpsNoticeDialog, type OpsDialogTone } from '../components/OpsDialog';
+import { OpsConfirmDialog, OpsNoticeDialog, type OpsDialogTone } from '../components/OpsDialog';
 
 export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () => void }> = ({ onBack, onProceedPatrol }) => {
   const { user } = useAuth();
@@ -40,11 +40,11 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
   const [itemName, setItemName] = useState('');
   const [itemQuantity, setItemQuantity] = useState('');
   const [itemCondition, setItemCondition] = useState('BAIK');
-  const [handedFrom, setHandedFrom] = useState('');
   const [toUserId, setToUserId] = useState('');
   const [isTaruna, setIsTaruna] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string; tone: OpsDialogTone } | null>(null);
+  const [ackTarget, setAckTarget] = useState<ShiftHandover | null>(null);
 
   const loadHandovers = async () => {
     try {
@@ -93,7 +93,6 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
         itemName,
         itemQuantity,
         itemCondition,
-        handedFrom,
         toUserId,
         isTaruna,
       });
@@ -105,7 +104,15 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
         setItemQuantity('');
         setToUserId('');
         setOutstandingIssues('');
+        setConditionStatus('BAIK');
+        setItemCondition('BAIK');
+        setIsTaruna(false);
         await loadHandovers();
+        setNotice({
+          title: 'Serah Terima Tersimpan',
+          message: 'Data berhasil disimpan dan menunggu konfirmasi dari anggota penerima.',
+          tone: 'success',
+        });
       }
     } catch (err: any) {
       setNotice({ title: 'Serah Terima Gagal', message: err.message || 'Gagal menyimpan serah terima jaga.', tone: 'danger' });
@@ -141,13 +148,42 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
   };
 
   const canCreate = user?.role === 'ANGGOTA';
-  const filteredHandovers = handovers.filter((handover) => activeTab === 'SERTIGAS' ? handover.handoverType === 'NAIK_JAGA' || handover.handoverType === 'TURUN_JAGA' : handover.handoverType === 'SERAH_TERIMA');
+  const filteredHandovers = useMemo(
+    () =>
+      handovers
+        .filter((handover) =>
+          activeTab === 'SERTIGAS'
+            ? handover.handoverType === 'NAIK_JAGA' || handover.handoverType === 'TURUN_JAGA'
+            : handover.handoverType === 'SERAH_TERIMA',
+        )
+        .sort((a, b) => new Date(b.eventAt).getTime() - new Date(a.eventAt).getTime()),
+    [activeTab, handovers],
+  );
+
+  const incomingPending = handovers.filter(
+    (handover) =>
+      handover.handoverType === 'SERAH_TERIMA'
+      && handover.toUserId === user?.id
+      && handover.status !== 'ACKNOWLEDGED',
+  ).length;
+  const outgoingPending = handovers.filter(
+    (handover) =>
+      handover.handoverType === 'SERAH_TERIMA'
+      && handover.fromUserId === user?.id
+      && handover.status !== 'ACKNOWLEDGED',
+  ).length;
 
   const handleAcknowledge = async (id: string) => {
     try {
       const res = await api.ackHandover(id);
       if (res.success) {
+        setAckTarget(null);
         await loadHandovers();
+        setNotice({
+          title: 'Serah Terima Diterima',
+          message: 'Konfirmasi penerimaan sudah tercatat pada sistem.',
+          tone: 'success',
+        });
       }
     } catch (err: any) {
       setNotice({ title: 'Konfirmasi Gagal', message: err.message || 'Gagal mengonfirmasi serah terima.', tone: 'danger' });
@@ -184,6 +220,20 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
 
       <main className="mx-auto max-w-md space-y-3 px-4 pt-4">
         <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-2 shadow-lg shadow-black/10"><button onClick={() => setActiveTab('SERTIGAS')} className={`min-h-10 rounded-xl px-3 py-2 text-xs font-black transition ${activeTab === 'SERTIGAS' ? 'bg-blue-600' : 'text-slate-400'}`}>SERTIGAS</button><button onClick={() => setActiveTab('BARANG')} className={`min-h-10 rounded-xl px-3 py-2 text-xs font-black transition ${activeTab === 'BARANG' ? 'bg-blue-600' : 'text-slate-400'}`}>SERAH TERIMA BARANG</button></div>
+        {activeTab === 'BARANG' ? (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl border border-amber-800/60 bg-amber-950/25 p-3">
+              <p className="text-[9px] font-black uppercase tracking-wider text-amber-300">Untuk Saya</p>
+              <p className="mt-1 text-2xl font-black text-white">{incomingPending}</p>
+              <p className="text-[10px] text-slate-400">menunggu konfirmasi</p>
+            </div>
+            <div className="rounded-2xl border border-blue-800/60 bg-blue-950/25 p-3">
+              <p className="text-[9px] font-black uppercase tracking-wider text-blue-300">Dari Saya</p>
+              <p className="mt-1 text-2xl font-black text-white">{outgoingPending}</p>
+              <p className="text-[10px] text-slate-400">belum diterima</p>
+            </div>
+          </div>
+        ) : null}
         {filteredHandovers.length === 0 ? (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-center text-slate-400 shadow-lg shadow-black/10">
             <FileText className="mx-auto mb-3 h-10 w-10 text-slate-600" />
@@ -220,6 +270,13 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
                   <div className="mt-1 font-mono text-[11px] text-slate-400">
                     {h.shiftCode} • {new Date(h.eventAt).toLocaleTimeString('id-ID')} WIB
                   </div>
+                  {h.handoverType === 'SERAH_TERIMA' ? (
+                    <p className={`mt-1 text-[10px] font-bold ${
+                      h.toUserId === user?.id ? 'text-amber-300' : h.fromUserId === user?.id ? 'text-blue-300' : 'text-slate-500'
+                    }`}>
+                      {h.toUserId === user?.id ? 'MASUK UNTUK SAYA' : h.fromUserId === user?.id ? 'DIKIRIM DARI SAYA' : 'MONITORING SITE'}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="text-right">
@@ -271,7 +328,7 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
               {/* Ack Action — only field members can acknowledge. Monitoring roles are read-only. */}
               {h.status !== 'ACKNOWLEDGED' && user?.role === 'ANGGOTA' && h.toUserId === user?.id && h.fromUserId !== user?.id ? (
                 <button
-                  onClick={() => handleAcknowledge(h.id)}
+                  onClick={() => setAckTarget(h)}
                   className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
                 >
                   <UserCheck className="w-4 h-4" />
@@ -300,8 +357,32 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
 
             <form onSubmit={handleCreateHandover} className="space-y-4 text-xs">
               <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-slate-300"><div>Member: <b>{user?.name}</b> ({user?.npk})</div><div>Customer: {activeSession?.customerId} • Site: {activeSession?.siteId}</div><div>{activeSession?.shiftCode} • Operational Date {activeSession?.shiftDate}</div></div>
-              <div className="grid grid-cols-2 gap-2"><label className="font-semibold">Jenis / Nama Barang atau Taruna<input required value={itemName} onChange={(e) => setItemName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Jumlah<input required value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Diserahkan Dari<input required value={handedFrom} onChange={(e) => setHandedFrom(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Penerima Akun<select required value={toUserId} onChange={(e) => setToUserId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"><option value="">Pilih Anggota</option>{siteMembers.map((member) => <option key={member.id} value={member.id}>{member.name} • {member.npk}</option>)}</select></label></div>
-              <label className="block font-semibold">Kondisi Barang<input required value={itemCondition} onChange={(e) => setItemCondition(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="font-semibold">Nama Barang / TARUNA
+                  <input required value={itemName} onChange={(e) => setItemName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" />
+                </label>
+                <label className="font-semibold">Jumlah
+                  <input required value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" />
+                </label>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Penyerah</p>
+                <p className="mt-1 text-xs font-black text-slate-200">{user?.name} • {user?.npk}</p>
+                <p className="mt-1 text-[10px] text-slate-500">Identitas penyerah diambil otomatis dari akun login.</p>
+              </div>
+              <label className="block font-semibold">Penerima Akun
+                <select required value={toUserId} onChange={(e) => setToUserId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15">
+                  <option value="">Pilih Anggota penerima</option>
+                  {siteMembers.map((member) => <option key={member.id} value={member.id}>{member.name} • {member.npk}</option>)}
+                </select>
+              </label>
+              <label className="block font-semibold">Kondisi Barang
+                <select required value={itemCondition} onChange={(e) => setItemCondition(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15">
+                  <option value="BAIK">BAIK</option>
+                  <option value="PERLU_PERHATIAN">PERLU PERHATIAN</option>
+                  <option value="BERMASALAH">BERMASALAH</option>
+                </select>
+              </label>
               <div><span className="font-semibold">Apakah ini TARUNA / dokumentasi khusus?</span><div className="mt-1 grid grid-cols-2 gap-2"><button type="button" onClick={() => setIsTaruna(false)} className={`min-h-10 rounded-xl px-3 py-2 font-black transition ${!isTaruna ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button type="button" onClick={() => setIsTaruna(true)} className={`min-h-10 rounded-xl px-3 py-2 font-black transition ${isTaruna ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>
 
               <div>
@@ -449,6 +530,27 @@ export const HandoverView: React.FC<{ onBack: () => void; onProceedPatrol?: () =
           </div>
         </div>
       ) : null}
+
+      <OpsConfirmDialog
+        isOpen={!!ackTarget}
+        onCancel={() => setAckTarget(null)}
+        onConfirm={() => ackTarget ? handleAcknowledge(ackTarget.id) : Promise.resolve()}
+        title="Konfirmasi Serah Terima"
+        message={ackTarget
+          ? `Pastikan barang / informasi dari ${ackTarget.handedFrom || 'petugas sebelumnya'} sudah diterima dan diperiksa.`
+          : 'Pastikan serah terima sudah diterima.'}
+        tone="warning"
+        confirmLabel="YA, SAYA TERIMA"
+        cancelLabel="BATAL"
+      >
+        {ackTarget ? (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs leading-5">
+            <p className="font-black text-white">{ackTarget.itemName || 'Serah Terima'}</p>
+            <p className="mt-1 text-slate-400">Jumlah {ackTarget.itemQuantity || '-'} • {ackTarget.itemCondition || '-'}</p>
+            {ackTarget.outstandingIssues ? <p className="mt-2 text-amber-300">{ackTarget.outstandingIssues}</p> : null}
+          </div>
+        ) : null}
+      </OpsConfirmDialog>
 
       <OpsNoticeDialog
         isOpen={!!notice}
