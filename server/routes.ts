@@ -1710,40 +1710,66 @@ apiRouter.delete('/admin/validation-alerts/:id', authMiddleware, requireAdmin, a
 });
 
 // Admin User Management
-apiRouter.get('/admin/users', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
+apiRouter.get('/admin/users', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const page = await repositories.users.list({ limit: 500, offset: 0 });
-  const users = page.items.map(({ passwordHash, ...user }) => user);
+  const scopedUsers = customerId
+    ? page.items.filter((user) => user.customerId === customerId)
+    : page.items;
+  const users = scopedUsers.map(({ passwordHash, ...user }) => user);
   res.json({ success: true, users });
 });
 
-apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
+apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const [customersPage, sitesPage, usersPage, checkpointsPage, activeSessionsPage] = await Promise.all([
     repositories.customers.list({ limit: 500, offset: 0 }),
     repositories.sites.list({ limit: 500, offset: 0 }),
     repositories.users.list({ limit: 500, offset: 0 }),
     repositories.checkpoints.list({ limit: 500, offset: 0 }),
-    repositories.sessions.listFiltered({ status: 'ACTIVE' }, { limit: 500, offset: 0 }),
+    repositories.sessions.listFiltered(
+      { status: 'ACTIVE', ...(customerId ? { customerId } : {}) },
+      { limit: 500, offset: 0 },
+    ),
   ]);
-  const customersById = new Map(customersPage.items.map((customer) => [customer.id, customer]));
+
+  const customers = customerId
+    ? customersPage.items.filter((customer) => customer.id === customerId)
+    : customersPage.items;
+  const scopedSites = customerId
+    ? sitesPage.items.filter((site) => site.customerId === customerId)
+    : sitesPage.items;
+  const scopedSiteIds = new Set(scopedSites.map((site) => site.id));
+  const customersById = new Map(customers.map((customer) => [customer.id, customer]));
+
   const activeCountBySite = new Map<string, number>();
   for (const session of activeSessionsPage.items) {
     activeCountBySite.set(session.siteId, (activeCountBySite.get(session.siteId) || 0) + 1);
   }
-  const sites = sitesPage.items.map((site) => ({
+
+  const sites = scopedSites.map((site) => ({
     ...site,
     customer: customersById.get(site.customerId) || null,
     activeCount: activeCountBySite.get(site.id) || 0,
   }));
   const personnel = usersPage.items
     .filter((user) => user.role === 'ANGGOTA')
+    .filter((user) => !customerId || user.customerId === customerId)
     .map(({ passwordHash, ...user }) => user);
+  const checkpoints = customerId
+    ? checkpointsPage.items.filter((checkpoint) => scopedSiteIds.has(checkpoint.siteId))
+    : checkpointsPage.items;
 
   res.json({
     success: true,
-    customers: customersPage.items,
+    customers,
     sites,
     personnel,
-    checkpoints: checkpointsPage.items,
+    checkpoints,
   });
 });
 
