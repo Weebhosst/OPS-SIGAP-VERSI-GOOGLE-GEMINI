@@ -52,12 +52,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export const api = {
   // Auth
   login: (npk: string, password: string) =>
-    request<{ success: boolean; user: User }>('/auth/login', {
+    request<{ success: boolean; user: User; sessionExpiresAt?: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ npk, password }),
     }),
 
-  getMe: () => request<{ success: boolean; user: User }>('/auth/me'),
+  getMe: () => request<{ success: boolean; user: User; sessionExpiresAt?: string }>('/auth/me'),
 
   logout: () =>
     request<{ success: boolean }>('/auth/logout', {
