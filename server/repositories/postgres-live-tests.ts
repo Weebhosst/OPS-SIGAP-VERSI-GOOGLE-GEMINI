@@ -281,6 +281,8 @@ try {
   assert.equal((await repositories.alerts.transition(alert!.id, 'REVIEW', userOne.id)).status, 'UNDER_REVIEW');
   assert.equal((await repositories.alerts.transition(alert!.id, 'CLOSE', userOne.id, 'Integration verified')).status, 'CLOSED');
   assert.equal((await repositories.alerts.transition(alert!.id, 'REOPEN', userOne.id)).status, 'OPEN');
+  assert.equal((await repositories.alerts.remove(alert!.id))?.id, alert!.id);
+  assert.equal(await repositories.alerts.findById(alert!.id), undefined);
 
   const handoverId = `HND-PG-${suffix}`;
   await repositories.handovers.create({
@@ -448,6 +450,18 @@ try {
   });
   assert.equal(sessionTwo.status, 'ACTIVE', 'Setelah force close, slot capacity harus tersedia kembali.');
 
+  await assert.rejects(
+    () => repositories.users.remove(userOne.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
+    'Personel PostgreSQL dengan histori operasional tidak boleh hard-delete.',
+  );
+  await assert.rejects(
+    () => repositories.sites.remove(site.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'SITE_IN_USE',
+    'Site PostgreSQL dengan histori operasional tidak boleh hard-delete.',
+  );
+
+  console.log('PASS PostgreSQL destructive-action guards and disposable deletes');
   console.log('PASS PostgreSQL migrations apply and are idempotent');
   console.log('PASS JSON -> PostgreSQL live import and idempotency');
   console.log('PASS PostgreSQL provider health and imported data visibility');
