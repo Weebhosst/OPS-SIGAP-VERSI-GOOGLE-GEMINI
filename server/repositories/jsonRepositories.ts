@@ -285,6 +285,7 @@ export const jsonRepositories: RepositoryBundle = {
       }
       return db.updateValidationAlert(id, updates)!;
     },
+    remove: async (id) => db.deleteValidationAlert(id),
   },
 
   adminState: {
