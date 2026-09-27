@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { ShiftInfo, PatrolSession, MediaGalleryItem, ShiftHandover } from '../types/ops';
+import { ShiftInfo, PatrolSession, MediaGalleryItem, ShiftHandover, Site } from '../types/ops';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
 interface MemberHomeProps {
@@ -34,6 +34,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
   const [completedRounds, setCompletedRounds] = useState(0);
   const [targetRounds, setTargetRounds] = useState(1);
   const [activeSession, setActiveSession] = useState<PatrolSession | null>(null);
+  const [siteInfo, setSiteInfo] = useState<Site | null>(null);
   const [recentMedia, setRecentMedia] = useState<MediaGalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [startingPatrol, setStartingPatrol] = useState(false);
@@ -50,6 +51,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
 
       if (progressRes.success) {
         setShiftInfo(progressRes.shift);
+        setSiteInfo(progressRes.site || null);
         setCompletedRounds(progressRes.completedRounds);
         setTargetRounds(progressRes.targetRounds || 1);
       }
@@ -107,10 +109,10 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
               <div className="flex items-center gap-1.5">
                 <span className="text-base font-black tracking-tight text-white">OPS SIGAP</span>
                 <span className="rounded-md border border-blue-700/60 bg-blue-900/50 px-1.5 py-0.5 font-mono text-[9px] font-bold text-blue-300">
-                  BB92
+                  {siteInfo?.code || siteInfo?.id || user?.siteId || 'SITE'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Barang Bukti KM 92</p>
+              <p className="text-[11px] text-slate-400 font-medium">{siteInfo?.name || 'Site penugasan aktif'}</p>
             </div>
           </div>
 
