@@ -638,6 +638,13 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
   const session = await repositories.sessions.findById(req.params.id);
   if (!session || session.userId !== req.user!.id) return res.status(404).json({ success: false, error: 'Active session milik Anda tidak ditemukan.' });
   if (session.status !== 'ACTIVE') return res.status(409).json({ success: false, error: 'Session sudah tidak aktif.' });
+  if (!session.startDocumentationCompleted) {
+    return res.status(409).json({
+      success: false,
+      code: 'START_DOCUMENTATION_REQUIRED',
+      error: 'Sertigas Naik Jaga wajib diselesaikan sebelum shift dapat ditutup.',
+    });
+  }
 
   const [activeCheckpointsRaw, site, validLogsAll] = await Promise.all([
     repositories.checkpoints.listBySite(session.siteId),
@@ -668,11 +675,41 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
 
   const hasSpecialHandover = req.body.hasSpecialHandover === true;
   const specialNotes = String(req.body.specialNotes || '').trim();
+  const specialToUserId = String(req.body.specialToUserId || '').trim();
   const specialPhotoUrls = Array.isArray(req.body.specialPhotoUrls)
     ? req.body.specialPhotoUrls.filter((item: unknown) => typeof item === 'string' && item)
     : [];
-  if (hasSpecialHandover && (!specialNotes || specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5)) {
-    return res.status(400).json({ success: false, error: !specialNotes ? 'Catatan TARUNA wajib diisi.' : 'Dokumentasi TARUNA minimal 3 dan maksimal 5 foto.' });
+
+  let specialRecipient: User | null = null;
+  if (hasSpecialHandover) {
+    if (!specialNotes) {
+      return res.status(400).json({ success: false, code: 'SPECIAL_HANDOVER_NOTES_REQUIRED', error: 'Catatan TARUNA wajib diisi.' });
+    }
+    if (specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5) {
+      return res.status(400).json({ success: false, code: 'SPECIAL_HANDOVER_PHOTOS_INVALID', error: 'Dokumentasi TARUNA minimal 3 dan maksimal 5 foto.' });
+    }
+    if (!specialToUserId) {
+      return res.status(400).json({
+        success: false,
+        code: 'SPECIAL_HANDOVER_RECIPIENT_REQUIRED',
+        error: 'Penerima TARUNA / serah terima khusus wajib dipilih.',
+      });
+    }
+
+    specialRecipient = await repositories.users.findById(specialToUserId) || null;
+    if (
+      !specialRecipient
+      || specialRecipient.role !== 'ANGGOTA'
+      || specialRecipient.status !== 'ACTIVE'
+      || specialRecipient.siteId !== session.siteId
+      || specialRecipient.id === req.user!.id
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: 'SPECIAL_HANDOVER_RECIPIENT_INVALID',
+        error: 'Penerima TARUNA tidak valid atau berada di luar Site penugasan.',
+      });
+    }
   }
 
   const now = new Date().toISOString();
@@ -722,6 +759,7 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
         shiftCode: session.shiftCode,
         handoverType: 'SERAH_TERIMA',
         fromUserId: req.user!.id,
+        toUserId: specialRecipient!.id,
         eventAt: now,
         photoUrl: specialUrls[0],
         photoUrls: specialUrls,
@@ -732,6 +770,11 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
         vehicleStatus: '-',
         outstandingIssues: specialNotes,
         handoverNotes: specialNotes,
+        itemName: 'TARUNA / Serah Terima Khusus',
+        itemQuantity: '1',
+        itemCondition: 'PERLU_PERHATIAN',
+        handedFrom: req.user!.name,
+        handedTo: specialRecipient!.name,
         isTaruna: true,
         ackFrom: true,
         ackTo: false,
@@ -842,6 +885,7 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
         checkpoint: `${session.totalValid}/${session.totalRequired}`,
         endDocumentationAt: now,
         evidenceCount: preparedEvidence.length,
+        specialHandoverRecipientId: specialRecipient?.id || null,
         storageProvider: endPrepared.storageProvider,
       },
       reason: 'Normal close setelah checkpoint dan Turun Jaga lengkap',
