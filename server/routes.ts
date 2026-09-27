@@ -203,6 +203,57 @@ function sendRepositoryError(res: Response, error: unknown): boolean {
   return true;
 }
 
+const fieldWriteWindows = new Map<string, { startedAt: number; count: number }>();
+
+function fieldWriteRateLimit(maxRequests: number, windowMs = 60_000) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+
+    const now = Date.now();
+    if (fieldWriteWindows.size > 5000) {
+      for (const [key, value] of fieldWriteWindows) {
+        if (now - value.startedAt > windowMs) fieldWriteWindows.delete(key);
+      }
+    }
+
+    const routeKey = String(req.route?.path || req.path || 'field-write');
+    const key = `${userId}:${routeKey}`;
+    const existing = fieldWriteWindows.get(key);
+    const current = !existing || now - existing.startedAt >= windowMs
+      ? { startedAt: now, count: 0 }
+      : existing;
+
+    current.count += 1;
+    fieldWriteWindows.set(key, current);
+
+    if (current.count > maxRequests) {
+      const retryAfter = Math.max(1, Math.ceil((current.startedAt + windowMs - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({
+        success: false,
+        code: 'FIELD_WRITE_RATE_LIMITED',
+        error: 'Terlalu banyak permintaan operasional. Tunggu sebentar lalu coba kembali.',
+      });
+    }
+
+    next();
+  };
+}
+
+function normalizedText(value: unknown, maxLength: number): string {
+  return String(value ?? '').trim().slice(0, maxLength);
+}
+
+function parseOptionalCoordinate(value: unknown, min: number, max: number): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new RepositoryError('GPS_COORDINATES_INVALID', 'Koordinat GPS tidak valid.', 400);
+  }
+  return parsed;
+}
+
 // -------------------------------------------------------------
 // AUTH ROUTES
 // -------------------------------------------------------------
@@ -226,6 +277,16 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   }
 
   const cleanNpk = String(npk).trim();
+  const cleanPassword = String(password);
+  if (!cleanNpk || cleanNpk.length > 64 || cleanPassword.length > 256) {
+    return res.status(400).json({ success: false, error: 'Format NPK atau Password tidak valid.' });
+  }
+  if (loginAttempts.size > 5000) {
+    const now = Date.now();
+    for (const [key, value] of loginAttempts) {
+      if (!value.blockedUntil || value.blockedUntil <= now) loginAttempts.delete(key);
+    }
+  }
   const attemptKey = `${req.ip || 'unknown'}:${cleanNpk}`;
   const record = loginAttempts.get(attemptKey);
   if (record?.blockedUntil && record.blockedUntil > Date.now()) {
@@ -247,12 +308,12 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   }
 
   if (!user) {
-    bcrypt.compareSync(String(password), DUMMY_PASSWORD_HASH);
+    bcrypt.compareSync(cleanPassword, DUMMY_PASSWORD_HASH);
     registerLoginFailure(attemptKey, record);
     return res.status(401).json({ success: false, error: 'NPK atau Password salah.' });
   }
 
-  const validPassword = bcrypt.compareSync(String(password), user.passwordHash);
+  const validPassword = bcrypt.compareSync(cleanPassword, user.passwordHash);
   if (!validPassword) {
     registerLoginFailure(attemptKey, record);
     return res.status(401).json({ success: false, error: 'NPK atau Password salah.' });
@@ -462,7 +523,7 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
   });
 });
 
-apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
   const siteId = resolveFieldSiteId(req, res);
   if (!siteId) return;
   const existingOpen = await repositories.sessions.getActiveByUser(req.user!.id);
@@ -529,7 +590,7 @@ apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, asyn
   }
 });
 
-apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
   const photoUrl = String(req.body.photoUrl || '').trim();
   if (!photoUrl) return res.status(400).json({ success: false, error: 'Foto Sertigas Naik Jaga wajib diambil.' });
 
@@ -636,7 +697,7 @@ apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requir
   }
 });
 
-apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
   const session = await repositories.sessions.findById(req.params.id);
   if (!session || session.userId !== req.user!.id) return res.status(404).json({ success: false, error: 'Active session milik Anda tidak ditemukan.' });
   if (session.status !== 'ACTIVE') return res.status(409).json({ success: false, error: 'Session sudah tidak aktif.' });
@@ -901,7 +962,7 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
   }
 });
 
-apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, fieldWriteRateLimit(30), async (req: AuthenticatedRequest, res: Response) => {
   const {
     sessionId,
     qrToken,
@@ -912,7 +973,6 @@ apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, async (req: A
     observationStatus,
     notes,
     clientCapturedAt,
-    syncSource,
     idempotencyId,
   } = req.body;
 
@@ -930,22 +990,29 @@ apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, async (req: A
     });
   }
 
-  const result = await validateAndProcessScan({
-    sessionId,
-    qrToken,
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-    gpsAccuracyM: gpsAccuracyM ? Number(gpsAccuracyM) : undefined,
-    photoUrl,
-    observationStatus,
-    notes,
-    clientCapturedAt,
-    syncSource,
-    idempotencyId,
-    userId: req.user!.id,
-  });
+  try {
+    const result = await validateAndProcessScan({
+      sessionId: String(sessionId),
+      qrToken: String(qrToken),
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      gpsAccuracyM: gpsAccuracyM === undefined || gpsAccuracyM === null || gpsAccuracyM === ''
+        ? undefined
+        : Number(gpsAccuracyM),
+      photoUrl: typeof photoUrl === 'string' ? photoUrl : undefined,
+      observationStatus,
+      notes: normalizedText(notes, 2000) || undefined,
+      clientCapturedAt,
+      syncSource: 'ONLINE',
+      idempotencyId: idempotencyId ? String(idempotencyId) : undefined,
+      userId: req.user!.id,
+    });
 
-  res.json({ success: true, ...result });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    if (sendRepositoryError(res, error)) return;
+    throw error;
+  }
 });
 
 apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
@@ -1004,7 +1071,9 @@ apiRouter.get('/handover', authMiddleware, async (req: AuthenticatedRequest, res
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
     if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
   } else if (!isAdministrator(req.user!.role)) {
-    if (req.user!.siteId) filter.siteId = req.user!.siteId;
+    const siteId = resolveFieldSiteId(req, res);
+    if (!siteId) return;
+    filter.siteId = siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
     if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
@@ -1013,11 +1082,10 @@ apiRouter.get('/handover', authMiddleware, async (req: AuthenticatedRequest, res
   res.json({ success: true, handovers: page.items });
 });
 
-apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/handover', authMiddleware, requireFieldMember, fieldWriteRateLimit(20), async (req: AuthenticatedRequest, res: Response) => {
   const {
     handoverType,
     toUserId,
-    eventAt,
     latitude,
     longitude,
     photoUrl,
@@ -1032,7 +1100,6 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     itemName,
     itemQuantity,
     itemCondition,
-    handedFrom,
     isTaruna,
   } = req.body;
 
@@ -1072,8 +1139,19 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
   const evidencePhotos = Array.isArray(photoUrls)
     ? photoUrls.filter((item: unknown) => typeof item === 'string' && item)
     : (photoUrl ? [photoUrl] : []);
-  if (!itemName || !itemQuantity || !itemCondition) {
+
+  const normalizedItemName = normalizedText(itemName, 160);
+  const normalizedItemQuantity = normalizedText(itemQuantity, 80);
+  const normalizedItemCondition = normalizedText(itemCondition, 40).toUpperCase();
+  const normalizedConditionStatus = normalizedText(conditionStatus || 'BAIK', 40).toUpperCase();
+  const allowedItemConditions = new Set(['BAIK', 'PERLU_PERHATIAN', 'BERMASALAH']);
+  const allowedConditionStatuses = new Set(['BAIK', 'PERLU_PERHATIAN', 'BERMASALAH']);
+
+  if (!normalizedItemName || !normalizedItemQuantity || !normalizedItemCondition) {
     return res.status(400).json({ success: false, error: 'Nama barang, jumlah, dan kondisi wajib diisi.' });
+  }
+  if (!allowedItemConditions.has(normalizedItemCondition) || !allowedConditionStatuses.has(normalizedConditionStatus)) {
+    return res.status(400).json({ success: false, code: 'HANDOVER_CONDITION_INVALID', error: 'Kondisi serah terima tidak valid.' });
   }
   if (!isTaruna && evidencePhotos.length < 1) {
     return res.status(400).json({ success: false, error: 'Dokumentasi Serah Terima Barang wajib diisi.' });
@@ -1113,24 +1191,24 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     handoverType: 'SERAH_TERIMA',
     fromUserId: req.user!.id,
     toUserId: recipient.id,
-    eventAt: eventAt || now,
-    latitude: latitude ? Number(latitude) : null,
-    longitude: longitude ? Number(longitude) : null,
+    eventAt: now,
+    latitude: parseOptionalCoordinate(latitude, -90, 90),
+    longitude: parseOptionalCoordinate(longitude, -180, 180),
     photoUrl: preparedUrls[0] || null,
     photoUrls: preparedUrls,
-    itemName,
-    itemQuantity: String(itemQuantity),
-    itemCondition,
+    itemName: normalizedItemName,
+    itemQuantity: normalizedItemQuantity,
+    itemCondition: normalizedItemCondition,
     handedFrom: req.user!.name,
     handedTo: recipient.name,
     isTaruna: !!isTaruna,
-    conditionStatus: conditionStatus || 'BAIK',
+    conditionStatus: normalizedConditionStatus as ShiftHandover['conditionStatus'],
     personnelStatus: personnelStatus || 'Lengkap sesuai regu',
     equipmentStatus: equipmentStatus || 'Lengkap & berfungsi normal',
     keysStatus: keysStatus || 'Kunci pos & portal lengkap',
     vehicleStatus: vehicleStatus || 'Inventaris operasional aman',
-    outstandingIssues: outstandingIssues || '',
-    handoverNotes: handoverNotes || '',
+    outstandingIssues: normalizedText(outstandingIssues, 2000),
+    handoverNotes: normalizedText(handoverNotes, 2000),
     ackFrom: true,
     ackTo: false,
     status: 'SUBMITTED',
@@ -1200,7 +1278,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
   }
 });
 
-apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, fieldWriteRateLimit(30), async (req: AuthenticatedRequest, res: Response) => {
   const siteId = resolveFieldSiteId(req, res);
   if (!siteId) return;
 
@@ -1267,7 +1345,9 @@ apiRouter.get('/incidents', authMiddleware, async (req: AuthenticatedRequest, re
     if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
     if (req.query.status) filter.status = String(req.query.status);
   } else if (!isAdministrator(req.user!.role)) {
-    if (req.user!.siteId) filter.siteId = req.user!.siteId;
+    const siteId = resolveFieldSiteId(req, res);
+    if (!siteId) return;
+    filter.siteId = siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
     if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
@@ -1277,7 +1357,7 @@ apiRouter.get('/incidents', authMiddleware, async (req: AuthenticatedRequest, re
   res.json({ success: true, incidents: page.items });
 });
 
-apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/incidents', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
   const {
     category,
     severity,
@@ -1303,13 +1383,13 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
 
   const allowedCategories = new Set(['INSIDENTIL', 'MENONJOL', 'KEAMANAN', 'K3', 'KECELAKAAN', 'KERUSAKAN', 'KEHILANGAN', 'LAINNYA']);
   const allowedSeverities = new Set(['RENDAH', 'SEDANG', 'TINGGI', 'KRITIS']);
-  const normalizedTitle = String(title || '').trim();
-  const normalizedLocation = String(locationText || '').trim();
-  const normalizedChronology = String(chronology || '').trim();
-  const normalizedInitialAction = String(initialAction || '').trim();
+  const normalizedTitle = normalizedText(title, 160);
+  const normalizedLocation = normalizedText(locationText, 240);
+  const normalizedChronology = normalizedText(chronology, 4000);
+  const normalizedInitialAction = normalizedText(initialAction, 2000);
   const normalizedCategory = String(category || 'INSIDENTIL').trim().toUpperCase();
   const normalizedSeverity = String(severity || 'RENDAH').trim().toUpperCase();
-  const normalizedEscalatedTo = String(escalatedTo || '').trim();
+  const normalizedEscalatedTo = normalizedText(escalatedTo, 160);
 
   if (!normalizedTitle || !normalizedLocation || !normalizedChronology || !normalizedInitialAction) {
     return res.status(400).json({ success: false, error: 'Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.' });
@@ -1371,20 +1451,20 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     severity: normalizedSeverity as IncidentReport['severity'],
     title: normalizedTitle,
     locationText: normalizedLocation,
-    latitude: latitude ? Number(latitude) : null,
-    longitude: longitude ? Number(longitude) : null,
+    latitude: parseOptionalCoordinate(latitude, -90, 90),
+    longitude: parseOptionalCoordinate(longitude, -180, 180),
     photoUrl: preparedUrls[0],
     photoUrls: preparedUrls,
-    notes: notes || null,
+    notes: normalizedText(notes, 2000) || null,
     chronology: normalizedChronology,
     initialAction: normalizedInitialAction,
-    followUp: followUp || null,
-    personInvolved: personInvolved || null,
-    witness: witness || null,
-    vehicleInvolved: vehicleInvolved || null,
-    assetInvolved: assetInvolved || null,
-    policeReportNo: policeReportNo || null,
-    externalParty: externalParty || null,
+    followUp: normalizedText(followUp, 2000) || null,
+    personInvolved: normalizedText(personInvolved, 500) || null,
+    witness: normalizedText(witness, 500) || null,
+    vehicleInvolved: normalizedText(vehicleInvolved, 500) || null,
+    assetInvolved: normalizedText(assetInvolved, 500) || null,
+    policeReportNo: normalizedText(policeReportNo, 200) || null,
+    externalParty: normalizedText(externalParty, 500) || null,
     status: 'OPEN',
     escalated: !!escalated,
     escalatedTo: escalated ? normalizedEscalatedTo : null,
@@ -1501,7 +1581,8 @@ apiRouter.get('/media/:id/content', authMiddleware, async (req: AuthenticatedReq
   }
 
   if (ref.storageProvider === 'external_url') {
-    if (!/^https?:\/\//i.test(ref.storageKey)) {
+    const allowedExternalPattern = config.isProduction ? /^https:\/\//i : /^https?:\/\//i;
+    if (!allowedExternalPattern.test(ref.storageKey)) {
       return res.status(404).json({ success: false, error: 'Referensi media eksternal tidak valid.' });
     }
     return res.redirect(302, ref.storageKey);
@@ -2677,29 +2758,42 @@ apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, async
 // BATCH OFFLINE QUEUE SYNC
 // -------------------------------------------------------------
 
-apiRouter.post('/sync', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/sync', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
   const { items } = req.body;
   if (!Array.isArray(items)) {
     return res.status(400).json({ success: false, error: 'Payload sync harus berupa array items.' });
+  }
+  if (items.length === 0 || items.length > 50) {
+    return res.status(400).json({
+      success: false,
+      code: 'SYNC_BATCH_SIZE_INVALID',
+      error: 'Sinkronisasi hanya menerima 1 sampai 50 item per batch.',
+    });
   }
 
   const results: any[] = [];
 
   for (const item of items) {
     try {
+      if (!item || typeof item !== 'object') {
+        results.push({ idempotencyId: null, status: 'SYNC_FAILED', error: 'Format item sinkronisasi tidak valid.' });
+        continue;
+      }
       if (item.type === 'PATROL_SCAN') {
         const result = await validateAndProcessScan({
           sessionId: item.sessionId,
           qrToken: item.qrToken,
           latitude: Number(item.latitude),
           longitude: Number(item.longitude),
-          gpsAccuracyM: item.gpsAccuracyM,
-          photoUrl: item.photoUrl,
+          gpsAccuracyM: item.gpsAccuracyM === undefined || item.gpsAccuracyM === null || item.gpsAccuracyM === ''
+            ? undefined
+            : Number(item.gpsAccuracyM),
+          photoUrl: typeof item.photoUrl === 'string' ? item.photoUrl : undefined,
           observationStatus: item.observationStatus,
-          notes: item.notes,
+          notes: normalizedText(item.notes, 2000) || undefined,
           clientCapturedAt: item.clientCapturedAt,
           syncSource: 'OFFLINE_QUEUE',
-          idempotencyId: item.idempotencyId,
+          idempotencyId: item.idempotencyId ? String(item.idempotencyId) : undefined,
           userId: req.user!.id,
         });
         results.push({
@@ -2715,11 +2809,13 @@ apiRouter.post('/sync', authMiddleware, requireFieldMember, async (req: Authenti
           message: 'Tipe item tidak dikenali',
         });
       }
-    } catch (err: any) {
+    } catch (error: any) {
+      const controlled = error instanceof RepositoryError;
       results.push({
-        idempotencyId: item.idempotencyId,
+        idempotencyId: item?.idempotencyId || null,
         status: 'SYNC_FAILED',
-        error: err.message || 'Gagal memproses item',
+        code: controlled ? error.code : 'SYNC_ITEM_FAILED',
+        error: controlled ? error.message : 'Gagal memproses item sinkronisasi.',
       });
     }
   }
