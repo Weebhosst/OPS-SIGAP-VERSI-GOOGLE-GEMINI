@@ -87,6 +87,7 @@ export interface CheckpointRepository {
 export interface StartSessionInput { session: PatrolSession; personnelCapacity: number }
 export interface SessionFilter {
   userId?: string;
+  customerId?: string;
   siteId?: string;
   shiftCode?: ShiftCode;
   status?: PatrolSession['status'];
@@ -114,6 +115,7 @@ export interface PatrolRepository {
 }
 
 export interface HandoverFilter {
+  customerId?: string;
   siteId?: string;
   shiftCode?: ShiftCode;
   userId?: string;
@@ -126,6 +128,7 @@ export interface HandoverRepository {
 }
 
 export interface IncidentFilter {
+  customerId?: string;
   siteId?: string;
   shiftCode?: ShiftCode;
   userId?: string;
