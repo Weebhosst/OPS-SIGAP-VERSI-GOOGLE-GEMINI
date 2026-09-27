@@ -743,11 +743,6 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         onScanSuccess={handleQrDetected}
         expectedCheckpointCode={activeCpForScan?.code}
         expectedCheckpointName={activeCpForScan?.name}
-        availableTokens={checkpoints.map((c) => ({
-          code: c.code,
-          name: c.name,
-          token: c.qrToken,
-        }))}
       />
 
       {/* Camera Capture Modal */}
