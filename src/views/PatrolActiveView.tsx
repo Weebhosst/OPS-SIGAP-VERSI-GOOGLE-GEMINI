@@ -65,7 +65,10 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
   const [hasSpecialHandover, setHasSpecialHandover] = useState(false);
   const [specialNotes, setSpecialNotes] = useState('');
   const [specialPhotoUrls, setSpecialPhotoUrls] = useState<string[]>([]);
+  const [specialToUserId, setSpecialToUserId] = useState('');
+  const [closeSiteMembers, setCloseSiteMembers] = useState<Array<{ id: string; name: string; npk: string }>>([]);
   const [endPhotoUrl, setEndPhotoUrl] = useState<string | null>(null);
+  const [completedSession, setCompletedSession] = useState<PatrolSession | null>(null);
   const [cameraMode, setCameraMode] = useState<'CHECKPOINT' | 'SPECIAL' | 'END'>('CHECKPOINT');
   const [validationAlert, setValidationAlert] = useState<{
     type: 'success' | 'error' | 'warning';
@@ -80,6 +83,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       const res = await api.getCurrentSession();
       if (res.success && res.hasOpenSession && res.session) {
         setSession(res.session);
+        setCompletedSession(null);
         setSiteInfo(res.site || null);
         const pendingOffline = await offlineQueue.getPendingForSession(res.session.id);
         const pendingCodes = new Set(
@@ -282,26 +286,97 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
     setShowCameraModal(false);
   };
 
-  const handleOpenCloseShift = () => {
+  const handleOpenCloseShift = async () => {
     if (!session) return;
-    if (session.totalValid < session.totalRequired) {
-      const missing = checkpoints.filter((checkpoint) => checkpoint.statusInRound !== 'VALID').map((checkpoint) => `${checkpoint.code} ${checkpoint.name}`).join(', ');
-      setValidationAlert({ type: 'error', title: 'CLOSE SHIFT DITOLAK', message: `Patroli belum selesai. Checkpoint ${session.totalValid}/${session.totalRequired}. Belum selesai: ${missing}.` });
+    if (!session.startDocumentationCompleted) {
+      setValidationAlert({
+        type: 'error',
+        title: 'NAIK JAGA BELUM SELESAI',
+        message: 'Sertigas Naik Jaga wajib diselesaikan sebelum Turun Jaga.',
+      });
       return;
+    }
+    if (session.totalValid < session.totalRequired) {
+      const missing = checkpoints
+        .filter((checkpoint) => checkpoint.statusInRound !== 'VALID')
+        .map((checkpoint) => `${checkpoint.code} ${checkpoint.name}`)
+        .join(', ');
+      setValidationAlert({
+        type: 'error',
+        title: 'CLOSE SHIFT DITOLAK',
+        message: `Patroli belum selesai. Checkpoint ${session.totalValid}/${session.totalRequired}. Belum selesai: ${missing}.`,
+      });
+      return;
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setValidationAlert({
+        type: 'warning',
+        title: 'KONEKSI DIPERLUKAN',
+        message: 'Turun Jaga adalah penutupan final session dan harus disimpan langsung ke server.',
+      });
+      return;
+    }
+
+    try {
+      const membersRes = await api.getFieldSiteMembers();
+      setCloseSiteMembers(membersRes.success ? membersRes.members : []);
+    } catch {
+      setCloseSiteMembers([]);
     }
     setShowCloseModal(true);
   };
 
   const handleCloseShift = async () => {
     if (!session || !endPhotoUrl) return;
+    if (hasSpecialHandover && !specialToUserId) {
+      setValidationAlert({
+        type: 'warning',
+        title: 'PENERIMA WAJIB DIPILIH',
+        message: 'Pilih Anggota penerima TARUNA / serah terima khusus sebelum menutup shift.',
+      });
+      return;
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setValidationAlert({
+        type: 'warning',
+        title: 'KONEKSI DIPERLUKAN',
+        message: 'Shift belum ditutup. Sambungkan internet lalu kirim Turun Jaga kembali.',
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await api.closePatrolSession(session.id, { endPhotoUrl, hasSpecialHandover, specialNotes, specialPhotoUrls });
+      const res = await api.closePatrolSession(session.id, {
+        endPhotoUrl,
+        hasSpecialHandover,
+        specialNotes,
+        specialPhotoUrls,
+        specialToUserId: hasSpecialHandover ? specialToUserId : undefined,
+      });
+      setCompletedSession(res.session);
       setShowCloseModal(false);
+      setHasSpecialHandover(false);
+      setSpecialNotes('');
+      setSpecialPhotoUrls([]);
+      setSpecialToUserId('');
+      setEndPhotoUrl(null);
       await loadSession();
-      setValidationAlert({ type: 'success', title: 'SHIFT COMPLETED', message: 'Turun Jaga tersimpan dan session berhasil diselesaikan.' });
-    } catch (error: any) { setValidationAlert({ type: 'error', title: 'CLOSE SHIFT DITOLAK', message: error.message || 'Shift belum dapat ditutup.' }); }
-    finally { setSubmitting(false); }
+      setValidationAlert({
+        type: 'success',
+        title: 'SHIFT SELESAI',
+        message: 'Turun Jaga tersimpan. Session telah ditutup dengan status COMPLETED.',
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error: any) {
+      setValidationAlert({
+        type: 'error',
+        title: 'CLOSE SHIFT DITOLAK',
+        message: error.message || 'Shift belum dapat ditutup.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Step 4: Final submission with observation status
