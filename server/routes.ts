@@ -1469,6 +1469,9 @@ apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, 
 // -------------------------------------------------------------
 
 apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const adminId = req.user!.id;
   const storedFilter = await repositories.adminState.get(adminId);
   const filterState = storedFilter || {
@@ -1481,21 +1484,32 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
   };
 
   const { dateString: todayJakarta } = getJakartaDateParts();
-  const siteId = filterState.siteId || undefined;
+  let siteId = filterState.siteId || undefined;
+  let memberUserId = filterState.memberUserId || undefined;
   const shiftCode = filterState.shiftCode || undefined;
-  const memberUserId = filterState.memberUserId || undefined;
 
-  const sessionFilter:any = { status: 'ACTIVE' };
+  if (customerId && siteId) {
+    const selectedSite = await repositories.sites.findById(siteId);
+    if (!selectedSite || selectedSite.customerId !== customerId) siteId = undefined;
+  }
+  if (customerId && memberUserId) {
+    const selectedMember = await repositories.users.findById(memberUserId);
+    if (!selectedMember || selectedMember.customerId !== customerId || selectedMember.role !== 'ANGGOTA') {
+      memberUserId = undefined;
+    }
+  }
+
+  const sessionFilter:any = { status: 'ACTIVE', ...(customerId ? { customerId } : {}) };
   if (siteId) sessionFilter.siteId = siteId;
   if (shiftCode) sessionFilter.shiftCode = shiftCode;
   if (memberUserId) sessionFilter.userId = memberUserId;
 
-  const incidentFilter:any = {};
+  const incidentFilter:any = { ...(customerId ? { customerId } : {}) };
   if (siteId) incidentFilter.siteId = siteId;
   if (shiftCode) incidentFilter.shiftCode = shiftCode;
   if (memberUserId) incidentFilter.userId = memberUserId;
 
-  const handoverFilter:any = {};
+  const handoverFilter:any = { ...(customerId ? { customerId } : {}) };
   if (siteId) handoverFilter.siteId = siteId;
   if (shiftCode) handoverFilter.shiftCode = shiftCode;
   if (memberUserId) handoverFilter.userId = memberUserId;
@@ -1513,15 +1527,21 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
     repositories.incidents.list(incidentFilter, { limit: 500, offset: 0 }),
     repositories.handovers.list(handoverFilter, { limit: 500, offset: 0 }),
     repositories.alerts.list(undefined, { limit: 500, offset: 0 }),
-    getOperationalMedia({ siteId, userId: memberUserId, shiftCode }, { limit: 12, offset: 0 }),
+    getOperationalMedia({ customerId: customerId || undefined, siteId, userId: memberUserId, shiftCode }, { limit: 12, offset: 0 }),
     repositories.sites.list({ limit: 500, offset: 0 }),
     repositories.users.list({ limit: 500, offset: 0 }),
   ]);
+
+  const scopedSites = customerId
+    ? sitesPage.items.filter((site) => site.customerId === customerId)
+    : sitesPage.items;
+  const scopedSiteIds = new Set(scopedSites.map((site) => site.id));
 
   const activePatrols = activeSessionsPage.items;
   const openIncidents = incidentsPage.items.filter((incident) => incident.status !== 'CLOSED');
   const handoversToday = handoversPage.items.filter((handover) => handover.shiftDate === todayJakarta);
   const filteredAlerts = alertsPage.items
+    .filter((alert) => (!customerId || scopedSiteIds.has(alert.siteId)))
     .filter((alert) => (!siteId || alert.siteId === siteId) && (!memberUserId || alert.userId === memberUserId))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const rejectedToday = filteredAlerts.filter((alert) => getJakartaDateParts(new Date(alert.createdAt)).dateString === todayJakarta);
@@ -1538,11 +1558,16 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
 
   const users = usersPage.items
     .filter((user) => user.role === 'ANGGOTA')
+    .filter((user) => !customerId || user.customerId === customerId)
     .map(({ passwordHash, ...user }) => user);
 
   res.json({
     success: true,
-    filterState,
+    filterState: {
+      ...filterState,
+      siteId: siteId || null,
+      memberUserId: memberUserId || null,
+    },
     kpis: {
       patroliAktif: activePatrols.length,
       kejadianOpen: openIncidents.length,
@@ -1557,7 +1582,7 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
       recentMedia: mediaPage.items,
     },
     options: {
-      sites: sitesPage.items,
+      sites: scopedSites,
       users,
       shifts: [
         { code: 'SHIFT_1', name: 'Shift 1 (07:00 - 15:00)' },
@@ -1570,10 +1595,30 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
 
 apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
   const { siteId, shiftCode, memberUserId } = req.body;
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
+  const normalizedSiteId = siteId === '' ? null : siteId;
+  const normalizedMemberId = memberUserId === '' ? null : memberUserId;
+
+  if (customerId && normalizedSiteId) {
+    const selectedSite = await repositories.sites.findById(normalizedSiteId);
+    if (!selectedSite || selectedSite.customerId !== customerId) {
+      return res.status(403).json({ success: false, error: 'Site berada di luar Customer penugasan Chief.' });
+    }
+  }
+
+  if (customerId && normalizedMemberId) {
+    const selectedMember = await repositories.users.findById(normalizedMemberId);
+    if (!selectedMember || selectedMember.customerId !== customerId || selectedMember.role !== 'ANGGOTA') {
+      return res.status(403).json({ success: false, error: 'Personel berada di luar Customer penugasan Chief.' });
+    }
+  }
+
   const updated = await repositories.adminState.set(req.user!.id, {
-    siteId: siteId === '' ? null : siteId,
+    siteId: normalizedSiteId,
     shiftCode: shiftCode === '' ? null : shiftCode,
-    memberUserId: memberUserId === '' ? null : memberUserId,
+    memberUserId: normalizedMemberId,
   });
   res.json({ success: true, filterState: updated });
 });
