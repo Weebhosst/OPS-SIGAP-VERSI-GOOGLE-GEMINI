@@ -503,6 +503,14 @@ class DatabaseStore {
     return customer;
   }
 
+  public deleteCustomer(id: string): Customer | undefined {
+    const index = this.data.customers.findIndex((customer) => customer.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.customers.splice(index, 1);
+    this.save();
+    return removed;
+  }
+
   public getSites(): Site[] {
     return this.data.sites;
   }
@@ -523,6 +531,14 @@ class DatabaseStore {
     Object.assign(site, updates, { updatedAt: new Date().toISOString() });
     this.save();
     return site;
+  }
+
+  public deleteSite(id: string): Site | undefined {
+    const index = this.data.sites.findIndex((site) => site.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.sites.splice(index, 1);
+    this.save();
+    return removed;
   }
 
   public getCheckpoints(siteId?: string): Checkpoint[] {
