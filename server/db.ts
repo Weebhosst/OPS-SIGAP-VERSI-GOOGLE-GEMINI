@@ -522,6 +522,14 @@ class DatabaseStore {
     return user;
   }
 
+  public deleteUser(id: string): User | undefined {
+    const index = this.data.users.findIndex((user) => user.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.users.splice(index, 1);
+    this.save();
+    return removed;
+  }
+
   // -------------------------------------------------------------
   // SITES & CHECKPOINTS
   // -------------------------------------------------------------
