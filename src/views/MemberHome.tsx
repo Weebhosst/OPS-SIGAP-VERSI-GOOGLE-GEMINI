@@ -58,6 +58,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
   const [currentRoundCompleted, setCurrentRoundCompleted] = useState(0);
   const [currentRoundRequired, setCurrentRoundRequired] = useState(0);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [failedSyncCount, setFailedSyncCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(
     typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -69,10 +70,17 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const loadOfflineState = useCallback(async () => {
-    const count = await offlineQueue.getPendingCount();
-    setPendingSyncCount(count);
+    if (!user?.id || user.role !== 'ANGGOTA') {
+      setPendingSyncCount(0);
+      setFailedSyncCount(0);
+      setIsSyncing(false);
+      return;
+    }
+    const summary = await offlineQueue.getSummary(user.id);
+    setPendingSyncCount(summary.total);
+    setFailedSyncCount(summary.failed);
     setIsSyncing(offlineQueue.isCurrentlySyncing());
-  }, []);
+  }, [user?.id, user?.role]);
 
   const loadData = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
@@ -362,8 +370,16 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
             </div>
             <div className="border-r border-slate-800 px-3 py-2.5">
               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Sync</p>
-              <p className={`mt-1 text-[10px] font-black ${pendingSyncCount > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
-                {isSyncing ? 'SYNCING...' : pendingSyncCount > 0 ? `${pendingSyncCount} PENDING` : 'BERSIH'}
+              <p className={`mt-1 text-[10px] font-black ${
+                failedSyncCount > 0 ? 'text-red-300' : pendingSyncCount > 0 ? 'text-amber-300' : 'text-emerald-300'
+              }`}>
+                {isSyncing
+                  ? 'SYNCING...'
+                  : failedSyncCount > 0
+                    ? `${failedSyncCount} GAGAL`
+                    : pendingSyncCount > 0
+                      ? `${pendingSyncCount} PENDING`
+                      : 'BERSIH'}
               </p>
             </div>
             <div className="px-3 py-2.5">
@@ -512,7 +528,15 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
                   ? `Update ${lastUpdatedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
                   : 'Belum diperbarui'}
               </span>
-              {pendingSyncCount > 0 ? (
+              {failedSyncCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('profile')}
+                  className="font-bold text-red-300 underline decoration-red-500/50 underline-offset-2"
+                >
+                  {failedSyncCount} data gagal • buka recovery
+                </button>
+              ) : pendingSyncCount > 0 ? (
                 <span className="font-bold text-amber-300">{pendingSyncCount} data menunggu server</span>
               ) : (
                 <span className="font-bold text-emerald-400">Data tersinkron</span>
