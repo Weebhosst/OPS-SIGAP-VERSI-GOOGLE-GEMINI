@@ -18,6 +18,7 @@ import {
   ShiftHandover,
   IncidentReport,
   PatrolSession,
+  Checkpoint,
   Role,
   isAdministrator,
 } from '../src/types/ops';
@@ -347,7 +348,8 @@ apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, async (
 // -------------------------------------------------------------
 
 function toFieldCheckpoint(checkpoint: Checkpoint) {
-  const { qrToken: _qrToken, ...safeCheckpoint } = checkpoint;
+  const { qrToken, ...safeCheckpoint } = checkpoint;
+  void qrToken;
   return safeCheckpoint;
 }
 
