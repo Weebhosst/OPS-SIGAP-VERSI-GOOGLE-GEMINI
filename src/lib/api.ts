@@ -260,6 +260,12 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  deleteAdminUser: (id: string, confirmationText: string) =>
+    request<{ success: boolean; deletedId: string }>(`/admin/users/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmationText }),
+    }),
+
   // Admin Checkpoints
   getAdminCheckpoints: () => request<{ success: boolean; checkpoints: any[] }>('/admin/checkpoints'),
 
