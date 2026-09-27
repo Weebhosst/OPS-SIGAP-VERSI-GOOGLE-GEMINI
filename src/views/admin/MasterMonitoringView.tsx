@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -28,6 +28,43 @@ import {
 } from '../../components/OpsDialog';
 
 type MasterTab = 'CUSTOMER_SITE' | 'PERSONNEL' | 'CHECKPOINT' | 'ACTIVE_SESSION';
+
+type MasterWorkspaceState = {
+  activeTab?: MasterTab;
+  search?: string;
+  customerFilter?: string;
+  statusFilter?: string;
+  showEmptySites?: boolean;
+  expandedSites?: Record<string, boolean>;
+  expandedCustomers?: Record<string, boolean>;
+  expandedPersonnelCustomers?: Record<string, boolean>;
+  expandedPersonnelSites?: Record<string, boolean>;
+  personnelSearch?: string;
+  personnelCustomerFilter?: string;
+  personnelStatusFilter?: string;
+  expandedCheckpointCustomers?: Record<string, boolean>;
+  expandedCheckpointSites?: Record<string, boolean>;
+  checkpointSearch?: string;
+  checkpointCustomerFilter?: string;
+  checkpointStatusFilter?: string;
+  checkpointQrFilter?: string;
+  scrollByTab?: Partial<Record<MasterTab, number>>;
+};
+
+const readMasterWorkspace = (userId?: string): MasterWorkspaceState => {
+  if (!userId || typeof window === 'undefined') return {};
+  try {
+    const raw = sessionStorage.getItem(`ops:masterWorkspace:${userId}`);
+    return raw ? (JSON.parse(raw) as MasterWorkspaceState) : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeMasterWorkspace = (userId: string, state: MasterWorkspaceState) => {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(`ops:masterWorkspace:${userId}`, JSON.stringify(state));
+};
 type ActiveSite = Site & {
   activeCount: number;
   capacityStatus: 'FULL' | 'AVAILABLE';
@@ -70,6 +107,8 @@ export const MasterMonitoringView: React.FC<{
 }> = ({ onBack, onNavigate }) => {
   const { user } = useAuth();
   const canMutate = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+  const restoredWorkspace = useMemo(() => readMasterWorkspace(user?.id), [user?.id]);
+  const scrollFrameRef = useRef<number | null>(null);
 
   const [masters, setMasters] = useState<MasterData>(emptyMasters);
   const [activeSites, setActiveSites] = useState<ActiveSite[]>([]);
@@ -79,6 +118,7 @@ export const MasterMonitoringView: React.FC<{
     if (queryTab && ['CUSTOMER_SITE', 'PERSONNEL', 'CHECKPOINT', 'ACTIVE_SESSION'].includes(queryTab)) {
       return queryTab as MasterTab;
     }
+    if (restoredWorkspace.activeTab) return restoredWorkspace.activeTab;
     if (!user) return 'CUSTOMER_SITE';
     const saved = sessionStorage.getItem(`ops:masterTab:${user.id}`);
     return ['CUSTOMER_SITE', 'PERSONNEL', 'CHECKPOINT', 'ACTIVE_SESSION'].includes(saved || '')
@@ -86,23 +126,23 @@ export const MasterMonitoringView: React.FC<{
       : 'CUSTOMER_SITE';
   });
 
-  const [search, setSearch] = useState('');
-  const [customerFilter, setCustomerFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [showEmptySites, setShowEmptySites] = useState(false);
-  const [expandedSites, setExpandedSites] = useState<Record<string, boolean>>({});
-  const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>({});
-  const [expandedPersonnelCustomers, setExpandedPersonnelCustomers] = useState<Record<string, boolean>>({});
-  const [expandedPersonnelSites, setExpandedPersonnelSites] = useState<Record<string, boolean>>({});
-  const [personnelSearch, setPersonnelSearch] = useState('');
-  const [personnelCustomerFilter, setPersonnelCustomerFilter] = useState('');
-  const [personnelStatusFilter, setPersonnelStatusFilter] = useState('');
-  const [expandedCheckpointCustomers, setExpandedCheckpointCustomers] = useState<Record<string, boolean>>({});
-  const [expandedCheckpointSites, setExpandedCheckpointSites] = useState<Record<string, boolean>>({});
-  const [checkpointSearch, setCheckpointSearch] = useState('');
-  const [checkpointCustomerFilter, setCheckpointCustomerFilter] = useState('');
-  const [checkpointStatusFilter, setCheckpointStatusFilter] = useState('');
-  const [checkpointQrFilter, setCheckpointQrFilter] = useState('');
+  const [search, setSearch] = useState(restoredWorkspace.search || '');
+  const [customerFilter, setCustomerFilter] = useState(restoredWorkspace.customerFilter || '');
+  const [statusFilter, setStatusFilter] = useState(restoredWorkspace.statusFilter || '');
+  const [showEmptySites, setShowEmptySites] = useState(restoredWorkspace.showEmptySites ?? false);
+  const [expandedSites, setExpandedSites] = useState<Record<string, boolean>>(restoredWorkspace.expandedSites || {});
+  const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>(restoredWorkspace.expandedCustomers || {});
+  const [expandedPersonnelCustomers, setExpandedPersonnelCustomers] = useState<Record<string, boolean>>(restoredWorkspace.expandedPersonnelCustomers || {});
+  const [expandedPersonnelSites, setExpandedPersonnelSites] = useState<Record<string, boolean>>(restoredWorkspace.expandedPersonnelSites || {});
+  const [personnelSearch, setPersonnelSearch] = useState(restoredWorkspace.personnelSearch || '');
+  const [personnelCustomerFilter, setPersonnelCustomerFilter] = useState(restoredWorkspace.personnelCustomerFilter || '');
+  const [personnelStatusFilter, setPersonnelStatusFilter] = useState(restoredWorkspace.personnelStatusFilter || '');
+  const [expandedCheckpointCustomers, setExpandedCheckpointCustomers] = useState<Record<string, boolean>>(restoredWorkspace.expandedCheckpointCustomers || {});
+  const [expandedCheckpointSites, setExpandedCheckpointSites] = useState<Record<string, boolean>>(restoredWorkspace.expandedCheckpointSites || {});
+  const [checkpointSearch, setCheckpointSearch] = useState(restoredWorkspace.checkpointSearch || '');
+  const [checkpointCustomerFilter, setCheckpointCustomerFilter] = useState(restoredWorkspace.checkpointCustomerFilter || '');
+  const [checkpointStatusFilter, setCheckpointStatusFilter] = useState(restoredWorkspace.checkpointStatusFilter || '');
+  const [checkpointQrFilter, setCheckpointQrFilter] = useState(restoredWorkspace.checkpointQrFilter || '');
 
   const [forceTarget, setForceTarget] = useState<(PatrolSession & { memberName: string; npk: string }) | null>(null);
   const [reason, setReason] = useState('');
@@ -151,6 +191,106 @@ export const MasterMonitoringView: React.FC<{
     else params.delete('customer');
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
   }, [activeTab, customerFilter, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const current = readMasterWorkspace(user.id);
+    writeMasterWorkspace(user.id, {
+      ...current,
+      activeTab,
+      search,
+      customerFilter,
+      statusFilter,
+      showEmptySites,
+      expandedSites,
+      expandedCustomers,
+      expandedPersonnelCustomers,
+      expandedPersonnelSites,
+      personnelSearch,
+      personnelCustomerFilter,
+      personnelStatusFilter,
+      expandedCheckpointCustomers,
+      expandedCheckpointSites,
+      checkpointSearch,
+      checkpointCustomerFilter,
+      checkpointStatusFilter,
+      checkpointQrFilter,
+    });
+  }, [
+    activeTab,
+    checkpointCustomerFilter,
+    checkpointQrFilter,
+    checkpointSearch,
+    checkpointStatusFilter,
+    customerFilter,
+    expandedCheckpointCustomers,
+    expandedCheckpointSites,
+    expandedCustomers,
+    expandedPersonnelCustomers,
+    expandedPersonnelSites,
+    expandedSites,
+    personnelCustomerFilter,
+    personnelSearch,
+    personnelStatusFilter,
+    search,
+    showEmptySites,
+    statusFilter,
+    user,
+  ]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const persistScroll = () => {
+      if (scrollFrameRef.current !== null) return;
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null;
+        const current = readMasterWorkspace(user.id);
+        writeMasterWorkspace(user.id, {
+          ...current,
+          scrollByTab: {
+            ...(current.scrollByTab || {}),
+            [activeTab]: window.scrollY,
+          },
+        });
+      });
+    };
+
+    window.addEventListener('scroll', persistScroll, { passive: true });
+    window.addEventListener('pagehide', persistScroll);
+
+    return () => {
+      window.removeEventListener('scroll', persistScroll);
+      window.removeEventListener('pagehide', persistScroll);
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
+  }, [activeTab, user]);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    const target = readMasterWorkspace(user.id).scrollByTab?.[activeTab] || 0;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: target, behavior: 'auto' });
+      });
+    });
+  }, [activeTab, loading, user]);
+
+  const refreshDataInPlace = useCallback(
+    async (returnScrollY = window.scrollY) => {
+      await loadData();
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: returnScrollY, behavior: 'auto' });
+        });
+      });
+    },
+    [loadData],
+  );
 
   const checkpointCount = (siteId: string) =>
     masters.checkpoints.filter((checkpoint) => checkpoint.siteId === siteId).length;
@@ -356,18 +496,21 @@ export const MasterMonitoringView: React.FC<{
           personnelCapacity: bundleForm.personnelCapacity,
           targetRoundsPerShift: bundleForm.targetRoundsPerShift,
         });
+        const returnScrollY = window.scrollY;
         setExpandedCustomers((current) => ({ ...current, [selectedCustomerId]: true }));
         resetBundle();
-        await loadData();
+        await refreshDataInPlace(returnScrollY);
         setNotice({
           title: 'Site Ditambahkan',
           message: `Site baru berhasil ditambahkan ke ${selectedCustomer?.name || 'Customer terpilih'}.`,
           tone: 'success',
         });
       } else {
-        await api.createCustomerWithSite(bundleForm);
+        const returnScrollY = window.scrollY;
+        const created = await api.createCustomerWithSite(bundleForm);
+        setExpandedCustomers((current) => ({ ...current, [created.customer.id]: true }));
         resetBundle();
-        await loadData();
+        await refreshDataInPlace(returnScrollY);
         setNotice({
           title: 'Customer & Site Ditambahkan',
           message: 'Customer baru berhasil dibuat bersama Site awalnya.',
@@ -402,7 +545,7 @@ export const MasterMonitoringView: React.FC<{
     try {
       await api.updateCustomer(editingCustomer.id, customerEditForm);
       setEditingCustomer(null);
-      await loadData();
+      await refreshDataInPlace();
       setNotice({
         title: 'Customer Diperbarui',
         message: 'Data Customer berhasil diperbarui.',
@@ -437,7 +580,7 @@ export const MasterMonitoringView: React.FC<{
       });
       setAddingSiteCustomer(null);
       setSiteForm(initialSiteForm);
-      await loadData();
+      await refreshDataInPlace();
       setNotice({
         title: 'Site Ditambahkan',
         message: `Site baru berhasil ditambahkan ke ${addingSiteCustomer.name}.`,
@@ -477,7 +620,7 @@ export const MasterMonitoringView: React.FC<{
       });
       setEditingSite(null);
       setSiteForm(initialSiteForm);
-      await loadData();
+      await refreshDataInPlace();
       setNotice({
         title: 'Site Diperbarui',
         message: 'Data Site berhasil diperbarui.',
@@ -500,7 +643,7 @@ export const MasterMonitoringView: React.FC<{
     try {
       await api.deleteSite(target.id, `HAPUS ${target.name}`);
       setDeleteSiteTarget(null);
-      await loadData();
+      await refreshDataInPlace();
       setNotice({
         title: 'Site Dihapus',
         message: `Site ${target.name} berhasil dihapus. Jejak penghapusan dicatat di Audit Trail.`,
@@ -526,7 +669,7 @@ export const MasterMonitoringView: React.FC<{
       const memberName = forceTarget.memberName;
       setForceTarget(null);
       setReason('');
-      await loadData();
+      await refreshDataInPlace();
       setNotice({
         title: 'Session Ditutup',
         message: `Session ${memberName} berhasil di-force close.`,
@@ -554,7 +697,7 @@ export const MasterMonitoringView: React.FC<{
               <p className="text-[11px] text-slate-400">Customer → Site → Data Operasional</p>
             </div>
           </div>
-          <button onClick={() => void loadData()} className="rounded-xl bg-slate-800 p-2" aria-label="Muat ulang">
+          <button onClick={() => void refreshDataInPlace()} className="rounded-xl bg-slate-800 p-2" aria-label="Muat ulang">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
