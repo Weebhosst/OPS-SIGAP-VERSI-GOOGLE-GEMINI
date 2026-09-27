@@ -340,6 +340,7 @@ function buildSessionWhere(filter: SessionFilter) {
     clauses.push(sql.replace('?', `$${values.length}`));
   };
   if (filter.userId) add('s.user_id=?', filter.userId);
+  if (filter.customerId) add('s.customer_id=?', filter.customerId);
   if (filter.siteId) add('s.site_id=?', filter.siteId);
   if (filter.shiftCode) add('s.shift_code=?', filter.shiftCode);
   if (filter.status) add('s.status=?', filter.status);
@@ -970,7 +971,9 @@ export const postgresRepositories: RepositoryBundle = {
     },
     list: async (filter, request) => {
       const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
-      if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=$${values.length} OR h.to_user_id=$${values.length})`);}
+      if(filter.customerId)add('EXISTS(SELECT 1 FROM sites hs WHERE hs.id=h.site_id AND hs.customer_id=',filter.customerId);
+      if(filter.customerId) clauses[clauses.length - 1] += ')';
+      if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=${values.length} OR h.to_user_id=${values.length})`);}
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
       const select = `SELECT h.*,med.media_urls,med.primary_media_url
         FROM handovers h
@@ -1004,7 +1007,7 @@ export const postgresRepositories: RepositoryBundle = {
     },
     list: async (filter, request) => {
       const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
-      if(filter.siteId)add('i.site_id=',filter.siteId); if(filter.shiftCode)add('i.shift_code=',filter.shiftCode); if(filter.userId)add('i.user_id=',filter.userId); if(filter.status)add('i.status=',filter.status);
+      if(filter.customerId)add('i.customer_id=',filter.customerId); if(filter.siteId)add('i.site_id=',filter.siteId); if(filter.shiftCode)add('i.shift_code=',filter.shiftCode); if(filter.userId)add('i.user_id=',filter.userId); if(filter.status)add('i.status=',filter.status);
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
       const select = `SELECT i.*,med.media_urls,med.primary_media_url
         FROM incident_reports i
