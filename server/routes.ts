@@ -2042,7 +2042,7 @@ apiRouter.delete('/admin/sites/:id', authMiddleware, requireAdmin, async (req: A
 
 
 apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  const { name, npk, email, role, siteId, position } = req.body;
+  const { name, npk, email, role, customerId, siteId, position } = req.body;
   if (!name || !npk) return res.status(400).json({ success: false, error: 'Nama dan NPK wajib diisi.' });
 
   const cleanNpk = String(npk).trim();
@@ -2051,23 +2051,39 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
   const now = new Date().toISOString();
   const allowedRoles: Role[] = ['ANGGOTA', 'ADMIN', 'CHIEF', 'SUPER_ADMIN'];
   const selectedRole: Role = allowedRoles.includes(role) ? role : 'ANGGOTA';
-  const selectedSite = selectedRole === 'SUPER_ADMIN' ? null : await repositories.sites.findById(siteId || '');
-  if (selectedRole !== 'SUPER_ADMIN' && !selectedSite) {
-    return res.status(400).json({ success: false, error: 'Site penugasan wajib valid.' });
+
+  let assignmentCustomerId: string | null = null;
+  let assignmentSiteId: string | null = null;
+
+  if (selectedRole === 'CHIEF') {
+    const selectedCustomer = await repositories.customers.findById(String(customerId || ''));
+    if (!selectedCustomer) {
+      return res.status(400).json({ success: false, error: 'Customer penugasan wajib dipilih untuk CHIEF.' });
+    }
+    assignmentCustomerId = selectedCustomer.id;
+  } else if (selectedRole !== 'SUPER_ADMIN') {
+    const selectedSite = await repositories.sites.findById(String(siteId || ''));
+    if (!selectedSite) {
+      return res.status(400).json({ success: false, error: 'Site penugasan wajib valid untuk role ini.' });
+    }
+    assignmentCustomerId = selectedSite.customerId;
+    assignmentSiteId = selectedSite.id;
   }
 
+  const scopeId = assignmentSiteId || assignmentCustomerId || 'GEN';
+  const hasAssignment = assignmentCustomerId !== null || assignmentSiteId !== null;
   const newUser: User = {
-    id: `USR-${siteId || 'GEN'}-${Date.now().toString().slice(-6)}`,
+    id: `USR-${scopeId}-${Date.now().toString().slice(-6)}`,
     name: String(name).trim(),
     npk: cleanNpk,
     email: email ? String(email).trim() : `${cleanNpk}@sigap.local`,
     role: selectedRole,
-    customerId: selectedSite?.customerId || null,
-    siteId: selectedSite?.id || null,
+    customerId: assignmentCustomerId,
+    siteId: assignmentSiteId,
     position: String(position || (selectedRole === 'ANGGOTA' ? 'ANGGOTA SECURITY' : selectedRole.replace('_', ' '))),
-    assignmentHistory: selectedSite ? [{
-      customerId: selectedSite.customerId,
-      siteId: selectedSite.id,
+    assignmentHistory: hasAssignment ? [{
+      customerId: assignmentCustomerId,
+      siteId: assignmentSiteId,
       effectiveAt: now,
       changedBy: req.user!.id,
     }] : [],
@@ -2085,7 +2101,13 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
       action: 'USER_CREATE',
       entityType: 'user',
       entityId: created.id,
-      newValue: { name: created.name, npk: created.npk, role: created.role, siteId: created.siteId },
+      newValue: {
+        name: created.name,
+        npk: created.npk,
+        role: created.role,
+        customerId: created.customerId,
+        siteId: created.siteId,
+      },
       reason: `Tambah pengguna baru ${created.name}`,
     });
     const { passwordHash, ...safeUser } = created;
@@ -2097,35 +2119,72 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
 });
 
 apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  const { name, email, role, siteId, status, position } = req.body;
+  const { name, email, role, customerId, siteId, status, position } = req.body;
   const user = await repositories.users.findById(req.params.id);
   if (!user) return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
 
-  const oldValues = { name: user.name, role: user.role, siteId: user.siteId, status: user.status };
+  const allowedRoles: Role[] = ['ANGGOTA', 'ADMIN', 'CHIEF', 'SUPER_ADMIN'];
+  const requestedRole = (role || user.role) as Role;
+  if (!allowedRoles.includes(requestedRole)) {
+    return res.status(400).json({ success: false, error: 'Role pengguna tidak valid.' });
+  }
+
+  const oldValues = {
+    name: user.name,
+    role: user.role,
+    customerId: user.customerId,
+    siteId: user.siteId,
+    status: user.status,
+  };
   const updates: Partial<User> = {};
   if (name !== undefined) updates.name = String(name).trim();
   if (email !== undefined) updates.email = String(email).trim();
-  if (role !== undefined) updates.role = role;
+  if (role !== undefined) updates.role = requestedRole;
   if (position !== undefined) updates.position = String(position).trim();
   if (status !== undefined) updates.status = status;
 
-  let assignment;
-  const requestedRole = (role || user.role) as Role;
+  let assignment:
+    | { customerId: string | null; siteId: string | null; effectiveAt: string; changedBy: string }
+    | undefined;
+  const effectiveAt = new Date().toISOString();
+
   if (requestedRole === 'SUPER_ADMIN') {
     if (user.siteId !== null || user.customerId !== null) {
-      assignment = { customerId: null, siteId: null, effectiveAt: new Date().toISOString(), changedBy: req.user!.id };
+      assignment = { customerId: null, siteId: null, effectiveAt, changedBy: req.user!.id };
     }
-  } else if (siteId !== undefined && siteId !== user.siteId) {
-    const selectedSite = siteId ? await repositories.sites.findById(siteId) : undefined;
-    if (!selectedSite) return res.status(400).json({ success: false, error: 'Site penugasan tidak valid.' });
-    assignment = {
-      customerId: selectedSite.customerId,
-      siteId: selectedSite.id,
-      effectiveAt: new Date().toISOString(),
-      changedBy: req.user!.id,
-    };
-  } else if (!user.siteId) {
-    return res.status(400).json({ success: false, error: 'Site penugasan wajib valid untuk role ini.' });
+  } else if (requestedRole === 'CHIEF') {
+    const targetCustomerId = customerId !== undefined ? String(customerId || '') : String(user.customerId || '');
+    const selectedCustomer = await repositories.customers.findById(targetCustomerId);
+    if (!selectedCustomer) {
+      return res.status(400).json({ success: false, error: 'Customer penugasan wajib dipilih untuk CHIEF.' });
+    }
+    if (user.customerId !== selectedCustomer.id || user.siteId !== null || user.role !== 'CHIEF') {
+      assignment = {
+        customerId: selectedCustomer.id,
+        siteId: null,
+        effectiveAt,
+        changedBy: req.user!.id,
+      };
+    }
+  } else {
+    const targetSiteId = siteId !== undefined ? String(siteId || '') : String(user.siteId || '');
+    const selectedSite = await repositories.sites.findById(targetSiteId);
+    if (!selectedSite) {
+      return res.status(400).json({ success: false, error: 'Site penugasan wajib valid untuk role ini.' });
+    }
+    if (
+      user.siteId !== selectedSite.id ||
+      user.customerId !== selectedSite.customerId ||
+      user.role === 'CHIEF' ||
+      user.role === 'SUPER_ADMIN'
+    ) {
+      assignment = {
+        customerId: selectedSite.customerId,
+        siteId: selectedSite.id,
+        effectiveAt,
+        changedBy: req.user!.id,
+      };
+    }
   }
 
   const updated = await repositories.users.update(user.id, updates, assignment);
@@ -2137,7 +2196,10 @@ apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: Au
     entityType: 'user',
     entityId: user.id,
     oldValue: oldValues,
-    newValue: { ...updates, ...(assignment ? { customerId: assignment.customerId, siteId: assignment.siteId } : {}) },
+    newValue: {
+      ...updates,
+      ...(assignment ? { customerId: assignment.customerId, siteId: assignment.siteId } : {}),
+    },
     reason: `Perubahan data pengguna ${user.name}`,
   });
 
