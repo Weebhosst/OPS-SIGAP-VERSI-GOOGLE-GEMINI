@@ -24,6 +24,7 @@ const paginate = <T>(items: T[], request: PageRequest) => {
 
 function sessionMatches(session: PatrolSession, filter: SessionFilter) {
   if (filter.userId && session.userId !== filter.userId) return false;
+  if (filter.customerId && session.customerId !== filter.customerId) return false;
   if (filter.siteId && session.siteId !== filter.siteId) return false;
   if (filter.shiftCode && session.shiftCode !== filter.shiftCode) return false;
   if (filter.status && session.status !== filter.status) return false;
@@ -301,7 +302,12 @@ export const jsonRepositories: RepositoryBundle = {
         siteId: filter.siteId || null,
         shiftCode: filter.shiftCode || null,
         userId: filter.userId || null,
-      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      })
+        .filter((item) => {
+          if (!filter.customerId) return true;
+          return db.findSiteById(item.siteId)?.customerId === filter.customerId;
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
       page,
     ),
     create: async (handover) => db.addHandover(handover),
@@ -316,7 +322,12 @@ export const jsonRepositories: RepositoryBundle = {
         shiftCode: filter.shiftCode || null,
         userId: filter.userId || null,
         status: filter.status || null,
-      }).sort((a, b) => new Date(b.incidentAt).getTime() - new Date(a.incidentAt).getTime()),
+      })
+        .filter((item) => {
+          if (!filter.customerId) return true;
+          return item.customerId === filter.customerId || db.findSiteById(item.siteId)?.customerId === filter.customerId;
+        })
+        .sort((a, b) => new Date(b.incidentAt).getTime() - new Date(a.incidentAt).getTime()),
       page,
     ),
     create: async (incident) => db.addIncident(incident),
