@@ -346,6 +346,11 @@ apiRouter.post('/auth/reset-password-npk', authMiddleware, requireAdmin, async (
 // PATROL ROUTES
 // -------------------------------------------------------------
 
+function toFieldCheckpoint(checkpoint: Checkpoint) {
+  const { qrToken: _qrToken, ...safeCheckpoint } = checkpoint;
+  return safeCheckpoint;
+}
+
 apiRouter.get('/patrol/shift-progress', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const siteId = req.user!.siteId || 'BB92';
   const progress = await getMemberShiftProgress(req.user!.id, siteId);
@@ -367,7 +372,7 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
       hasOpenSession: false,
       session: null,
       checkpoints: checkpoints.map((checkpoint) => ({
-        ...checkpoint,
+        ...toFieldCheckpoint(checkpoint),
         statusInRound: 'BELUM',
         lastScanLog: null,
       })),
@@ -390,7 +395,7 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
     const statusInRound = validLog?.validationStatus || latestLog?.validationStatus || 'BELUM';
-    return { ...checkpoint, statusInRound, lastScanLog: validLog || latestLog || null };
+    return { ...toFieldCheckpoint(checkpoint), statusInRound, lastScanLog: validLog || latestLog || null };
   });
 
   res.json({
