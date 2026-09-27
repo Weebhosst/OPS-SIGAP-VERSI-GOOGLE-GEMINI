@@ -27,6 +27,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [activeSession, setActiveSession] = useState<PatrolSession | null>(null);
+  const [siteMembers, setSiteMembers] = useState<Array<{ id: string; name: string; npk: string }>>([]);
   const [activeTab, setActiveTab] = useState<'SERTIGAS' | 'BARANG'>('SERTIGAS');
   const [cameraTarget, setCameraTarget] = useState<'START' | 'ITEM'>('ITEM');
   const [startPhotoUrl, setStartPhotoUrl] = useState<string | null>(null);
@@ -39,16 +40,26 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [itemQuantity, setItemQuantity] = useState('');
   const [itemCondition, setItemCondition] = useState('BAIK');
   const [handedFrom, setHandedFrom] = useState('');
-  const [handedTo, setHandedTo] = useState('');
+  const [toUserId, setToUserId] = useState('');
   const [isTaruna, setIsTaruna] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string; tone: OpsDialogTone } | null>(null);
 
   const loadHandovers = async () => {
     try {
-      const [res, sessionRes] = await Promise.all([api.getHandovers(), api.getCurrentSession()]);
+      const memberDirectoryPromise = user?.role === 'ANGGOTA'
+        ? api.getFieldSiteMembers()
+        : Promise.resolve({ success: true, members: [] as Array<{ id: string; name: string; npk: string }> });
+      const [res, sessionRes, memberRes] = await Promise.all([
+        api.getHandovers(),
+        api.getCurrentSession(),
+        memberDirectoryPromise,
+      ]);
       if (res.success) {
         setHandovers(res.handovers);
+      }
+      if (memberRes.success) {
+        setSiteMembers(memberRes.members);
       }
       setActiveSession(sessionRes.hasOpenSession ? sessionRes.session : null);
     } catch (err) {
@@ -81,7 +92,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         itemQuantity,
         itemCondition,
         handedFrom,
-        handedTo,
+        toUserId,
         isTaruna,
       });
 
@@ -90,6 +101,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         setPhotoUrls([]);
         setItemName('');
         setItemQuantity('');
+        setToUserId('');
         setOutstandingIssues('');
         await loadHandovers();
       }
@@ -243,7 +255,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               )}
 
               {/* Ack Action — only field members can acknowledge. Monitoring roles are read-only. */}
-              {h.status !== 'ACKNOWLEDGED' && user?.role === 'ANGGOTA' && h.fromUserId !== user?.id ? (
+              {h.status !== 'ACKNOWLEDGED' && user?.role === 'ANGGOTA' && h.toUserId === user?.id && h.fromUserId !== user?.id ? (
                 <button
                   onClick={() => handleAcknowledge(h.id)}
                   className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
@@ -274,7 +286,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
             <form onSubmit={handleCreateHandover} className="space-y-4 text-xs">
               <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-slate-300"><div>Member: <b>{user?.name}</b> ({user?.npk})</div><div>Customer: {activeSession?.customerId} • Site: {activeSession?.siteId}</div><div>{activeSession?.shiftCode} • Operational Date {activeSession?.shiftDate}</div></div>
-              <div className="grid grid-cols-2 gap-2"><label className="font-semibold">Jenis / Nama Barang atau Taruna<input required value={itemName} onChange={(e) => setItemName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Jumlah<input required value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Diserahkan Dari<input required value={handedFrom} onChange={(e) => setHandedFrom(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Diserahkan Kepada<input required value={handedTo} onChange={(e) => setHandedTo(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label></div>
+              <div className="grid grid-cols-2 gap-2"><label className="font-semibold">Jenis / Nama Barang atau Taruna<input required value={itemName} onChange={(e) => setItemName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Jumlah<input required value={itemQuantity} onChange={(e) => setItemQuantity(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Diserahkan Dari<input required value={handedFrom} onChange={(e) => setHandedFrom(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label><label className="font-semibold">Penerima Akun<select required value={toUserId} onChange={(e) => setToUserId(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"><option value="">Pilih Anggota</option>{siteMembers.map((member) => <option key={member.id} value={member.id}>{member.name} • {member.npk}</option>)}</select></label></div>
               <label className="block font-semibold">Kondisi Barang<input required value={itemCondition} onChange={(e) => setItemCondition(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" /></label>
               <div><span className="font-semibold">Apakah ini TARUNA / dokumentasi khusus?</span><div className="mt-1 grid grid-cols-2 gap-2"><button type="button" onClick={() => setIsTaruna(false)} className={`min-h-10 rounded-xl px-3 py-2 font-black transition ${!isTaruna ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button type="button" onClick={() => setIsTaruna(true)} className={`min-h-10 rounded-xl px-3 py-2 font-black transition ${isTaruna ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>
 
@@ -322,7 +334,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
               <button
                 type="submit"
-                disabled={submitting || (!isTaruna && photoUrls.length < 1) || (isTaruna && (photoUrls.length < 3 || photoUrls.length > 5 || !outstandingIssues.trim()))}
+                disabled={submitting || !toUserId || (!isTaruna && photoUrls.length < 1) || (isTaruna && (photoUrls.length < 3 || photoUrls.length > 5 || !outstandingIssues.trim()))}
                 className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-50"
               >
                 {submitting ? 'Menyimpan...' : 'SIMPAN SERAH TERIMA BARANG'}
