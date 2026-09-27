@@ -324,6 +324,10 @@ try {
   const incidentViewSource = fs.readFileSync(path.resolve('src/views/IncidentView.tsx'), 'utf8');
   const offlineQueueSource = fs.readFileSync(path.resolve('src/lib/offlineQueue.ts'), 'utf8');
   const apiSource = fs.readFileSync(path.resolve('src/lib/api.ts'), 'utf8');
+  const mainSource = fs.readFileSync(path.resolve('src/main.tsx'), 'utf8');
+  const offlineBannerSource = fs.readFileSync(path.resolve('src/components/OfflineBanner.tsx'), 'utf8');
+  const profileViewSource = fs.readFileSync(path.resolve('src/views/ProfileView.tsx'), 'utf8');
+  const serviceWorkerSource = fs.readFileSync(path.resolve('public/sw.js'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -434,7 +438,7 @@ try {
   assert.match(memberHomeSource, /TURUN JAGA & SELESAIKAN SHIFT/);
   assert.match(memberHomeSource, /KONEKSI DIPERLUKAN/);
   assert.match(memberHomeSource, /SERAH TERIMA MENUNGGU KONFIRMASI/);
-  assert.match(memberHomeSource, /offlineQueue\.getPendingCount/);
+  assert.match(memberHomeSource, /offlineQueue\.getSummary/);
   assert.match(memberHomeSource, /visibilitychange/);
   assert.match(memberHomeSource, /30_000/);
   assert.match(memberHomeSource, /currentRoundCompleted/);
@@ -508,6 +512,47 @@ try {
   assert.match(routeSource, /incidentPhotos\.length < 3/);
   assert.match(routeSource, /incidentPhotos\.length > 5/);
 
+  // MEMBER-07 offline + recovery regression guards.
+  assert.match(offlineQueueSource, /const DB_VERSION = 2/);
+  assert.match(offlineQueueSource, /patrol_snapshots/);
+  assert.match(offlineQueueSource, /recoverInterruptedSync/);
+  assert.match(offlineQueueSource, /retryItem/);
+  assert.match(offlineQueueSource, /activeUserId/);
+  assert.match(offlineQueueSource, /syncStatus: 'SYNC_FAILED'/);
+  assert.match(offlineQueueSource, /sort\(\(a, b\) => a\.createdAt - b\.createdAt\)/);
+  assert.match(offlineQueueSource, /savePatrolSnapshot/);
+  assert.match(offlineQueueSource, /getPatrolSnapshot/);
+  assert.match(offlineQueueSource, /claimLegacyItemsForSession/);
+
+  assert.match(patrolViewSource, /userId: user\?\.id/);
+  assert.match(patrolViewSource, /MODE RECOVERY OFFLINE/);
+  assert.match(patrolViewSource, /offlineSyncStatus/);
+  assert.match(patrolViewSource, /savePatrolSnapshot/);
+  assert.match(patrolViewSource, /getPatrolSnapshot/);
+  assert.match(memberHomeSource, /MODE RECOVERY OFFLINE/);
+  assert.match(memberHomeSource, /RECOVERY SINKRONISASI/);
+  assert.match(memberHomeSource, /MENUNGGU VALIDASI SERVER/);
+  assert.match(profileViewSource, /COBA ULANG DATA INI/);
+  assert.match(profileViewSource, /retryItem/);
+  assert.match(offlineBannerSource, /COBA LAGI/);
+  assert.match(offlineBannerSource, /recoverInterruptedSync/);
+
+  assert.match(routeSource, /authSessionExpiresAt/);
+  assert.match(routeSource, /sessionExpiresAt: issuedSession\.expiresAt/);
+  assert.match(apiSource, /sessionExpiresAt\?: string/);
+  assert.match(authContextSource, /ops:offlineIdentity:v1/);
+  assert.match(authContextSource, /offlineRecovered/);
+  assert.match(authContextSource, /user\.role !== 'ANGGOTA'/);
+  assert.match(authContextSource, /sessionExpiresAt/);
+  assert.doesNotMatch(authContextSource, /localStorage\.setItem\([^\n]*(token|password|sigap_session)/i);
+
+  assert.match(mainSource, /navigator\.serviceWorker/);
+  assert.match(mainSource, /register\('\/sw\.js'/);
+  assert.match(serviceWorkerSource, /ops-sigap-shell-v1-2/);
+  assert.match(serviceWorkerSource, /url\.pathname === '\/api' \|\| url\.pathname\.startsWith\('\/api\/'\)/);
+  assert.match(serviceWorkerSource, /request\.mode === 'navigate'/);
+  assert.match(serviceWorkerSource, /cacheApplicationShell/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -528,6 +573,7 @@ try {
   console.log('PASS MEMBER-04 guided patrol next-checkpoint and route-lock regression guards');
   console.log('PASS MEMBER-05 guided naik-jaga and guarded close-shift regression guards');
   console.log('PASS MEMBER-06 handover integrity and guided incident regression guards');
+  console.log('PASS MEMBER-07 offline queue, cold-start recovery, and retry regression guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
