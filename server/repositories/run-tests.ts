@@ -482,6 +482,32 @@ try {
   assert.match(patrolViewSource, /Session Completed/);
   assert.match(patrolViewSource, /completedSession/);
 
+  // MEMBER-06 Handover + Incident regression guards.
+  assert.match(handoverViewSource, /Untuk Saya/);
+  assert.match(handoverViewSource, /Dari Saya/);
+  assert.match(handoverViewSource, /Konfirmasi Serah Terima/);
+  assert.match(handoverViewSource, /YA, SAYA TERIMA/);
+  assert.match(handoverViewSource, /Identitas penyerah diambil otomatis dari akun login/);
+  assert.doesNotMatch(handoverViewSource, /setHandedFrom|Diserahkan Dari/);
+  assert.match(routeSource, /handedFrom: req\.user!\.name/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_MISMATCH/);
+
+  assert.doesNotMatch(incidentViewSource, /\balert\s*\(|\bconfirm\s*\(|\bprompt\s*\(/);
+  assert.match(incidentViewSource, /Laporan Kejadian Lapangan/);
+  assert.match(incidentViewSource, /1\. Identitas Kejadian/);
+  assert.match(incidentViewSource, /2\. Kronologi & Tindakan/);
+  assert.match(incidentViewSource, /3\. Eskalasi/);
+  assert.match(incidentViewSource, /4\. Bukti Foto Live/);
+  assert.match(incidentViewSource, /minimal 3 dan maksimal 5 foto live/);
+  assert.match(incidentViewSource, /GPS OPSIONAL/);
+  assert.match(incidentViewSource, /status OPEN/);
+  assert.match(routeSource, /INCIDENT_CATEGORY_INVALID/);
+  assert.match(routeSource, /INCIDENT_SEVERITY_INVALID/);
+  assert.match(routeSource, /INCIDENT_ESCALATION_TARGET_REQUIRED/);
+  assert.match(routeSource, /INCIDENT_STATUS_INVALID/);
+  assert.match(routeSource, /incidentPhotos\.length < 3/);
+  assert.match(routeSource, /incidentPhotos\.length > 5/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -501,6 +527,7 @@ try {
   console.log('PASS MEMBER-03 next-action dashboard and live status regression guards');
   console.log('PASS MEMBER-04 guided patrol next-checkpoint and route-lock regression guards');
   console.log('PASS MEMBER-05 guided naik-jaga and guarded close-shift regression guards');
+  console.log('PASS MEMBER-06 handover integrity and guided incident regression guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
