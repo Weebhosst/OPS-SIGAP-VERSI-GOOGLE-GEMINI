@@ -85,18 +85,28 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         setSession(res.session);
         setCompletedSession(null);
         setSiteInfo(res.site || null);
-        const pendingOffline = await offlineQueue.getPendingForSession(res.session.id);
+        if (user?.id) {
+          await offlineQueue.claimLegacyItemsForSession(res.session.id, user.id);
+        }
+        const pendingOffline = await offlineQueue.getPendingForSession(res.session.id, user?.id);
         const pendingCodes = new Set(
           pendingOffline
             .map((item) => item.checkpointCode)
             .filter((code): code is string => !!code),
         );
         setCheckpoints(
-          res.checkpoints.map((checkpoint: any) =>
-            checkpoint.statusInRound !== 'VALID' && pendingCodes.has(checkpoint.code)
-              ? { ...checkpoint, statusInRound: 'PENDING_SYNC', isOfflinePending: true }
-              : checkpoint,
-          ),
+          res.checkpoints.map((checkpoint: any) => {
+            const pendingItem = pendingOffline.find((item) => item.checkpointCode === checkpoint.code);
+            return checkpoint.statusInRound !== 'VALID' && pendingCodes.has(checkpoint.code)
+              ? {
+                  ...checkpoint,
+                  statusInRound: 'PENDING_SYNC',
+                  isOfflinePending: true,
+                  offlineSyncStatus: pendingItem?.syncStatus,
+                  offlineErrorMessage: pendingItem?.errorMessage,
+                }
+              : checkpoint;
+          }),
         );
         if (res.logs) setLogs(res.logs);
         setRounds(res.rounds || []);
@@ -221,6 +231,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
 
   const nextPendingSync = !!nextCheckpoint
     && (nextCheckpoint.statusInRound === 'PENDING_SYNC' || nextCheckpoint.isOfflinePending === true);
+  const nextSyncFailed = nextCheckpoint?.offlineSyncStatus === 'SYNC_FAILED';
 
   const patrolComplete = !!session && session.totalValid >= session.totalRequired;
   const startDocumentationReady = !!session?.startDocumentationCompleted;
@@ -231,9 +242,11 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       ? 'Naik Jaga wajib diselesaikan terlebih dahulu.'
       : patrolComplete
         ? 'Target patroli shift sudah tercapai.'
-        : nextPendingSync
-          ? 'Checkpoint ini menunggu validasi server dari antrean offline.'
-          : !currentGps
+        : nextSyncFailed
+          ? `Sinkronisasi checkpoint gagal. ${nextCheckpoint?.offlineErrorMessage || 'Gunakan tombol retry pada banner atau Profil.'}`
+          : nextPendingSync
+            ? 'Checkpoint ini menunggu validasi server dari antrean offline.'
+            : !currentGps
             ? 'Menunggu GPS perangkat.'
             : !nextWithinRadius
               ? 'Datangi titik checkpoint hingga berada di dalam radius.'
@@ -416,6 +429,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
       try {
         await offlineQueue.enqueuePatrolScan({
           idempotencyId,
+          userId: user?.id,
           type: 'PATROL_SCAN',
           sessionId: session.id,
           qrToken: scannedToken,
@@ -833,7 +847,9 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                           {isValid
                             ? 'Sudah tervalidasi'
                             : isPending
-                              ? 'Menunggu sinkronisasi server'
+                              ? checkpoint.offlineSyncStatus === 'SYNC_FAILED'
+                                ? checkpoint.offlineErrorMessage || 'Sinkronisasi gagal. Coba ulang saat koneksi stabil.'
+                                : 'Menunggu sinkronisasi server'
                               : isRejected
                                 ? checkpoint.lastScanLog?.rejectionMessage || 'Scan terakhir ditolak, ulangi checkpoint ini'
                                 : isReview
