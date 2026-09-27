@@ -97,6 +97,8 @@ export const MasterMonitoringView: React.FC<{
   const [reason, setReason] = useState('');
 
   const [showCreateBundle, setShowCreateBundle] = useState(false);
+  const [customerMode, setCustomerMode] = useState<'NEW' | 'EXISTING'>('NEW');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [bundleForm, setBundleForm] = useState(initialBundleForm);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [customerEditForm, setCustomerEditForm] = useState({ name: '', status: 'ACTIVE' as Customer['status'] });
@@ -184,27 +186,69 @@ export const MasterMonitoringView: React.FC<{
   );
 
   const resetBundle = () => {
+    setCustomerMode('NEW');
+    setSelectedCustomerId('');
     setBundleForm(initialBundleForm);
     setShowCreateBundle(false);
+  };
+
+  const openCreateBundle = () => {
+    setCustomerMode('NEW');
+    setSelectedCustomerId(masters.customers[0]?.id || '');
+    setBundleForm(initialBundleForm);
+    setShowCreateBundle(true);
   };
 
   const submitCustomerWithSite = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
+
+    if (customerMode === 'EXISTING' && !selectedCustomerId) {
+      setNotice({
+        title: 'Customer Belum Dipilih',
+        message: 'Pilih Customer terdaftar terlebih dahulu sebelum menambahkan Site.',
+        tone: 'warning',
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await api.createCustomerWithSite(bundleForm);
-      resetBundle();
-      await loadData();
-      setNotice({
-        title: 'Customer & Site Ditambahkan',
-        message: 'Customer baru berhasil dibuat bersama Site awalnya.',
-        tone: 'success',
-      });
+      if (customerMode === 'EXISTING') {
+        const selectedCustomer = masters.customers.find((customer) => customer.id === selectedCustomerId);
+        await api.createSite({
+          name: bundleForm.siteName,
+          customerId: selectedCustomerId,
+          personnelCapacity: bundleForm.personnelCapacity,
+          targetRoundsPerShift: bundleForm.targetRoundsPerShift,
+        });
+        setExpandedCustomers((current) => ({ ...current, [selectedCustomerId]: true }));
+        resetBundle();
+        await loadData();
+        setNotice({
+          title: 'Site Ditambahkan',
+          message: `Site baru berhasil ditambahkan ke ${selectedCustomer?.name || 'Customer terpilih'}.`,
+          tone: 'success',
+        });
+      } else {
+        await api.createCustomerWithSite(bundleForm);
+        resetBundle();
+        await loadData();
+        setNotice({
+          title: 'Customer & Site Ditambahkan',
+          message: 'Customer baru berhasil dibuat bersama Site awalnya.',
+          tone: 'success',
+        });
+      }
     } catch (error) {
       setNotice({
-        title: 'Tambah Customer & Site Gagal',
-        message: error instanceof ApiError ? error.message : 'Gagal menambah Customer dan Site.',
+        title: customerMode === 'EXISTING' ? 'Tambah Site Gagal' : 'Tambah Customer & Site Gagal',
+        message:
+          error instanceof ApiError
+            ? error.message
+            : customerMode === 'EXISTING'
+              ? 'Gagal menambah Site ke Customer terdaftar.'
+              : 'Gagal menambah Customer dan Site.',
         tone: 'danger',
       });
     } finally {
@@ -474,10 +518,7 @@ export const MasterMonitoringView: React.FC<{
                 {canMutate ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      setBundleForm(initialBundleForm);
-                      setShowCreateBundle(true);
-                    }}
+                    onClick={openCreateBundle}
                     className="ops-btn-primary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 px-4"
                   >
                     <Plus className="h-4 w-4" />
@@ -772,7 +813,7 @@ export const MasterMonitoringView: React.FC<{
         isOpen={showCreateBundle}
         onClose={resetBundle}
         title="ADD CUSTOMER & SITE"
-        description="Customer baru wajib memiliki minimal satu Site. Kode Site dibuat otomatis oleh sistem."
+        description="Tambahkan Customer baru atau pilih Customer terdaftar untuk menambahkan Site baru."
         tone="info"
         size="lg"
         busy={submitting}
@@ -782,7 +823,11 @@ export const MasterMonitoringView: React.FC<{
               BATAL
             </button>
             <button type="submit" form="customer-site-form" disabled={submitting} className="ops-btn-primary px-4 disabled:opacity-40">
-              {submitting ? 'MENYIMPAN...' : 'SIMPAN CUSTOMER & SITE'}
+              {submitting
+                ? 'MENYIMPAN...'
+                : customerMode === 'EXISTING'
+                  ? 'TAMBAH SITE'
+                  : 'SIMPAN CUSTOMER & SITE'}
             </button>
           </div>
         }
@@ -790,42 +835,106 @@ export const MasterMonitoringView: React.FC<{
         <form id="customer-site-form" onSubmit={submitCustomerWithSite} className="space-y-5">
           <section className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
             <div className="mb-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-300">DATA CUSTOMER</div>
-              <p className="mt-1 text-xs text-slate-500">Kode Customer adalah identitas bisnis yang terlihat oleh user.</p>
+              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-300">PILIH MODE CUSTOMER</div>
+              <p className="mt-1 text-xs text-slate-500">
+                Satu Customer dapat memiliki banyak Site.
+              </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-bold text-slate-300">
-                Kode Customer
-                <input
-                  required
-                  autoFocus
-                  value={bundleForm.code}
-                  onChange={(event) =>
-                    setBundleForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))
-                  }
-                  placeholder="Contoh AIS"
-                  className="ops-input mt-1 px-3"
-                />
-              </label>
-              <label className="text-xs font-bold text-slate-300">
-                Nama Customer
-                <input
-                  required
-                  value={bundleForm.customerName}
-                  onChange={(event) =>
-                    setBundleForm((current) => ({ ...current, customerName: event.target.value }))
-                  }
-                  placeholder="Nama perusahaan / customer"
-                  className="ops-input mt-1 px-3"
-                />
-              </label>
+
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-900 p-1">
+              <button
+                type="button"
+                onClick={() => setCustomerMode('NEW')}
+                className={`min-h-10 rounded-lg px-3 text-xs font-black transition ${
+                  customerMode === 'NEW'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                CUSTOMER BARU
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomerMode('EXISTING');
+                  setSelectedCustomerId((current) => current || masters.customers[0]?.id || '');
+                }}
+                disabled={masters.customers.length === 0}
+                className={`min-h-10 rounded-lg px-3 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                  customerMode === 'EXISTING'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                CUSTOMER TERDAFTAR
+              </button>
             </div>
+
+            {customerMode === 'NEW' ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-bold text-slate-300">
+                  Kode Customer
+                  <input
+                    required
+                    data-autofocus="true"
+                    value={bundleForm.code}
+                    onChange={(event) =>
+                      setBundleForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))
+                    }
+                    placeholder="Contoh AIS"
+                    className="ops-input mt-1 px-3"
+                  />
+                </label>
+                <label className="text-xs font-bold text-slate-300">
+                  Nama Customer
+                  <input
+                    required
+                    value={bundleForm.customerName}
+                    onChange={(event) =>
+                      setBundleForm((current) => ({ ...current, customerName: event.target.value }))
+                    }
+                    placeholder="Nama perusahaan / customer"
+                    className="ops-input mt-1 px-3"
+                  />
+                </label>
+              </div>
+            ) : (
+              <label className="mt-4 block text-xs font-bold text-slate-300">
+                Customer Terdaftar
+                <select
+                  required
+                  data-autofocus="true"
+                  value={selectedCustomerId}
+                  onChange={(event) => setSelectedCustomerId(event.target.value)}
+                  className="ops-input mt-1 px-3"
+                >
+                  <option value="">Pilih Customer</option>
+                  {masters.customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.code} — {customer.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedCustomerId ? (
+                  <div className="mt-2 rounded-xl border border-blue-900/60 bg-blue-950/20 p-3 font-normal text-blue-200">
+                    {masters.customers.find((customer) => customer.id === selectedCustomerId)?.name}
+                    <div className="mt-1 text-[10px] text-blue-300/70">
+                      Site baru akan otomatis terkunci ke Customer ini.
+                    </div>
+                  </div>
+                ) : null}
+              </label>
+            )}
           </section>
 
           <section className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
             <div className="mb-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">SITE WAJIB</div>
-              <p className="mt-1 text-xs text-slate-500">Tidak perlu membuat kode Site. Sistem membuat key internal otomatis.</p>
+              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">
+                {customerMode === 'EXISTING' ? 'SITE BARU' : 'SITE WAJIB'}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Tidak perlu membuat kode Site. Sistem membuat key internal otomatis.
+              </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="text-xs font-bold text-slate-300 sm:col-span-3">
@@ -836,7 +945,7 @@ export const MasterMonitoringView: React.FC<{
                   onChange={(event) =>
                     setBundleForm((current) => ({ ...current, siteName: event.target.value }))
                   }
-                  placeholder="Contoh Barang Bukti KM 92"
+                  placeholder="Contoh Rest Area KM 130"
                   className="ops-input mt-1 px-3"
                 />
               </label>
