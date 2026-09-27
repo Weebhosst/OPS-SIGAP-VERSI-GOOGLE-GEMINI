@@ -41,7 +41,7 @@ function clearSessionCookie(res: Response) {
   });
 }
 
-async function issueSession(user: User, req: Request, res: Response): Promise<string> {
+async function issueSession(user: User, req: Request, res: Response): Promise<{ tokenHash: string; expiresAt: string }> {
   const token = randomBytes(32).toString('base64url');
   const tokenHash = hashSessionToken(token);
   const now = new Date();
@@ -67,7 +67,7 @@ async function issueSession(user: User, req: Request, res: Response): Promise<st
     maxAge: config.sessionTtlHours * 3600 * 1000,
   });
 
-  return tokenHash;
+  return { tokenHash, expiresAt: expiresAt.toISOString() };
 }
 
 // Authentication Middleware
@@ -75,6 +75,7 @@ export interface AuthenticatedRequest extends Request {
   user?: User;
   authTokenHash?: string;
   authSessionId?: string;
+  authSessionExpiresAt?: string;
 }
 
 async function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -103,6 +104,7 @@ async function authMiddleware(req: AuthenticatedRequest, res: Response, next: Ne
     req.user = user;
     req.authTokenHash = tokenHash;
     req.authSessionId = session.id;
+    req.authSessionExpiresAt = session.expiresAt;
 
     const lastSeen = new Date(session.lastSeenAt).getTime();
     if (!Number.isFinite(lastSeen) || Date.now() - lastSeen > 5 * 60 * 1000) {
@@ -266,7 +268,7 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   }
 
   loginAttempts.delete(attemptKey);
-  await issueSession(authenticatedUser, req, res);
+  const issuedSession = await issueSession(authenticatedUser, req, res);
 
   await repositories.audit.append({
     actorUserId: authenticatedUser.id,
@@ -279,12 +281,12 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   });
 
   const { passwordHash, ...safeUser } = authenticatedUser;
-  res.json({ success: true, user: safeUser });
+  res.json({ success: true, user: safeUser, sessionExpiresAt: issuedSession.expiresAt });
 });
 
 apiRouter.get('/auth/me', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
   const { passwordHash, ...safeUser } = req.user!;
-  res.json({ success: true, user: safeUser });
+  res.json({ success: true, user: safeUser, sessionExpiresAt: req.authSessionExpiresAt });
 });
 
 apiRouter.post('/auth/logout', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
