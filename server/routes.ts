@@ -382,6 +382,7 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
       success: true,
       hasOpenSession: false,
       session: null,
+      site: null,
       checkpoints: [],
       logs: [],
       targetRounds: 0,
@@ -405,6 +406,7 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
       success: true,
       hasOpenSession: false,
       session: null,
+      site: site || null,
       checkpoints: checkpoints.map((checkpoint) => ({
         ...toFieldCheckpoint(checkpoint),
         statusInRound: 'BELUM',
@@ -436,6 +438,7 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
     success: true,
     hasOpenSession: true,
     session: openSession,
+    site: site || null,
     checkpoints: enrichedCheckpoints,
     logs,
     targetRounds,
