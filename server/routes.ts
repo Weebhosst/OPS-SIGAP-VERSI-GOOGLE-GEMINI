@@ -2022,6 +2022,62 @@ apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: Au
   res.json({ success: true, user: safeUser });
 });
 
+apiRouter.delete('/admin/users/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const target = await repositories.users.findById(req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: 'Personel tidak ditemukan.' });
+
+    if (target.id === req.user!.id) {
+      return res.status(409).json({ success: false, code: 'CANNOT_DELETE_SELF', error: 'Akun yang sedang digunakan tidak dapat dihapus.' });
+    }
+    if (target.role === 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, code: 'SUPER_ADMIN_DELETE_BLOCKED', error: 'Akun Super Admin tidak dapat dihapus dari menu Petugas.' });
+    }
+
+    const expectedConfirmation = `HAPUS ${target.name}`;
+    const confirmationText = String(req.body.confirmationText || '').trim();
+    if (confirmationText !== expectedConfirmation) {
+      return res.status(400).json({
+        success: false,
+        code: 'DELETE_CONFIRMATION_MISMATCH',
+        error: 'Konfirmasi hapus tidak sesuai. Ketik ulang nama personel sesuai instruksi.',
+      });
+    }
+
+    const removed = await repositories.users.remove(target.id);
+    if (!removed) return res.status(404).json({ success: false, error: 'Personel tidak ditemukan atau sudah dihapus.' });
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'USER_DELETE',
+      entityType: 'user',
+      entityId: target.id,
+      oldValue: {
+        id: target.id,
+        name: target.name,
+        npk: target.npk,
+        email: target.email,
+        role: target.role,
+        position: target.position,
+        customerId: target.customerId,
+        siteId: target.siteId,
+        status: target.status,
+      },
+      newValue: null,
+      reason: `Hapus personel ${target.name}`,
+    });
+
+    res.json({ success: true, deletedId: target.id });
+  } catch (error: any) {
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    throw error;
+  }
+});
+
+
 // Admin Checkpoint Management
 apiRouter.get('/admin/checkpoints', authMiddleware, async (_req: Request, res: Response) => {
   const page = await repositories.checkpoints.list({ limit: 500, offset: 0 });
