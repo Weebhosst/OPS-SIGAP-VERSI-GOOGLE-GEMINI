@@ -81,6 +81,7 @@ export const api = {
     request<{
       success: boolean;
       shift: ShiftInfo;
+      site: Site | null;
       targetRounds: number;
       completedRounds: number;
       activeSession?: PatrolSession;
@@ -92,6 +93,7 @@ export const api = {
       success: boolean;
       hasOpenSession: boolean;
       session: PatrolSession | null;
+      site: Site | null;
       checkpoints: any[];
       logs?: PatrolLog[];
       targetRounds?: number;
