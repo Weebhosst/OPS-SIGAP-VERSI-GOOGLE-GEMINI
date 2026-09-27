@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Customer, PatrolSession, Site } from '../../types/ops';
+import { Customer, PatrolSession, Site, User } from '../../types/ops';
 import {
   OpsDangerConfirmDialog,
   OpsDialog,
@@ -38,7 +38,7 @@ type SiteWithActive = Site & { activeCount: number };
 interface MasterData {
   customers: Customer[];
   sites: SiteWithActive[];
-  personnel: Array<{ id: string }>;
+  personnel: User[];
   checkpoints: Array<{ id: string; siteId: string }>;
 }
 
@@ -92,6 +92,11 @@ export const MasterMonitoringView: React.FC<{
   const [showEmptySites, setShowEmptySites] = useState(false);
   const [expandedSites, setExpandedSites] = useState<Record<string, boolean>>({});
   const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>({});
+  const [expandedPersonnelCustomers, setExpandedPersonnelCustomers] = useState<Record<string, boolean>>({});
+  const [expandedPersonnelSites, setExpandedPersonnelSites] = useState<Record<string, boolean>>({});
+  const [personnelSearch, setPersonnelSearch] = useState('');
+  const [personnelCustomerFilter, setPersonnelCustomerFilter] = useState('');
+  const [personnelStatusFilter, setPersonnelStatusFilter] = useState('');
 
   const [forceTarget, setForceTarget] = useState<(PatrolSession & { memberName: string; npk: string }) | null>(null);
   const [reason, setReason] = useState('');
@@ -183,6 +188,67 @@ export const MasterMonitoringView: React.FC<{
               .includes(search.toLowerCase())),
       ),
     [activeSites, showEmptySites, customerFilter, search],
+  );
+
+  const personnelGroups = useMemo(() => {
+    const query = personnelSearch.trim().toLowerCase();
+
+    return masters.customers
+      .filter((customer) => !personnelCustomerFilter || customer.id === personnelCustomerFilter)
+      .map((customer) => {
+        const sites = masters.sites
+          .filter((site) => site.customerId === customer.id)
+          .map((site) => {
+            const personnel = masters.personnel.filter((person) => {
+              if (person.siteId !== site.id) return false;
+              if (personnelStatusFilter && person.status !== personnelStatusFilter) return false;
+              if (!query) return true;
+              const searchable = [
+                person.name,
+                person.npk,
+                person.email,
+                person.position,
+                person.role,
+                site.name,
+                customer.name,
+                customer.code,
+              ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+              return searchable.includes(query);
+            });
+            return { site, personnel };
+          })
+          .filter(({ personnel }) => !query || personnel.length > 0);
+
+        const totalPersonnel = sites.reduce((sum, item) => sum + item.personnel.length, 0);
+        return { customer, sites, totalPersonnel };
+      })
+      .filter(({ sites, totalPersonnel }) => sites.length > 0 && (!personnelSearch.trim() || totalPersonnel > 0));
+  }, [
+    masters.customers,
+    masters.sites,
+    masters.personnel,
+    personnelCustomerFilter,
+    personnelSearch,
+    personnelStatusFilter,
+  ]);
+
+  const unassignedPersonnel = useMemo(
+    () =>
+      masters.personnel.filter((person) => {
+        if (person.siteId) return false;
+        if (personnelStatusFilter && person.status !== personnelStatusFilter) return false;
+        const query = personnelSearch.trim().toLowerCase();
+        if (!query) return true;
+        return [person.name, person.npk, person.email, person.position]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(query);
+      }),
+    [masters.personnel, personnelSearch, personnelStatusFilter],
   );
 
   const resetBundle = () => {
@@ -671,16 +737,254 @@ export const MasterMonitoringView: React.FC<{
         ) : null}
 
         {activeTab === 'PERSONNEL' ? (
-          <section className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-center text-sm">
-            <Users className="mx-auto mb-2 h-6 w-6 text-blue-400" />
-            <p>{masters.personnel.length} personel terdaftar.</p>
-            {canMutate ? (
-              <button onClick={() => onNavigate('users')} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold">
-                KELOLA PERSONEL
-              </button>
-            ) : (
-              <p className="mt-2 text-xs text-slate-500">Chief: view only</p>
-            )}
+          <section className="space-y-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div className="grid flex-1 gap-2 text-xs md:grid-cols-3">
+                  <label className="relative">
+                    <span className="font-bold text-slate-300">Cari Personel</span>
+                    <Search className="absolute left-3 top-[34px] h-4 w-4 text-slate-500" />
+                    <input
+                      value={personnelSearch}
+                      onChange={(event) => setPersonnelSearch(event.target.value)}
+                      placeholder="Nama, NPK, jabatan"
+                      className="ops-input mt-1 py-2 pl-9 pr-3"
+                    />
+                  </label>
+                  <label>
+                    <span className="font-bold text-slate-300">Customer</span>
+                    <select
+                      value={personnelCustomerFilter}
+                      onChange={(event) => setPersonnelCustomerFilter(event.target.value)}
+                      className="ops-input mt-1 px-3"
+                    >
+                      <option value="">Semua Customer</option>
+                      {masters.customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.code} — {customer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="font-bold text-slate-300">Status Personel</span>
+                    <select
+                      value={personnelStatusFilter}
+                      onChange={(event) => setPersonnelStatusFilter(event.target.value)}
+                      className="ops-input mt-1 px-3"
+                    >
+                      <option value="">Semua Status</option>
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="INACTIVE">INACTIVE</option>
+                    </select>
+                  </label>
+                </div>
+
+                {canMutate ? (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('users')}
+                    className="ops-btn-secondary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 px-4"
+                  >
+                    <Users className="h-4 w-4" />
+                    KELOLA PETUGAS
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-black text-white">DATA PERSONEL</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    Customer → Site → Personel
+                  </div>
+                </div>
+                <div className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs font-black text-slate-300">
+                  {masters.personnel.length} PERSONEL
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {personnelGroups.map(({ customer, sites, totalPersonnel }) => {
+                const customerExpanded = !!expandedPersonnelCustomers[customer.id];
+
+                return (
+                  <article
+                    key={customer.id}
+                    className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedPersonnelCustomers((current) => ({
+                          ...current,
+                          [customer.id]: !current[customer.id],
+                        }))
+                      }
+                      aria-expanded={customerExpanded}
+                      className="flex min-h-16 w-full items-center gap-3 p-4 text-left transition hover:bg-slate-800/60"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-900/70 bg-blue-950/40 text-blue-300">
+                        {customerExpanded ? <FolderOpen className="h-5 w-5" /> : <Folder className="h-5 w-5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-300">
+                          CUSTOMER
+                        </div>
+                        <div className="truncate text-sm font-black text-white">{customer.name}</div>
+                        <div className="mt-0.5 text-[10px] text-slate-500">
+                          {customer.code} • {sites.length} Site • {totalPersonnel} Personel
+                        </div>
+                      </div>
+                      {customerExpanded ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      )}
+                    </button>
+
+                    {customerExpanded ? (
+                      <div className="space-y-2 border-t border-slate-800 bg-slate-950/30 p-3">
+                        {sites.map(({ site, personnel }) => {
+                          const siteExpanded = !!expandedPersonnelSites[site.id];
+
+                          return (
+                            <div
+                              key={site.id}
+                              className="overflow-hidden rounded-xl border border-slate-800 bg-[#0f172a]"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedPersonnelSites((current) => ({
+                                    ...current,
+                                    [site.id]: !current[site.id],
+                                  }))
+                                }
+                                aria-expanded={siteExpanded}
+                                className="flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-slate-800/50"
+                              >
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-900/60 bg-emerald-950/30 text-emerald-300">
+                                  {siteExpanded ? <FolderOpen className="h-4 w-4" /> : <Folder className="h-4 w-4" />}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-300">
+                                    SITE
+                                  </div>
+                                  <div className="truncate text-xs font-black text-white">{site.name}</div>
+                                  <div className="mt-0.5 text-[10px] text-slate-500">
+                                    {personnel.length} Personel • {site.status}
+                                  </div>
+                                </div>
+                                <span className="rounded-full bg-slate-950 px-2 py-1 text-[10px] font-black text-slate-300">
+                                  {personnel.length}
+                                </span>
+                                {siteExpanded ? (
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                                )}
+                              </button>
+
+                              {siteExpanded ? (
+                                <div className="space-y-2 border-t border-slate-800 p-2.5">
+                                  {personnel.length > 0 ? (
+                                    personnel.map((person) => {
+                                      const isActiveSession = activeSites.some((activeSite) =>
+                                        activeSite.sessions.some((session) => session.userId === person.id),
+                                      );
+
+                                      return (
+                                        <div
+                                          key={person.id}
+                                          className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-950/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+                                        >
+                                          <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="text-sm font-black text-white">{person.name}</span>
+                                              <span
+                                                className={
+                                                  person.status === 'ACTIVE'
+                                                    ? 'ops-badge-success'
+                                                    : 'ops-badge-neutral'
+                                                }
+                                              >
+                                                {person.status}
+                                              </span>
+                                              {isActiveSession ? (
+                                                <span className="rounded-full border border-blue-800 bg-blue-950/50 px-2 py-0.5 text-[9px] font-black text-blue-300">
+                                                  ON DUTY
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
+                                              <span className="font-mono">NPK {person.npk}</span>
+                                              <span>{person.position || 'ANGGOTA SECURITY'}</span>
+                                              <span>{person.email}</span>
+                                            </div>
+                                          </div>
+
+                                          <div className="shrink-0 text-left sm:text-right">
+                                            <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">
+                                              ROLE
+                                            </div>
+                                            <div className="mt-0.5 text-[10px] font-bold text-slate-300">{person.role}</div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <div className="rounded-xl border border-dashed border-slate-700 p-4 text-center text-xs text-slate-500">
+                                      Belum ada personel pada Site ini.
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+
+              {unassignedPersonnel.length > 0 ? (
+                <article className="overflow-hidden rounded-2xl border border-amber-900/60 bg-amber-950/10">
+                  <div className="p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-300">
+                      PERSONEL BELUM TERASSIGN
+                    </div>
+                    <div className="mt-1 text-xs text-amber-200">
+                      {unassignedPersonnel.length} personel belum terhubung ke Site.
+                    </div>
+                  </div>
+                  <div className="space-y-2 border-t border-amber-900/40 p-3">
+                    {unassignedPersonnel.map((person) => (
+                      <div key={person.id} className="rounded-xl bg-slate-950/80 p-3 text-xs">
+                        <div className="font-black text-white">{person.name}</div>
+                        <div className="mt-1 text-slate-400">
+                          NPK {person.npk} • {person.position || person.role} • {person.status}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ) : null}
+
+              {personnelGroups.length === 0 && unassignedPersonnel.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                  <Users className="mx-auto h-7 w-7 text-slate-600" />
+                  <div className="mt-2 text-sm font-bold text-slate-300">Personel tidak ditemukan</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Ubah pencarian atau filter Customer / status.
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </section>
         ) : null}
 
