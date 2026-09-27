@@ -126,6 +126,14 @@ try {
   );
 
   assert.equal((await jsonRepositories.sessions.findById(active.id))?.shiftDate, active.shiftDate);
+  const customerSessions = await jsonRepositories.sessions.listFiltered(
+    { customerId: site.customerId, status: 'ACTIVE' },
+    { limit: 100, offset: 0 },
+  );
+  assert.ok(
+    customerSessions.items.some((item) => item.id === active!.id),
+    'Customer scope harus mengembalikan active session dari seluruh Site Customer.',
+  );
 
   const filteredSessions = await jsonRepositories.sessions.listFiltered(
     { userId: active.userId, siteId: active.siteId, status: 'ACTIVE', operationalDate: active.shiftDate },
@@ -228,6 +236,11 @@ try {
     updatedAt: new Date().toISOString(),
   });
   assert.equal((await jsonRepositories.handovers.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === handover.id), true);
+  assert.equal(
+    (await jsonRepositories.handovers.list({ customerId: site.customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === handover.id),
+    true,
+  );
   assert.equal((await jsonRepositories.handovers.update(handover.id, { ackTo: true, status: 'ACKNOWLEDGED', toUserId: user.id }))?.ackTo, true);
 
   const incidentId = `TEST-INCIDENT-${Date.now()}`;
@@ -253,6 +266,11 @@ try {
     updatedAt: new Date().toISOString(),
   });
   assert.equal((await jsonRepositories.incidents.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === incident.id), true);
+  assert.equal(
+    (await jsonRepositories.incidents.list({ customerId: site.customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === incident.id),
+    true,
+  );
   assert.equal((await jsonRepositories.incidents.update(incident.id, { status: 'CLOSED', closedAt: new Date().toISOString() }))?.status, 'CLOSED');
 
   const calibration = await jsonRepositories.radiusCalibrations.create({
@@ -296,6 +314,8 @@ try {
   const appSource = fs.readFileSync(path.resolve('src/App.tsx'), 'utf8');
   const adminCheckpointSource = fs.readFileSync(path.resolve('src/views/admin/AdminCheckpoints.tsx'), 'utf8');
   const masterMonitoringSource = fs.readFileSync(path.resolve('src/views/admin/MasterMonitoringView.tsx'), 'utf8');
+  const adminUsersSource = fs.readFileSync(path.resolve('src/views/admin/AdminUsers.tsx'), 'utf8');
+  const chiefScopeMigration = fs.readFileSync(path.resolve('server/db/migrations/006_chief_customer_scope.sql'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -341,6 +361,14 @@ try {
   assert.match(masterMonitoringSource, /ops:masterWorkspace:/);
   assert.match(masterMonitoringSource, /scrollByTab/);
   assert.match(masterMonitoringSource, /refreshDataInPlace/);
+  assert.match(routeSource, /resolveMonitoringCustomerScope/);
+  assert.match(routeSource, /selectedRole === 'CHIEF'/);
+  assert.match(routeSource, /Customer penugasan wajib dipilih untuk CHIEF/);
+  assert.match(adminUsersSource, /Customer Penugasan CHIEF/);
+  assert.match(adminUsersSource, /CHIEF tidak ditempatkan pada satu Site/);
+  assert.match(chiefScopeMigration, /231117/);
+  assert.match(chiefScopeMigration, /230599/);
+  assert.match(chiefScopeMigration, /site_id = NULL|site_id, effective_from/);
 
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
@@ -356,6 +384,7 @@ try {
   console.log('PASS destructive-action regression guards and disposable deletes');
   console.log('PASS Super Admin audit policy and order-safe checkpoint sequence source guards');
   console.log('PASS Master Monitoring sticky workspace and in-place refresh source guards');
+  console.log('PASS CHIEF customer-level assignment and monitoring scope guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
