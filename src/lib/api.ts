@@ -109,7 +109,13 @@ export const api = {
   submitStartDocumentation: (sessionId: string, photoUrl: string) =>
     request<{ success: boolean; session: PatrolSession }>(`/patrol/session/${sessionId}/start-documentation`, { method: 'POST', body: JSON.stringify({ photoUrl }) }),
 
-  closePatrolSession: (sessionId: string, payload: { endPhotoUrl: string; hasSpecialHandover: boolean; specialNotes?: string; specialPhotoUrls?: string[] }) =>
+  closePatrolSession: (sessionId: string, payload: {
+    endPhotoUrl: string;
+    hasSpecialHandover: boolean;
+    specialNotes?: string;
+    specialPhotoUrls?: string[];
+    specialToUserId?: string;
+  }) =>
     request<{ success: boolean; session: PatrolSession; progress?: { completed: number; target: number }; missingCheckpoints?: Array<{ code: string; name: string }> }>(`/patrol/session/${sessionId}/close`, { method: 'POST', body: JSON.stringify(payload) }),
 
   submitPatrolScan: (payload: {
