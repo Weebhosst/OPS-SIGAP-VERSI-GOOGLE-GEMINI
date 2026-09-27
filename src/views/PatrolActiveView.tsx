@@ -112,6 +112,18 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         setRounds(res.rounds || []);
         setCurrentRound(res.currentRound || 1);
 
+        if (user?.id) {
+          await offlineQueue.savePatrolSnapshot(user.id, {
+            session: res.session,
+            site: res.site || null,
+            checkpoints: res.checkpoints,
+            logs: res.logs || [],
+            rounds: res.rounds || [],
+            currentRound: res.currentRound || 1,
+            targetRounds: res.targetRounds || 0,
+          });
+        }
+
         if (
           res.session.totalValid >= res.session.totalRequired
           && celebratedSessionRef.current !== res.session.id
@@ -123,9 +135,52 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         setSession(null);
         setSiteInfo(res.site || null);
         celebratedSessionRef.current = null;
+        if (user?.id) {
+          await offlineQueue.clearPatrolSnapshot(user.id);
+        }
       }
     } catch (err: any) {
       console.warn('Error loading patrol session:', err);
+
+      if (err?.status === 401 || err?.status === 403 || !user?.id) {
+        return;
+      }
+
+      const snapshot = await offlineQueue.getPatrolSnapshot(user.id);
+      if (snapshot?.session) {
+        await offlineQueue.claimLegacyItemsForSession(snapshot.session.id, user.id);
+        const pendingOffline = await offlineQueue.getPendingForSession(snapshot.session.id, user.id);
+        const pendingCodes = new Set(
+          pendingOffline
+            .map((item) => item.checkpointCode)
+            .filter((code): code is string => !!code),
+        );
+
+        setSession(snapshot.session);
+        setSiteInfo(snapshot.site || null);
+        setLogs(snapshot.logs || []);
+        setRounds(snapshot.rounds || []);
+        setCurrentRound(snapshot.currentRound || 1);
+        setCheckpoints(
+          (snapshot.checkpoints || []).map((checkpoint: any) => {
+            const pendingItem = pendingOffline.find((item) => item.checkpointCode === checkpoint.code);
+            return checkpoint.statusInRound !== 'VALID' && pendingCodes.has(checkpoint.code)
+              ? {
+                  ...checkpoint,
+                  statusInRound: 'PENDING_SYNC',
+                  isOfflinePending: true,
+                  offlineSyncStatus: pendingItem?.syncStatus,
+                  offlineErrorMessage: pendingItem?.errorMessage,
+                }
+              : checkpoint;
+          }),
+        );
+        setValidationAlert({
+          type: 'warning',
+          title: 'MODE RECOVERY OFFLINE',
+          message: 'Session dipulihkan dari snapshot lokal terakhir. Status final tetap mengikuti server saat koneksi kembali.',
+        });
+      }
     } finally {
       setLoading(false);
     }
