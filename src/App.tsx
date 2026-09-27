@@ -382,7 +382,12 @@ function AppContent() {
       <div className="flex-1">
         {memberTab === 'home' && <MemberHome onNavigate={setMemberTab} />}
         {memberTab === 'patrol' && <PatrolActiveView onBack={() => setMemberTab('home')} />}
-        {memberTab === 'handover' && <HandoverView onBack={() => setMemberTab('home')} />}
+        {memberTab === 'handover' && (
+          <HandoverView
+            onBack={() => setMemberTab('home')}
+            onProceedPatrol={() => setMemberTab('patrol')}
+          />
+        )}
         {memberTab === 'incidents' && <IncidentView onBack={() => setMemberTab('home')} />}
         {memberTab === 'gallery' && <GalleryView onBack={() => setMemberTab('home')} />}
         {memberTab === 'profile' && <ProfileView onBack={() => setMemberTab('home')} />}
