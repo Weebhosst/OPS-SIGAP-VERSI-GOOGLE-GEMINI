@@ -517,6 +517,7 @@ export async function getMemberShiftProgress(userId: string, siteId: string) {
 
   return {
     shift,
+    site: site || null,
     targetRounds,
     completedRounds,
     activeSession,
