@@ -295,6 +295,7 @@ try {
   const loginViewSource = fs.readFileSync(path.resolve('src/views/LoginView.tsx'), 'utf8');
   const appSource = fs.readFileSync(path.resolve('src/App.tsx'), 'utf8');
   const adminCheckpointSource = fs.readFileSync(path.resolve('src/views/admin/AdminCheckpoints.tsx'), 'utf8');
+  const masterMonitoringSource = fs.readFileSync(path.resolve('src/views/admin/MasterMonitoringView.tsx'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -337,6 +338,9 @@ try {
   assert.doesNotMatch(appSource, /AdminRadiusCalibration|Kalibrasi Radius/);
   assert.match(appSource, /adminTab === 'audit' && user\.role === 'SUPER_ADMIN'/);
   assert.match(adminCheckpointSource, /Math\.max\(0, \.\.\.existingSequences\) \+ 1/);
+  assert.match(masterMonitoringSource, /ops:masterWorkspace:/);
+  assert.match(masterMonitoringSource, /scrollByTab/);
+  assert.match(masterMonitoringSource, /refreshDataInPlace/);
 
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
@@ -351,6 +355,7 @@ try {
 
   console.log('PASS destructive-action regression guards and disposable deletes');
   console.log('PASS Super Admin audit policy and order-safe checkpoint sequence source guards');
+  console.log('PASS Master Monitoring sticky workspace and in-place refresh source guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
