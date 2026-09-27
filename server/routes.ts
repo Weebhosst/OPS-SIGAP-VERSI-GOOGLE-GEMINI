@@ -147,6 +147,19 @@ function requireMonitoring(req: AuthenticatedRequest, res: Response, next: NextF
   next();
 }
 
+function resolveMonitoringCustomerScope(req: AuthenticatedRequest, res: Response): string | null | undefined {
+  if (req.user?.role !== 'CHIEF') return null;
+  if (!req.user.customerId) {
+    res.status(403).json({
+      success: false,
+      code: 'CHIEF_CUSTOMER_SCOPE_REQUIRED',
+      error: 'Customer penugasan Chief belum dikonfigurasi.',
+    });
+    return undefined;
+  }
+  return req.user.customerId;
+}
+
 function requireOperationalWrite(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({ success: false, error: 'Unauthorized.' });
