@@ -1006,6 +1006,10 @@ export const postgresRepositories: RepositoryBundle = {
       }
       return mapAlert(result.rows[0]);
     }),
+    remove: async (id) => {
+      const result = await query('DELETE FROM validation_alerts WHERE id=$1 RETURNING *', [id]);
+      return result.rows[0] ? mapAlert(result.rows[0]) : undefined;
+    },
   },
 
   adminState: {
