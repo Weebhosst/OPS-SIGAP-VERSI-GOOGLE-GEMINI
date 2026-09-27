@@ -1070,8 +1070,8 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
   const evidencePhotos = Array.isArray(photoUrls)
     ? photoUrls.filter((item: unknown) => typeof item === 'string' && item)
     : (photoUrl ? [photoUrl] : []);
-  if (!itemName || !itemQuantity || !itemCondition || !handedFrom) {
-    return res.status(400).json({ success: false, error: 'Nama barang, jumlah, kondisi, dan pihak penyerah wajib diisi.' });
+  if (!itemName || !itemQuantity || !itemCondition) {
+    return res.status(400).json({ success: false, error: 'Nama barang, jumlah, dan kondisi wajib diisi.' });
   }
   if (!isTaruna && evidencePhotos.length < 1) {
     return res.status(400).json({ success: false, error: 'Dokumentasi Serah Terima Barang wajib diisi.' });
@@ -1119,7 +1119,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     itemName,
     itemQuantity: String(itemQuantity),
     itemCondition,
-    handedFrom,
+    handedFrom: req.user!.name,
     handedTo: recipient.name,
     isTaruna: !!isTaruna,
     conditionStatus: conditionStatus || 'BAIK',
@@ -1285,8 +1285,8 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     longitude,
     photoUrl,
     photoUrls,
-    chronology,
-    initialAction,
+    chronology: normalizedChronology,
+    initialAction: normalizedInitialAction,
     followUp,
     personInvolved,
     witness,
@@ -1299,8 +1299,27 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     notes,
   } = req.body;
 
-  if (!title || !locationText || !chronology || !initialAction) {
+  const allowedCategories = new Set(['INSIDENTIL', 'MENONJOL', 'KEAMANAN', 'K3', 'KECELAKAAN', 'KERUSAKAN', 'KEHILANGAN', 'LAINNYA']);
+  const allowedSeverities = new Set(['RENDAH', 'SEDANG', 'TINGGI', 'KRITIS']);
+  const normalizedTitle = String(title || '').trim();
+  const normalizedLocation = String(locationText || '').trim();
+  const normalizedChronology = String(chronology || '').trim();
+  const normalizedInitialAction = String(initialAction || '').trim();
+  const normalizedCategory = String(category || 'INSIDENTIL').trim().toUpperCase();
+  const normalizedSeverity = String(severity || 'RENDAH').trim().toUpperCase();
+  const normalizedEscalatedTo = String(escalatedTo || '').trim();
+
+  if (!normalizedTitle || !normalizedLocation || !normalizedChronology || !normalizedInitialAction) {
     return res.status(400).json({ success: false, error: 'Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.' });
+  }
+  if (!allowedCategories.has(normalizedCategory)) {
+    return res.status(400).json({ success: false, code: 'INCIDENT_CATEGORY_INVALID', error: 'Kategori kejadian tidak valid.' });
+  }
+  if (!allowedSeverities.has(normalizedSeverity)) {
+    return res.status(400).json({ success: false, code: 'INCIDENT_SEVERITY_INVALID', error: 'Tingkat keparahan kejadian tidak valid.' });
+  }
+  if (escalated === true && !normalizedEscalatedTo) {
+    return res.status(400).json({ success: false, code: 'INCIDENT_ESCALATION_TARGET_REQUIRED', error: 'Tujuan eskalasi wajib diisi jika laporan dieskalasi.' });
   }
 
   const siteId = resolveFieldSiteId(req, res);
@@ -1346,10 +1365,10 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     incidentAt: now,
     shiftCode: activeSession.shiftCode,
     shiftDate: activeSession.shiftDate,
-    category: category || 'INSIDENTIL',
-    severity: severity || 'RENDAH',
-    title,
-    locationText,
+    category: normalizedCategory as IncidentReport['category'],
+    severity: normalizedSeverity as IncidentReport['severity'],
+    title: normalizedTitle,
+    locationText: normalizedLocation,
     latitude: latitude ? Number(latitude) : null,
     longitude: longitude ? Number(longitude) : null,
     photoUrl: preparedUrls[0],
@@ -1366,7 +1385,7 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     externalParty: externalParty || null,
     status: 'OPEN',
     escalated: !!escalated,
-    escalatedTo: escalated ? (escalatedTo || 'SUPERVISOR / POLSEK') : null,
+    escalatedTo: escalated ? normalizedEscalatedTo : null,
     createdBy: req.user!.id,
     createdAt: now,
     updatedAt: now,
@@ -1413,14 +1432,14 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
       entityType: 'incident_report',
       entityId: id,
       newValue: {
-        title,
+        title: normalizedTitle,
         category: incident.category,
         severity: incident.severity,
         escalated: incident.escalated,
         evidenceCount: preparedEvidence.length,
         storageProvider: preparedEvidence[0]?.storageProvider,
       },
-      reason: `Laporan kejadian: ${title} (${incident.severity})`,
+      reason: `Laporan kejadian: ${normalizedTitle} (${incident.severity})`,
     });
 
     const stored = await repositories.incidents.findById(id);
@@ -1434,6 +1453,10 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
 
 apiRouter.patch('/incidents/:id/status', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { status, followUp } = req.body;
+  const allowedStatuses = new Set(['OPEN', 'FOLLOW_UP', 'CLOSED']);
+  if (status && !allowedStatuses.has(String(status))) {
+    return res.status(400).json({ success: false, code: 'INCIDENT_STATUS_INVALID', error: 'Status laporan kejadian tidak valid.' });
+  }
   const incident = await repositories.incidents.findById(req.params.id);
   if (!incident) return res.status(404).json({ success: false, error: 'Laporan kejadian tidak ditemukan.' });
 
