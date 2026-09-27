@@ -97,6 +97,34 @@ try {
   const currentResponse = await fetch(`${base}/patrol/current`, { headers: { Cookie: cookie } });
   assert.equal(currentResponse.status, 200, 'Workspace API should unlock after password rotation.');
 
+  const invalidGpsResponse = await fetch(`${base}/patrol/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({
+      sessionId: 'SECURITY-INVALID-SESSION',
+      qrToken: 'SECURITY-QR',
+      latitude: 'not-a-number',
+      longitude: 107.5,
+    }),
+  });
+  assert.equal(invalidGpsResponse.status, 400);
+  const invalidGpsBody = await invalidGpsResponse.json() as any;
+  assert.equal(invalidGpsBody.code, 'GPS_COORDINATES_INVALID');
+
+  const oversizedSyncResponse = await fetch(`${base}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({
+      items: Array.from({ length: 51 }, (_, index) => ({
+        type: 'PATROL_SCAN',
+        idempotencyId: `SEC-SYNC-${index}`,
+      })),
+    }),
+  });
+  assert.equal(oversizedSyncResponse.status, 400);
+  const oversizedSyncBody = await oversizedSyncResponse.json() as any;
+  assert.equal(oversizedSyncBody.code, 'SYNC_BATCH_SIZE_INVALID');
+
   const logoutResponse = await fetch(`${base}/auth/logout`, {
     method: 'POST',
     headers: { Cookie: cookie },
@@ -109,6 +137,8 @@ try {
   console.log('PASS login uses HttpOnly SameSite=Strict cookie without browser bearer token');
   console.log('PASS unrotated accounts are forced through password change');
   console.log('PASS workspace remains blocked until password rotation completes');
+  console.log('PASS malformed GPS is rejected before geofence validation');
+  console.log('PASS oversized offline sync batches are rejected');
   console.log('PASS logout revokes the server-side session');
 } finally {
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));

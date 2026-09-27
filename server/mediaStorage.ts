@@ -229,9 +229,10 @@ async function putObject(key: string, body: Buffer, mimeType: string): Promise<v
   const response = await s3Request('PUT', key, body, mimeType);
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 300);
+    console.error('[media] Object storage upload failed:', response.status, detail || 'no detail');
     throw new RepositoryError(
       'MEDIA_UPLOAD_FAILED',
-      `Upload foto ke object storage gagal (HTTP ${response.status})${detail ? `: ${detail}` : ''}`,
+      'Upload foto ke object storage gagal. Silakan coba kembali.',
       503,
     );
   }
@@ -255,14 +256,11 @@ export async function prepareMedia(input: PrepareMediaInput): Promise<PreparedMe
   if (!raw) throw new RepositoryError('MEDIA_REQUIRED', 'Foto wajib tersedia.', 400);
 
   if (!raw.startsWith('data:')) {
-    return {
-      photoUrl: raw,
-      storageProvider: 'external_url',
-      storageKey: raw,
-      mimeType: raw.toLowerCase().endsWith('.png') ? 'image/png' : raw.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg',
-      fileName: `${sanitizeSegment(input.mediaId)}.jpg`,
-      fileSize: null,
-    };
+    throw new RepositoryError(
+      'MEDIA_LIVE_CAPTURE_REQUIRED',
+      'Bukti operasional baru wajib berasal dari capture gambar pada perangkat.',
+      400,
+    );
   }
 
   if (config.databaseProvider === 'json') {

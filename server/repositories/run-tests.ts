@@ -13,6 +13,7 @@ try {
   const { jsonRepositories } = await import('./jsonRepositories');
   const { RepositoryError } = await import('./contracts');
   const { normalizeLegacyJson, validateJsonImport } = await import('../db/importJson');
+  const { validateAndProcessScan } = await import('../patrolService');
 
   const health = await jsonRepositories.health();
   assert.deepEqual(health, { provider: 'json', database: 'connected' });
@@ -174,6 +175,31 @@ try {
     (error: unknown) => error instanceof RepositoryError && error.code === 'DUPLICATE_CHECKPOINT',
   );
 
+  await assert.rejects(
+    () => validateAndProcessScan({
+      sessionId: active!.id,
+      qrToken: 'SECURITY-GPS-TEST',
+      latitude: Number.NaN,
+      longitude: checkpoint.longitude,
+      userId: user.id,
+    }),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'GPS_COORDINATES_INVALID',
+    'Koordinat non-finite tidak boleh melewati geofence validator.',
+  );
+
+  await assert.rejects(
+    () => validateAndProcessScan({
+      sessionId: active!.id,
+      qrToken: 'SECURITY-IDEMPOTENCY-TEST',
+      latitude: checkpoint.latitude,
+      longitude: checkpoint.longitude,
+      idempotencyId: logBase.id,
+      userId: `${user.id}-OTHER`,
+    }),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'IDEMPOTENCY_KEY_CONFLICT',
+    'Idempotency key tidak boleh mengembalikan log milik user/session lain.',
+  );
+
   const reviewLog = { ...logBase, id: `${logBase.id}-REVIEW`, checkpointId: 'UNKNOWN', validationStatus: 'REVIEW' as const, rejectionReason: 'GPS_LOW_ACCURACY' };
   await jsonRepositories.patrol.addLogAtomic(reviewLog);
   const alert = (await jsonRepositories.alerts.list('OPEN', { limit: 100, offset: 0 })).items.find((item) => item.patrolLogId === reviewLog.id);
@@ -316,6 +342,21 @@ try {
   const masterMonitoringSource = fs.readFileSync(path.resolve('src/views/admin/MasterMonitoringView.tsx'), 'utf8');
   const adminUsersSource = fs.readFileSync(path.resolve('src/views/admin/AdminUsers.tsx'), 'utf8');
   const chiefScopeMigration = fs.readFileSync(path.resolve('server/db/migrations/006_chief_customer_scope.sql'), 'utf8');
+  const memberHomeSource = fs.readFileSync(path.resolve('src/views/MemberHome.tsx'), 'utf8');
+  const patrolViewSource = fs.readFileSync(path.resolve('src/views/PatrolActiveView.tsx'), 'utf8');
+  const qrScannerSource = fs.readFileSync(path.resolve('src/components/QRScannerModal.tsx'), 'utf8');
+  const cameraCaptureSource = fs.readFileSync(path.resolve('src/components/CameraCaptureModal.tsx'), 'utf8');
+  const handoverViewSource = fs.readFileSync(path.resolve('src/views/HandoverView.tsx'), 'utf8');
+  const incidentViewSource = fs.readFileSync(path.resolve('src/views/IncidentView.tsx'), 'utf8');
+  const offlineQueueSource = fs.readFileSync(path.resolve('src/lib/offlineQueue.ts'), 'utf8');
+  const apiSource = fs.readFileSync(path.resolve('src/lib/api.ts'), 'utf8');
+  const mainSource = fs.readFileSync(path.resolve('src/main.tsx'), 'utf8');
+  const offlineBannerSource = fs.readFileSync(path.resolve('src/components/OfflineBanner.tsx'), 'utf8');
+  const profileViewSource = fs.readFileSync(path.resolve('src/views/ProfileView.tsx'), 'utf8');
+  const galleryViewSource = fs.readFileSync(path.resolve('src/views/GalleryView.tsx'), 'utf8');
+  const serviceWorkerSource = fs.readFileSync(path.resolve('public/sw.js'), 'utf8');
+  const serverEntrySource = fs.readFileSync(path.resolve('server.ts'), 'utf8');
+  const securityIntegrationSource = fs.readFileSync(path.resolve('server/security.run-tests.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -370,6 +411,265 @@ try {
   assert.match(chiefScopeMigration, /230599/);
   assert.match(chiefScopeMigration, /site_id = NULL|site_id, effective_from/);
 
+  // MEMBER-02 security critical regression guards.
+  assert.doesNotMatch(patrolViewSource, /setSimulationGps|GPS Simulasi|Set GPS 0m|14\.86m \(VALID\)|16\.3m \(REJECT\)|Default around CP02|Menggunakan koordinat area site BB92/);
+  assert.match(patrolViewSource, /GPS BELUM SIAP/);
+  assert.match(patrolViewSource, /disabled=\{!!scanLockReason \|\| !nextCheckpoint\}/);
+  assert.match(patrolViewSource, /!currentGps[\s\S]+Menunggu GPS perangkat/);
+
+  assert.doesNotMatch(qrScannerSource, /manualToken|availableTokens|Simulasi Scan Cepat Lapangan|masukkan kode token manual/);
+  assert.match(qrScannerSource, /harus dipindai langsung melalui kamera perangkat di lokasi/);
+  assert.match(routeSource, /function toFieldCheckpoint\(checkpoint: Checkpoint\)/);
+  assert.match(routeSource, /const \{ qrToken, \.\.\.safeCheckpoint \} = checkpoint/);
+  assert.doesNotMatch(patrolViewSource, /token:\s*c\.qrToken/);
+
+  assert.doesNotMatch(cameraCaptureSource, /handleFileFallback|Galeri Kamera|Pilih File Foto|type="file"/);
+  assert.match(cameraCaptureSource, /Bukti operasional wajib diambil langsung melalui kamera perangkat/);
+
+  assert.match(routeSource, /SITE_ASSIGNMENT_REQUIRED/);
+  assert.match(routeSource, /resolveFieldSiteId/);
+  assert.doesNotMatch(routeSource, /siteId\s*\|\|\s*['"]BB92['"]/);
+
+  assert.match(patrolServiceSource, /WRONG_CHECKPOINT_SEQUENCE/);
+  assert.match(patrolServiceSource, /localeCompare\(b\.code, undefined, \{ numeric: true, sensitivity: 'base' \}\)/);
+  assert.match(patrolServiceSource, /expectedCheckpoint/);
+
+  assert.match(offlineQueueSource, /throw err instanceof Error/);
+  assert.match(patrolViewSource, /statusInRound: 'PENDING_SYNC'/);
+  assert.doesNotMatch(patrolViewSource, /statusInRound: 'VALID', isOfflinePending: true/);
+  assert.match(routeSource, /apiRouter\.post\('\/sync', authMiddleware, requireFieldMember/);
+
+  assert.match(routeSource, /apiRouter\.get\('\/field\/site-members', authMiddleware, requireFieldMember/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_REQUIRED/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_INVALID/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_MISMATCH/);
+  assert.match(routeSource, /handover\.toUserId !== req\.user!\.id/);
+  assert.match(handoverViewSource, /h\.toUserId === user\?\.id/);
+  assert.match(handoverViewSource, /Penerima Akun/);
+
+  const memberRuntimeSources = [
+    memberHomeSource,
+    patrolViewSource,
+    handoverViewSource,
+    incidentViewSource,
+    cameraCaptureSource,
+    qrScannerSource,
+  ].join('\n');
+  assert.doesNotMatch(memberRuntimeSources, /BB92|KM 92|Barang Bukti KM 92|Radius Ketat 10-15m/);
+  assert.match(memberHomeSource, /siteInfo\?\.name/);
+  assert.match(cameraCaptureSource, /siteLabel \|\| 'FIELD'/);
+
+  // MEMBER-03 member home operational-state regression guards.
+  assert.match(memberHomeSource, /Tindakan Berikutnya/);
+  assert.match(memberHomeSource, /MULAI SHIFT/);
+  assert.match(memberHomeSource, /LENGKAPI NAIK JAGA/);
+  assert.match(memberHomeSource, /LANJUTKAN RONDE/);
+  assert.match(memberHomeSource, /TURUN JAGA & SELESAIKAN SHIFT/);
+  assert.match(memberHomeSource, /KONEKSI DIPERLUKAN/);
+  assert.match(memberHomeSource, /SERAH TERIMA MENUNGGU KONFIRMASI/);
+  assert.match(memberHomeSource, /offlineQueue\.getSummary/);
+  assert.match(memberHomeSource, /visibilitychange/);
+  assert.match(memberHomeSource, /30_000/);
+  assert.match(memberHomeSource, /currentRoundCompleted/);
+  assert.match(memberHomeSource, /incomingHandoverCount/);
+  assert.match(memberHomeSource, /siteInfo\?\.name/);
+  assert.doesNotMatch(memberHomeSource, /Ronde Berjalan:/);
+
+  // MEMBER-04 guided patrol experience regression guards.
+  assert.match(patrolViewSource, /Checkpoint Berikutnya/);
+  assert.match(patrolViewSource, /CHECKPOINT TERKUNCI/);
+  assert.match(patrolViewSource, /cp\.id !== nextCheckpoint\.id/);
+  assert.match(patrolViewSource, /Datangi titik checkpoint hingga berada di dalam radius/);
+  assert.match(patrolViewSource, /Anda berada di dalam radius\. Scan QR checkpoint fisik sekarang/);
+  assert.match(patrolViewSource, /Rute Patroli/);
+  assert.match(patrolViewSource, /Urutan checkpoint wajib/);
+  assert.match(patrolViewSource, /PENDING SYNC/);
+  assert.match(patrolViewSource, /Jangan lanjut ke checkpoint berikutnya sampai server menyelesaikan validasi/);
+  assert.match(patrolViewSource, /TURUN JAGA & SELESAIKAN SHIFT/);
+  assert.match(patrolViewSource, /Progress Seluruh Shift/);
+  assert.doesNotMatch(patrolViewSource, /handleStartNewRound/);
+  assert.match(patrolServiceSource, /WRONG_CHECKPOINT_SEQUENCE/);
+
+  // MEMBER-05 start / close shift regression guards.
+  assert.match(handoverViewSource, /Step 2 dari 3/);
+  assert.match(handoverViewSource, /SIMPAN & MULAI PATROLI/);
+  assert.match(handoverViewSource, /onProceedPatrol/);
+  assert.match(handoverViewSource, /Patroli QR tetap terkunci sampai foto ini tersimpan di server/);
+  assert.match(appSource, /onProceedPatrol=\{\(\) => setMemberTab\('patrol'\)\}/);
+
+  assert.match(routeSource, /START_DOCUMENTATION_REQUIRED/);
+  assert.match(routeSource, /SPECIAL_HANDOVER_RECIPIENT_REQUIRED/);
+  assert.match(routeSource, /SPECIAL_HANDOVER_RECIPIENT_INVALID/);
+  assert.match(routeSource, /specialRecipient = await repositories\.users\.findById/);
+  assert.match(routeSource, /toUserId: specialRecipient!\.id/);
+  assert.match(routeSource, /handedTo: specialRecipient!\.name/);
+
+  assert.match(apiSource, /specialToUserId\?: string/);
+  assert.match(patrolViewSource, /Final Step/);
+  assert.match(patrolViewSource, /TURUN JAGA/);
+  assert.match(patrolViewSource, /KONFIRMASI TURUN JAGA & SELESAIKAN SHIFT/);
+  assert.match(patrolViewSource, /Penerima/);
+  assert.match(patrolViewSource, /specialToUserId/);
+  assert.match(patrolViewSource, /KONEKSI DIPERLUKAN/);
+  assert.match(patrolViewSource, /SHIFT SELESAI/);
+  assert.match(patrolViewSource, /Session Completed/);
+  assert.match(patrolViewSource, /completedSession/);
+
+  // MEMBER-06 Handover + Incident regression guards.
+  assert.match(handoverViewSource, /Untuk Saya/);
+  assert.match(handoverViewSource, /Dari Saya/);
+  assert.match(handoverViewSource, /Konfirmasi Serah Terima/);
+  assert.match(handoverViewSource, /YA, SAYA TERIMA/);
+  assert.match(handoverViewSource, /Identitas penyerah diambil otomatis dari akun login/);
+  assert.doesNotMatch(handoverViewSource, /setHandedFrom|Diserahkan Dari/);
+  assert.match(routeSource, /handedFrom: req\.user!\.name/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_MISMATCH/);
+
+  assert.doesNotMatch(incidentViewSource, /\balert\s*\(|\bconfirm\s*\(|\bprompt\s*\(/);
+  assert.match(incidentViewSource, /Laporan Kejadian Lapangan/);
+  assert.match(incidentViewSource, /1\. Identitas Kejadian/);
+  assert.match(incidentViewSource, /2\. Kronologi & Tindakan/);
+  assert.match(incidentViewSource, /3\. Eskalasi/);
+  assert.match(incidentViewSource, /4\. Bukti Foto Live/);
+  assert.match(incidentViewSource, /minimal 3 dan maksimal 5 foto live/);
+  assert.match(incidentViewSource, /GPS OPSIONAL/);
+  assert.match(incidentViewSource, /status OPEN/);
+  assert.match(routeSource, /INCIDENT_CATEGORY_INVALID/);
+  assert.match(routeSource, /INCIDENT_SEVERITY_INVALID/);
+  assert.match(routeSource, /INCIDENT_ESCALATION_TARGET_REQUIRED/);
+  assert.match(routeSource, /INCIDENT_STATUS_INVALID/);
+  assert.match(routeSource, /incidentPhotos\.length < 3/);
+  assert.match(routeSource, /incidentPhotos\.length > 5/);
+
+  // MEMBER-07 offline + recovery regression guards.
+  assert.match(offlineQueueSource, /const DB_VERSION = 2/);
+  assert.match(offlineQueueSource, /patrol_snapshots/);
+  assert.match(offlineQueueSource, /recoverInterruptedSync/);
+  assert.match(offlineQueueSource, /retryItem/);
+  assert.match(offlineQueueSource, /activeUserId/);
+  assert.match(offlineQueueSource, /syncStatus: 'SYNC_FAILED'/);
+  assert.match(offlineQueueSource, /sort\(\(a, b\) => a\.createdAt - b\.createdAt\)/);
+  assert.match(offlineQueueSource, /savePatrolSnapshot/);
+  assert.match(offlineQueueSource, /getPatrolSnapshot/);
+  assert.match(offlineQueueSource, /claimLegacyItemsForSession/);
+
+  assert.match(patrolViewSource, /userId: user\?\.id/);
+  assert.match(patrolViewSource, /MODE RECOVERY OFFLINE/);
+  assert.match(patrolViewSource, /offlineSyncStatus/);
+  assert.match(patrolViewSource, /savePatrolSnapshot/);
+  assert.match(patrolViewSource, /getPatrolSnapshot/);
+  assert.match(memberHomeSource, /MODE RECOVERY OFFLINE/);
+  assert.match(memberHomeSource, /RECOVERY SINKRONISASI/);
+  assert.match(memberHomeSource, /MENUNGGU VALIDASI SERVER/);
+  assert.match(profileViewSource, /COBA ULANG DATA INI/);
+  assert.match(profileViewSource, /retryItem/);
+  assert.match(offlineBannerSource, /COBA LAGI/);
+  assert.match(offlineBannerSource, /recoverInterruptedSync/);
+
+  assert.match(routeSource, /authSessionExpiresAt/);
+  assert.match(routeSource, /sessionExpiresAt: issuedSession\.expiresAt/);
+  assert.match(apiSource, /sessionExpiresAt\?: string/);
+  assert.match(authContextSource, /ops:offlineIdentity:v1/);
+  assert.match(authContextSource, /offlineRecovered/);
+  assert.match(authContextSource, /user\.role !== 'ANGGOTA'/);
+  assert.match(authContextSource, /sessionExpiresAt/);
+  assert.doesNotMatch(authContextSource, /localStorage\.setItem\([^\n]*(token|password|sigap_session)/i);
+
+  assert.match(mainSource, /navigator\.serviceWorker/);
+  assert.match(mainSource, /register\('\/sw\.js'/);
+  assert.match(serviceWorkerSource, /ops-sigap-shell-v1-2/);
+  assert.match(serviceWorkerSource, /url\.pathname === '\/api' \|\| url\.pathname\.startsWith\('\/api\/'\)/);
+  assert.match(serviceWorkerSource, /request\.mode === 'navigate'/);
+  assert.match(serviceWorkerSource, /cacheApplicationShell/);
+
+  // MEMBER-08 Gallery & History regression guards.
+  assert.match(mediaServiceSource, /enrichOperationalMedia/);
+  assert.match(mediaServiceSource, /checkpointCode/);
+  assert.match(mediaServiceSource, /validationStatus/);
+  assert.match(mediaServiceSource, /handoverStatus/);
+  assert.match(mediaServiceSource, /incidentSeverity/);
+  assert.match(routeSource, /const enrichedMedia = await enrichOperationalMedia\(page\.items\)/);
+  assert.match(routeSource, /media: enrichedMedia/);
+
+  assert.match(galleryViewSource, /Galeri & Riwayat/);
+  assert.match(galleryViewSource, /Bukti operasional/);
+  assert.match(galleryViewSource, /sourceContextLabel/);
+  assert.match(galleryViewSource, /Riwayat Patroli/);
+  assert.match(galleryViewSource, /Riwayat Serah Terima/);
+  assert.match(galleryViewSource, /Riwayat Kejadian/);
+  assert.match(galleryViewSource, /sourceContext\?\.checkpointName/);
+  assert.match(galleryViewSource, /sourceContext\?\.handoverStatus/);
+  assert.match(galleryViewSource, /sourceContext\?\.incidentStatus/);
+  assert.match(galleryViewSource, /loading="lazy"/);
+  assert.match(galleryViewSource, /limit: '48'/);
+  assert.match(galleryViewSource, /loadingMore/);
+  assert.match(galleryViewSource, /const byId = new Map/);
+  assert.match(galleryViewSource, /MUAT LEBIH BANYAK/);
+  assert.match(galleryViewSource, /BULAN INI/);
+
+  // MEMBER-09 final security hardening regression guards.
+  assert.match(patrolServiceSource, /GPS_COORDINATES_INVALID/);
+  assert.match(patrolServiceSource, /Number\.isFinite\(input\.latitude\)/);
+  assert.match(patrolServiceSource, /input\.latitude < -90/);
+  assert.match(patrolServiceSource, /input\.longitude > 180/);
+  assert.match(patrolServiceSource, /IDEMPOTENCY_KEY_CONFLICT/);
+  assert.match(patrolServiceSource, /existingLog\.userId !== input\.userId \|\| existingLog\.sessionId !== input\.sessionId/);
+  assert.match(patrolServiceSource, /OBSERVATION_STATUS_INVALID/);
+  assert.match(patrolServiceSource, /CAPTURE_TIME_INVALID/);
+
+  assert.match(mediaStorageSource, /MEDIA_LIVE_CAPTURE_REQUIRED/);
+  assert.match(mediaStorageSource, /Bukti operasional baru wajib berasal dari capture gambar/);
+  assert.doesNotMatch(
+    mediaStorageSource,
+    /if \(!raw\.startsWith\('data:'\)\)[\s\S]{0,300}storageProvider: 'external_url'/,
+  );
+  assert.match(mediaStorageSource, /Object storage upload failed/);
+  assert.doesNotMatch(mediaStorageSource, /MEDIA_UPLOAD_FAILED'[\s\S]{0,180}\$\{detail/);
+
+  assert.match(routeSource, /function fieldWriteRateLimit\(bucket: string, maxRequests: number/);
+  assert.match(routeSource, /FIELD_WRITE_RATE_LIMITED/);
+  assert.match(routeSource, /fieldWriteRateLimit\('patrol-scan', 30\)/);
+  assert.match(routeSource, /fieldWriteRateLimit\('offline-sync', 10\)/);
+  assert.match(routeSource, /fieldWriteRateLimit\('handover-create', 20\)/);
+  assert.match(routeSource, /fieldWriteRateLimit\('incident-create', 10\)/);
+
+  assert.match(routeSource, /SYNC_BATCH_SIZE_INVALID/);
+  assert.match(routeSource, /items\.length === 0 \|\| items\.length > 50/);
+  assert.match(routeSource, /syncSource: 'ONLINE'/);
+  assert.match(routeSource, /syncSource: 'OFFLINE_QUEUE'/);
+  assert.match(routeSource, /Gagal memproses item sinkronisasi/);
+  assert.doesNotMatch(routeSource, /error:\s*err\.message \|\| 'Gagal memproses item'/);
+
+  assert.match(
+    routeSource,
+    /apiRouter\.get\('\/handover'[\s\S]{0,700}const siteId = resolveFieldSiteId\(req, res\);[\s\S]{0,100}filter\.siteId = siteId/,
+  );
+  assert.match(
+    routeSource,
+    /apiRouter\.get\('\/incidents'[\s\S]{0,700}const siteId = resolveFieldSiteId\(req, res\);[\s\S]{0,100}filter\.siteId = siteId/,
+  );
+
+  assert.match(routeSource, /HANDOVER_CONDITION_INVALID/);
+  assert.match(routeSource, /eventAt: now/);
+  assert.match(routeSource, /parseOptionalCoordinate\(latitude, -90, 90\)/);
+  assert.match(routeSource, /normalizedText\(chronology, 4000\)/);
+  assert.match(routeSource, /allowedExternalPattern = config\.isProduction/);
+
+  assert.match(routeSource, /cleanNpk\.length > 64/);
+  assert.match(routeSource, /cleanPassword\.length > 256/);
+  assert.match(routeSource, /loginAttempts\.size > 5000/);
+
+  assert.match(serverEntrySource, /app\.disable\('x-powered-by'\)/);
+  assert.match(serverEntrySource, /Strict-Transport-Security/);
+  assert.match(serverEntrySource, /Content-Security-Policy/);
+  assert.match(serverEntrySource, /X-Content-Type-Options/);
+  assert.match(serverEntrySource, /Permissions-Policy/);
+  assert.match(serverEntrySource, /CROSS_SITE_REQUEST_BLOCKED/);
+  assert.match(serverEntrySource, /ORIGIN_NOT_ALLOWED/);
+
+  assert.match(securityIntegrationSource, /GPS_COORDINATES_INVALID/);
+  assert.match(securityIntegrationSource, /SYNC_BATCH_SIZE_INVALID/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -385,6 +685,14 @@ try {
   console.log('PASS Super Admin audit policy and order-safe checkpoint sequence source guards');
   console.log('PASS Master Monitoring sticky workspace and in-place refresh source guards');
   console.log('PASS CHIEF customer-level assignment and monitoring scope guards');
+  console.log('PASS MEMBER-02 security critical anti-bypass regression guards');
+  console.log('PASS MEMBER-03 next-action dashboard and live status regression guards');
+  console.log('PASS MEMBER-04 guided patrol next-checkpoint and route-lock regression guards');
+  console.log('PASS MEMBER-05 guided naik-jaga and guarded close-shift regression guards');
+  console.log('PASS MEMBER-06 handover integrity and guided incident regression guards');
+  console.log('PASS MEMBER-07 offline queue, cold-start recovery, and retry regression guards');
+  console.log('PASS MEMBER-08 gallery source-context, history, and pagination regression guards');
+  console.log('PASS MEMBER-09 auth, IDOR, evidence, GPS, rate-limit, and error-exposure security guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');

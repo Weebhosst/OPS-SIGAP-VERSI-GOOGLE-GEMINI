@@ -52,12 +52,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export const api = {
   // Auth
   login: (npk: string, password: string) =>
-    request<{ success: boolean; user: User }>('/auth/login', {
+    request<{ success: boolean; user: User; sessionExpiresAt?: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ npk, password }),
     }),
 
-  getMe: () => request<{ success: boolean; user: User }>('/auth/me'),
+  getMe: () => request<{ success: boolean; user: User; sessionExpiresAt?: string }>('/auth/me'),
 
   logout: () =>
     request<{ success: boolean }>('/auth/logout', {
@@ -81,6 +81,7 @@ export const api = {
     request<{
       success: boolean;
       shift: ShiftInfo;
+      site: Site | null;
       targetRounds: number;
       completedRounds: number;
       activeSession?: PatrolSession;
@@ -92,6 +93,7 @@ export const api = {
       success: boolean;
       hasOpenSession: boolean;
       session: PatrolSession | null;
+      site: Site | null;
       checkpoints: any[];
       logs?: PatrolLog[];
       targetRounds?: number;
@@ -107,7 +109,13 @@ export const api = {
   submitStartDocumentation: (sessionId: string, photoUrl: string) =>
     request<{ success: boolean; session: PatrolSession }>(`/patrol/session/${sessionId}/start-documentation`, { method: 'POST', body: JSON.stringify({ photoUrl }) }),
 
-  closePatrolSession: (sessionId: string, payload: { endPhotoUrl: string; hasSpecialHandover: boolean; specialNotes?: string; specialPhotoUrls?: string[] }) =>
+  closePatrolSession: (sessionId: string, payload: {
+    endPhotoUrl: string;
+    hasSpecialHandover: boolean;
+    specialNotes?: string;
+    specialPhotoUrls?: string[];
+    specialToUserId?: string;
+  }) =>
     request<{ success: boolean; session: PatrolSession; progress?: { completed: number; target: number }; missingCheckpoints?: Array<{ code: string; name: string }> }>(`/patrol/session/${sessionId}/close`, { method: 'POST', body: JSON.stringify(payload) }),
 
   submitPatrolScan: (payload: {
@@ -153,6 +161,9 @@ export const api = {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return request<{ success: boolean; handovers: ShiftHandover[] }>(`/handover${qs}`);
   },
+
+  getFieldSiteMembers: () =>
+    request<{ success: boolean; members: Array<{ id: string; name: string; npk: string }> }>('/field/site-members'),
 
   createHandover: (payload: Partial<ShiftHandover>) =>
     request<{ success: boolean; handover: ShiftHandover }>('/handover', {

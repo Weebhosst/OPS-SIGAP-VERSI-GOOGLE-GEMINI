@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx src/types/run-tests.ts && tsx server/repositories/run-tests.ts && tsx server/mediaStorage.run-tests.ts && tsx server/security.run-tests.ts",
+    "test": "tsx src/types/run-tests.ts && tsx server/repositories/run-tests.ts && tsx server/mediaStorage.run-tests.ts && tsx server/security.run-tests.ts && tsx server/member-full-regression.run-tests.ts",
     "db:migrate": "tsx server/db/migrate.ts",
     "db:import-json": "tsx server/db/importJson.ts",
     "test:postgres": "tsx server/repositories/postgres-live-tests.ts",

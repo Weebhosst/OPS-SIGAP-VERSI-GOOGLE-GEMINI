@@ -86,17 +86,18 @@ assert.equal(health.configured, true);
 assert.equal(health.connected, true);
 assert.ok(requests.some((item) => item.method === 'GET' && item.url.includes('ops-sigap/.healthcheck-missing-object')));
 
-const external = await prepareMedia({
-  mediaId: 'MED-EXT-01',
-  sourceModule: 'INCIDENT',
-  siteId: 'MO-SUBANG',
-  userId: 'USR-TEST',
-  documentType: 'INSIDEN',
-  eventAt: '2026-09-24T07:00:00.000Z',
-  photoUrl: 'https://example.invalid/photo.jpg',
-});
-assert.equal(external.storageProvider, 'external_url');
-assert.equal(external.photoUrl, 'https://example.invalid/photo.jpg');
+await assert.rejects(
+  () => prepareMedia({
+    mediaId: 'MED-EXT-01',
+    sourceModule: 'INCIDENT',
+    siteId: 'MO-SUBANG',
+    userId: 'USR-TEST',
+    documentType: 'INSIDEN',
+    eventAt: '2026-09-24T07:00:00.000Z',
+    photoUrl: 'https://example.invalid/photo.jpg',
+  }),
+  /wajib berasal dari capture gambar/,
+);
 
 let batchPut = 0;
 const batchRequests: string[] = [];
@@ -142,5 +143,5 @@ console.log('PASS deterministic Railway S3 object keys');
 console.log('PASS AWS Signature V4 upload request construction');
 console.log('PASS authenticated delivery URL metadata');
 console.log('PASS object download path and storage health probe');
-console.log('PASS external URL compatibility');
+console.log('PASS external URL evidence is rejected for new operational uploads');
 console.log('PASS failed batch upload compensates uploaded objects');
