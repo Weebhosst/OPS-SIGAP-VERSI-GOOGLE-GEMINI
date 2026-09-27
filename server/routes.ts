@@ -182,6 +182,19 @@ function requireFieldMember(req: AuthenticatedRequest, res: Response, next: Next
   next();
 }
 
+function resolveFieldSiteId(req: AuthenticatedRequest, res: Response): string | undefined {
+  const siteId = String(req.user?.siteId || '').trim();
+  if (!siteId) {
+    res.status(403).json({
+      success: false,
+      code: 'SITE_ASSIGNMENT_REQUIRED',
+      error: 'Akun Anggota belum memiliki penugasan Site. Hubungi Administrator sebelum memulai operasi lapangan.',
+    });
+    return undefined;
+  }
+  return siteId;
+}
+
 function sendRepositoryError(res: Response, error: unknown): boolean {
   if (!(error instanceof RepositoryError)) return false;
   res.status(error.status).json({ success: false, code: error.code, error: error.message });
@@ -354,13 +367,32 @@ function toFieldCheckpoint(checkpoint: Checkpoint) {
 }
 
 apiRouter.get('/patrol/shift-progress', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-  const siteId = req.user!.siteId || 'BB92';
+  if (req.user!.role !== 'ANGGOTA') {
+    return res.status(403).json({ success: false, error: 'Progress shift hanya tersedia untuk akun Anggota.' });
+  }
+  const siteId = resolveFieldSiteId(req, res);
+  if (!siteId) return;
   const progress = await getMemberShiftProgress(req.user!.id, siteId);
   res.json({ success: true, ...progress });
 });
 
 apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-  const siteId = req.user!.siteId || 'BB92';
+  if (req.user!.role !== 'ANGGOTA') {
+    return res.json({
+      success: true,
+      hasOpenSession: false,
+      session: null,
+      checkpoints: [],
+      logs: [],
+      targetRounds: 0,
+      currentRound: 0,
+      rounds: [],
+    });
+  }
+
+  const siteId = resolveFieldSiteId(req, res);
+  if (!siteId) return;
+
   const [activeCandidate, checkpoints, site] = await Promise.all([
     repositories.sessions.getActiveByUser(req.user!.id),
     repositories.checkpoints.listBySite(siteId),
@@ -426,7 +458,8 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
 });
 
 apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
-  const siteId = req.user!.siteId || 'BB92';
+  const siteId = resolveFieldSiteId(req, res);
+  if (!siteId) return;
   const existingOpen = await repositories.sessions.getActiveByUser(req.user!.id);
   if (existingOpen) {
     return res.status(400).json({
@@ -933,7 +966,8 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     isTaruna,
   } = req.body;
 
-  const siteId = req.user!.siteId || 'BB92';
+  const siteId = resolveFieldSiteId(req, res);
+  if (!siteId) return;
   const activeSession = await repositories.sessions.getActiveByUser(req.user!.id);
   if (!activeSession || activeSession.siteId !== siteId || !activeSession.startDocumentationCompleted) {
     return res.status(409).json({ success: false, error: 'Serah terima barang hanya dapat dibuat saat shift aktif.' });
@@ -1145,7 +1179,8 @@ apiRouter.post('/incidents', authMiddleware, requireFieldMember, async (req: Aut
     return res.status(400).json({ success: false, error: 'Judul, Area Kejadian, kronologi, dan tindakan awal wajib diisi.' });
   }
 
-  const siteId = req.user!.siteId || 'BB92';
+  const siteId = resolveFieldSiteId(req, res);
+  if (!siteId) return;
   const activeSession = await repositories.sessions.getActiveByUser(req.user!.id);
   if (!activeSession || activeSession.siteId !== siteId || !activeSession.startDocumentationCompleted) {
     return res.status(409).json({ success: false, error: 'Laporan kejadian hanya dapat dibuat saat shift aktif setelah Sertigas Naik Jaga.' });
