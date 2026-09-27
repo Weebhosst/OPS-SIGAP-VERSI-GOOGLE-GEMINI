@@ -27,28 +27,49 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
   const loadQueue = async () => {
-    const items = await offlineQueue.getQueueItems();
+    if (!user || user.role !== 'ANGGOTA') {
+      setQueueItems([]);
+      return;
+    }
+    const items = await offlineQueue.getQueueItems(user.id);
     setQueueItems(items);
   };
 
   useEffect(() => {
-    loadQueue();
-    const unsub = offlineQueue.subscribe(loadQueue);
+    void loadQueue();
+    const unsub = offlineQueue.subscribe(() => {
+      void loadQueue();
+    });
     return () => {
       unsub();
     };
-  }, []);
+  }, [user?.id, user?.role]);
 
   const handleManualSync = async () => {
+    if (!user || user.role !== 'ANGGOTA') return;
     setIsSyncing(true);
     setSyncStatusMsg('Menyinkronkan antrean...');
-    const res = await offlineQueue.syncNow();
-    if (res.synced > 0) {
-      setSyncStatusMsg(`Sukses menyinkronkan ${res.synced} data!`);
+    const res = await offlineQueue.syncNow(user.id);
+    if (res.synced > 0 && res.failed === 0) {
+      setSyncStatusMsg(`Sukses menyinkronkan ${res.synced} data.`);
     } else if (res.failed > 0) {
-      setSyncStatusMsg(`${res.failed} data gagal sinkron. Periksa jaringan.`);
+      setSyncStatusMsg(`${res.failed} data masih gagal sinkron. Bukti tetap tersimpan di perangkat.`);
     } else {
-      setSyncStatusMsg('Tidak ada antrean pending.');
+      setSyncStatusMsg('Tidak ada antrean yang perlu disinkronkan.');
+    }
+    await loadQueue();
+    setIsSyncing(false);
+  };
+
+  const handleRetryItem = async (item: OfflineQueueItem) => {
+    if (!user || user.role !== 'ANGGOTA') return;
+    setIsSyncing(true);
+    setSyncStatusMsg(`Mencoba ulang ${item.checkpointCode || 'data patroli'}...`);
+    const result = await offlineQueue.retryItem(item.idempotencyId, user.id);
+    if (result.synced > 0) {
+      setSyncStatusMsg(`${item.checkpointCode || 'Data'} berhasil disinkronkan.`);
+    } else {
+      setSyncStatusMsg(`${item.checkpointCode || 'Data'} belum berhasil sinkron. Detail error tetap tersimpan.`);
     }
     await loadQueue();
     setIsSyncing(false);
@@ -157,25 +178,56 @@ export const ProfileView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               {queueItems.map((q) => (
                 <div
                   key={q.idempotencyId}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs gap-3"
+                  className={`rounded-xl border p-3 text-xs ${
+                    q.syncStatus === 'SYNC_FAILED'
+                      ? 'border-red-900/70 bg-red-950/20'
+                      : 'border-slate-800 bg-slate-950/70'
+                  }`}
                 >
-                  <div>
-                    <div className="font-bold text-white font-mono">{q.checkpointCode || 'SCAN'}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      {new Date(q.clientCapturedAt).toLocaleTimeString('id-ID')} WIB
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-mono font-black text-white">{q.checkpointCode || 'SCAN'}</div>
+                      <div className="mt-0.5 truncate text-[10px] text-slate-400">
+                        {q.checkpointName || q.sessionId}
+                      </div>
+                      <div className="mt-1 font-mono text-[9px] text-slate-500">
+                        {new Date(q.clientCapturedAt).toLocaleString('id-ID')} WIB
+                      </div>
                     </div>
+                    <span
+                      className={`shrink-0 rounded px-2 py-0.5 font-mono text-[9px] font-black ${
+                        q.syncStatus === 'SYNC_FAILED'
+                          ? 'bg-red-950 text-red-400'
+                          : q.syncStatus === 'SYNCING'
+                            ? 'bg-blue-950 text-blue-400'
+                            : 'bg-amber-950 text-amber-400'
+                      }`}
+                    >
+                      {q.syncStatus}
+                    </span>
                   </div>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono ${
-                      q.syncStatus === 'SYNCED'
-                        ? 'bg-emerald-950 text-emerald-400'
-                        : q.syncStatus === 'SYNC_FAILED'
-                        ? 'bg-red-950 text-red-400'
-                        : 'bg-amber-950 text-amber-400'
-                    }`}
-                  >
-                    {q.syncStatus}
-                  </span>
+
+                  <div className="mt-2 flex items-center justify-between gap-3 text-[9px] text-slate-500">
+                    <span>Percobaan {q.attemptCount || 0}</span>
+                    {q.lastAttemptAt ? <span>Terakhir {new Date(q.lastAttemptAt).toLocaleTimeString('id-ID')} WIB</span> : null}
+                  </div>
+
+                  {q.errorMessage ? (
+                    <div className="mt-2 rounded-lg border border-red-900/60 bg-red-950/30 p-2 text-[10px] leading-4 text-red-200">
+                      {q.errorMessage}
+                    </div>
+                  ) : null}
+
+                  {q.syncStatus === 'SYNC_FAILED' ? (
+                    <button
+                      type="button"
+                      disabled={isSyncing}
+                      onClick={() => void handleRetryItem(q)}
+                      className="mt-2 min-h-9 w-full rounded-lg border border-red-800 bg-red-950/50 px-3 py-2 text-[10px] font-black text-red-200 disabled:opacity-40"
+                    >
+                      COBA ULANG DATA INI
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
