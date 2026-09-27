@@ -1554,6 +1554,64 @@ apiRouter.patch('/admin/validation-alerts/:id', authMiddleware, requireAdmin, as
   }
 });
 
+apiRouter.delete('/admin/validation-alerts/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const previous = await repositories.alerts.findById(req.params.id);
+    if (!previous) return res.status(404).json({ success: false, error: 'Validation alert tidak ditemukan.' });
+
+    const expectedConfirmation = `HAPUS ${previous.id}`;
+    const confirmationText = String(req.body.confirmationText || '').trim();
+    if (confirmationText !== expectedConfirmation) {
+      return res.status(400).json({
+        success: false,
+        code: 'DELETE_CONFIRMATION_MISMATCH',
+        error: 'Konfirmasi hapus tidak sesuai. Ketik ulang teks konfirmasi yang ditampilkan.',
+      });
+    }
+
+    const removed = await repositories.alerts.remove(previous.id);
+    if (!removed) return res.status(404).json({ success: false, error: 'Validation alert tidak ditemukan atau sudah dihapus.' });
+
+    try {
+      await repositories.audit.append({
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'VALIDATION_ALERT_DELETE',
+        entityType: 'validation_alert',
+        entityId: previous.id,
+        oldValue: {
+          id: previous.id,
+          patrolLogId: previous.patrolLogId,
+          sessionId: previous.sessionId,
+          userId: previous.userId,
+          siteId: previous.siteId,
+          checkpointId: previous.checkpointId,
+          alertType: previous.alertType,
+          status: previous.status,
+          message: previous.message,
+          createdAt: previous.createdAt,
+        },
+        newValue: null,
+        reason: `Hapus validation alert ${previous.id}`,
+      });
+    } catch (auditError) {
+      console.error('[alert] Validation alert deleted but audit append failed:', auditError instanceof Error ? auditError.message : 'unknown');
+      return res.status(500).json({
+        success: false,
+        code: 'AUDIT_APPEND_FAILED_AFTER_DELETE',
+        error: 'Validation alert sudah dihapus, tetapi pencatatan Audit Trail gagal. Segera periksa log sistem.',
+      });
+    }
+
+    res.json({ success: true, deletedId: previous.id });
+  } catch (error: any) {
+    const controlled = error instanceof RepositoryError;
+    const code = controlled ? error.code : 'DATABASE_OPERATION_FAILED';
+    console.error('[alert] Delete failed:', error instanceof Error ? error.message : 'unknown');
+    res.status(controlled ? error.status : 500).json({ success: false, code, error: controlled ? error.message : 'Validation alert gagal dihapus karena gangguan database.' });
+  }
+});
+
 // Admin User Management
 apiRouter.get('/admin/users', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
   const page = await repositories.users.list({ limit: 500, offset: 0 });
