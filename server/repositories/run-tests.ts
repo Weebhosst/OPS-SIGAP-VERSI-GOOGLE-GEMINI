@@ -13,6 +13,7 @@ try {
   const { jsonRepositories } = await import('./jsonRepositories');
   const { RepositoryError } = await import('./contracts');
   const { normalizeLegacyJson, validateJsonImport } = await import('../db/importJson');
+  const { validateAndProcessScan } = await import('../patrolService');
 
   const health = await jsonRepositories.health();
   assert.deepEqual(health, { provider: 'json', database: 'connected' });
@@ -172,6 +173,31 @@ try {
   await assert.rejects(
     () => jsonRepositories.patrol.addLogAtomic({ ...logBase, id: `${logBase.id}-DUPLICATE` }),
     (error: unknown) => error instanceof RepositoryError && error.code === 'DUPLICATE_CHECKPOINT',
+  );
+
+  await assert.rejects(
+    () => validateAndProcessScan({
+      sessionId: active!.id,
+      qrToken: 'SECURITY-GPS-TEST',
+      latitude: Number.NaN,
+      longitude: checkpoint.longitude,
+      userId: user.id,
+    }),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'GPS_COORDINATES_INVALID',
+    'Koordinat non-finite tidak boleh melewati geofence validator.',
+  );
+
+  await assert.rejects(
+    () => validateAndProcessScan({
+      sessionId: active!.id,
+      qrToken: 'SECURITY-IDEMPOTENCY-TEST',
+      latitude: checkpoint.latitude,
+      longitude: checkpoint.longitude,
+      idempotencyId: logBase.id,
+      userId: `${user.id}-OTHER`,
+    }),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'IDEMPOTENCY_KEY_CONFLICT',
+    'Idempotency key tidak boleh mengembalikan log milik user/session lain.',
   );
 
   const reviewLog = { ...logBase, id: `${logBase.id}-REVIEW`, checkpointId: 'UNKNOWN', validationStatus: 'REVIEW' as const, rejectionReason: 'GPS_LOW_ACCURACY' };
