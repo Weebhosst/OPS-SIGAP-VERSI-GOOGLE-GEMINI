@@ -225,6 +225,12 @@ export const api = {
   updateValidationAlert: (id: string, action: 'REVIEW' | 'CLOSE' | 'REOPEN', closeNote?: string) =>
     request<{ success: boolean; alert: ValidationAlert }>(`/admin/validation-alerts/${id}`, { method: 'PATCH', body: JSON.stringify({ action, closeNote }) }),
 
+  deleteValidationAlert: (id: string, confirmationText: string) =>
+    request<{ success: boolean; deletedId: string }>(`/admin/validation-alerts/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmationText }),
+    }),
+
   setAdminFilter: (filter: Partial<AdminFilterState>) =>
     request<{ success: boolean; filterState: AdminFilterState }>('/admin/filter-state', {
       method: 'POST',
