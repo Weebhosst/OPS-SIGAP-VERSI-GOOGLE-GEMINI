@@ -46,12 +46,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
     latitude: number;
     longitude: number;
     accuracy: number;
-    isSimulated?: boolean;
-  }>({
-    latitude: -6.48125, // Default around CP02 for BB92
-    longitude: 107.631806,
-    accuracy: 3.5,
-  });
+  } | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
   // Flow Modals & Steps
@@ -111,14 +106,13 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
             accuracy: pos.coords.accuracy,
-            isSimulated: false,
           });
           setGpsError(null);
         },
         (err) => {
           console.warn('[GPS] Geolocation warning:', err.message);
-          // Keep default BB92 location for smooth evaluation if GPS hardware is unavailable
-          setGpsError('GPS hardware lemah/izin nonaktif. Menggunakan koordinat area site BB92.');
+          setCurrentGps(null);
+          setGpsError('GPS belum tersedia. Aktifkan izin lokasi dan tunggu posisi perangkat diperoleh sebelum melakukan scan checkpoint.');
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
       );
@@ -127,6 +121,9 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         navigator.geolocation.clearWatch(watchId);
       };
     }
+
+    setCurrentGps(null);
+    setGpsError('Perangkat atau browser ini tidak menyediakan GPS. Scan checkpoint tidak dapat dilakukan.');
   }, []);
 
   const triggerConfetti = () => {
@@ -162,6 +159,14 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
   // Step 1: Guard clicks Scan on a checkpoint
   const handleInitiateScan = (cp: any) => {
     if (cp.statusInRound === 'VALID') return;
+    if (!currentGps) {
+      setValidationAlert({
+        type: 'error',
+        title: 'GPS BELUM SIAP',
+        message: 'Scan checkpoint dikunci sampai lokasi GPS perangkat berhasil diperoleh.',
+      });
+      return;
+    }
     setActiveCpForScan(cp);
     setScannedToken(null);
     setCapturedPhoto(null);
@@ -213,6 +218,14 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
   // Step 4: Final submission with observation status
   const handleSubmitScan = async () => {
     if (!session || !activeCpForScan || !scannedToken) return;
+    if (!currentGps) {
+      setValidationAlert({
+        type: 'error',
+        title: 'GPS TIDAK TERSEDIA',
+        message: 'Validasi checkpoint dibatalkan karena posisi GPS perangkat tidak tersedia.',
+      });
+      return;
+    }
 
     setSubmitting(true);
     setValidationAlert(null);
@@ -319,18 +332,6 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
     }
   };
 
-  // Helper to test calibration GPS points
-  const setSimulationGps = (cp: any, offsetM = 0) => {
-    // 1 deg lat is approx 111,320m, 1m is ~0.000009 deg
-    const latOffset = (offsetM * 0.000009);
-    setCurrentGps({
-      latitude: cp.latitude + latOffset,
-      longitude: cp.longitude,
-      accuracy: 3.0,
-      isSimulated: true,
-    });
-  };
-
   return (
     <div className="min-h-screen bg-[#020817] pb-28 text-slate-100">
       {/* Tactical Top Bar */}
@@ -375,31 +376,31 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/90 shadow-lg shadow-black/10">
           <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className={`flex h-9 w-9 items-center justify-center rounded-xl border ${currentGps.isSimulated ? 'border-purple-700/60 bg-purple-900/25 text-purple-300' : 'border-emerald-700/60 bg-emerald-900/25 text-emerald-300'}`}>
+              <span className={`flex h-9 w-9 items-center justify-center rounded-xl border ${currentGps ? 'border-emerald-700/60 bg-emerald-900/25 text-emerald-300' : 'border-amber-700/60 bg-amber-900/25 text-amber-300'}`}>
                 <LocateFixed className="h-4 w-4" />
               </span>
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Verifikasi Lokasi</p>
-                <p className="mt-0.5 text-sm font-black text-white">{currentGps.isSimulated ? 'GPS Simulasi' : 'GPS Perangkat Aktif'}</p>
+                <p className="mt-0.5 text-sm font-black text-white">{currentGps ? 'GPS Perangkat Aktif' : 'Menunggu GPS Perangkat'}</p>
               </div>
             </div>
-            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${currentGps.accuracy > 20 ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
-              ±{currentGps.accuracy.toFixed(1)} m
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${!currentGps ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : currentGps.accuracy > 20 ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+              {currentGps ? `±${currentGps.accuracy.toFixed(1)} m` : 'BELUM SIAP'}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3 px-4 py-3 text-xs">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Latitude</p>
-              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps.latitude.toFixed(6)}</p>
+              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps ? currentGps.latitude.toFixed(6) : '-'}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Longitude</p>
-              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps.longitude.toFixed(6)}</p>
+              <p className="mt-1 font-mono font-bold text-slate-200">{currentGps ? currentGps.longitude.toFixed(6) : '-'}</p>
             </div>
           </div>
-          {currentGps.accuracy > 20 ? (
+          {currentGps && currentGps.accuracy > 20 ? (
             <div className="border-t border-amber-900/60 bg-amber-950/30 px-4 py-2.5 text-[11px] font-semibold text-amber-300">
-              Akurasi GPS rendah. Posisi tetap mengikuti data GPS perangkat yang sedang diterima.
+              Akurasi GPS rendah. Tunggu posisi membaik sebelum melakukan scan checkpoint.
             </div>
           ) : null}
         </section>
@@ -494,12 +495,14 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
             const isReview = cp.statusInRound === 'REVIEW';
 
             // Calculate distance to current GPS
-            const distanceNow = calculateDistanceMeters(
-              currentGps.latitude,
-              currentGps.longitude,
-              cp.latitude,
-              cp.longitude
-            );
+            const distanceNow = currentGps
+              ? calculateDistanceMeters(
+                  currentGps.latitude,
+                  currentGps.longitude,
+                  cp.latitude,
+                  cp.longitude
+                )
+              : null;
 
             return (
               <div
@@ -533,11 +536,11 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                         <span className="rounded-lg border border-slate-700 bg-slate-950/70 px-2 py-1 font-mono text-slate-400">
                           Radius {cp.radiusMeters}m
                         </span>
-                        <span className={`rounded-lg border px-2 py-1 font-mono font-bold ${distanceNow <= cp.radiusMeters ? 'border-emerald-700/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-700/60 bg-amber-950/30 text-amber-300'}`}>
-                          Jarak HP {distanceNow.toFixed(1)}m
+                        <span className={`rounded-lg border px-2 py-1 font-mono font-bold ${distanceNow === null ? 'border-slate-700 bg-slate-950/70 text-slate-500' : distanceNow <= cp.radiusMeters ? 'border-emerald-700/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-700/60 bg-amber-950/30 text-amber-300'}`}>
+                          Jarak HP {distanceNow === null ? '-' : `${distanceNow.toFixed(1)}m`}
                         </span>
-                        <span className={`rounded-lg border px-2 py-1 text-[10px] font-black ${distanceNow <= cp.radiusMeters ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>
-                          {distanceNow <= cp.radiusMeters ? 'DALAM RADIUS' : 'DI LUAR RADIUS'}
+                        <span className={`rounded-lg border px-2 py-1 text-[10px] font-black ${distanceNow === null ? 'border-slate-700 bg-slate-800 text-slate-400' : distanceNow <= cp.radiusMeters ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>
+                          {distanceNow === null ? 'GPS BELUM SIAP' : distanceNow <= cp.radiusMeters ? 'DALAM RADIUS' : 'DI LUAR RADIUS'}
                         </span>
                       </div>
                     </div>
@@ -574,38 +577,6 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
 
                 {/* Actions Bar */}
                 <div className="mt-4 flex flex-col gap-3 border-t border-slate-800/80 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                  {/* Calibration / Test helper button (Positions GPS near checkpoint) */}
-                  <div className="flex flex-wrap items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setSimulationGps(cp, 0)}
-                      className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 font-mono text-[10px] text-slate-300 transition hover:bg-slate-700"
-                      title="Set koordinat HP persis di titik checkpoint ini (0m)"
-                    >
-                      Set GPS 0m
-                    </button>
-                    {cp.code === 'CP02' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setSimulationGps(cp, 14.86)}
-                          className="rounded-lg border border-emerald-800/60 bg-slate-800 px-2 py-1.5 font-mono text-[10px] text-emerald-300 transition hover:bg-slate-700"
-                          title="Simulasi 14.86m (Harus VALID)"
-                        >
-                          14.86m (VALID)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSimulationGps(cp, 16.3)}
-                          className="rounded-lg border border-red-800/60 bg-slate-800 px-2 py-1.5 font-mono text-[10px] text-red-300 transition hover:bg-slate-700"
-                          title="Simulasi 16.3m (Harus REJECTED)"
-                        >
-                          16.3m (REJECT)
-                        </button>
-                      </>
-                    )}
-                  </div>
-
                   {/* Main Scan Trigger */}
                   <div className="sm:ml-auto">
                     {isValid ? (
@@ -615,7 +586,8 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                     ) : (
                       <button
                         onClick={() => handleInitiateScan(cp)}
-                        className={`flex min-h-[38px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-black shadow transition focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                        disabled={!currentGps}
+                        className={`flex min-h-[38px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-black shadow transition focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none ${
                           isRejected
                             ? 'bg-red-600 hover:bg-red-500 text-white'
                             : 'bg-blue-600 hover:bg-blue-500 text-white'
@@ -685,7 +657,7 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
                   </div>
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
                     <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">AKURASI</p>
-                    <p className="mt-1 font-mono text-[11px] font-black text-slate-200">±{currentGps.accuracy.toFixed(0)}m</p>
+                    <p className="mt-1 font-mono text-[11px] font-black text-slate-200">{currentGps ? `±${currentGps.accuracy.toFixed(0)}m` : '-'}</p>
                   </div>
                 </div>
 
@@ -785,9 +757,9 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         onCapture={handlePhotoCaptured}
         checkpointCode={cameraMode === 'CHECKPOINT' ? activeCpForScan?.code : cameraMode === 'END' ? 'TURUN JAGA' : 'TARUNA'}
         checkpointName={cameraMode === 'CHECKPOINT' ? activeCpForScan?.name : 'Dokumentasi Shift'}
-        latitude={currentGps.latitude}
-        longitude={currentGps.longitude}
-        gpsAccuracyM={currentGps.accuracy}
+        latitude={currentGps?.latitude}
+        longitude={currentGps?.longitude}
+        gpsAccuracyM={currentGps?.accuracy}
       />
     </div>
   );
