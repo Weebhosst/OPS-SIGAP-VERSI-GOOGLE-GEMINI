@@ -258,7 +258,9 @@ export async function validateAndProcessScan(input: ScanInput): Promise<Validati
     repositories.sites.findById(session.siteId),
     repositories.checkpoints.listBySite(session.siteId),
   ]);
-  const enabledCheckpoints = activeCheckpoints.filter((item) => item.status === 'ACTIVE');
+  const enabledCheckpoints = activeCheckpoints
+    .filter((item) => item.status === 'ACTIVE')
+    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
   const checkpointsPerRound = Math.max(1, enabledCheckpoints.length);
   const targetRounds = Math.max(1, site?.targetRoundsPerShift || 1);
   const validLogs = existingLogs.filter((item) => item.validationStatus === 'VALID');
@@ -274,6 +276,25 @@ export async function validateAndProcessScan(input: ScanInput): Promise<Validati
       logId,
       'DUPLICATE_CHECKPOINT',
       `Titik checkpoint ${checkpoint.code} (${checkpoint.name}) sudah tervalidasi pada ronde ini.`,
+      { checkpointId: checkpoint.id, roundNumber: currentRound },
+    );
+    return resultFromLog(log, session, checkpoint);
+  }
+
+  const currentRoundValidIds = new Set(
+    validLogs
+      .filter((item) => (item.roundNumber || 1) === currentRound)
+      .map((item) => item.checkpointId),
+  );
+  const expectedCheckpoint = enabledCheckpoints.find((item) => !currentRoundValidIds.has(item.id));
+
+  if (expectedCheckpoint && checkpoint.id !== expectedCheckpoint.id) {
+    const log = await persistRejected(
+      input,
+      session,
+      logId,
+      'WRONG_CHECKPOINT_SEQUENCE',
+      `Urutan patroli wajib mengikuti checkpoint aktif. Berikutnya ${expectedCheckpoint.code} (${expectedCheckpoint.name}), bukan ${checkpoint.code}.`,
       { checkpointId: checkpoint.id, roundNumber: currentRound },
     );
     return resultFromLog(log, session, checkpoint);
