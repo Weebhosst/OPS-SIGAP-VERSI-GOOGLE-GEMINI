@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { OpsNoticeDialog, type OpsDialogTone } from '../../components/OpsDialog';
 import { api } from '../../lib/api';
 import {
   AdminFilterState,
@@ -81,6 +82,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   const [detailAlert, setDetailAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeAlert, setCloseAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeNote, setCloseNote] = useState('');
+  const [notice, setNotice] = useState<{ title: string; message: string; tone: OpsDialogTone } | null>(null);
 
   const loadDashboard = async () => {
     try {
@@ -121,7 +123,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         await loadDashboard();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mengubah filter');
+      setNotice({ title: 'Filter Gagal', message: err.message || 'Gagal mengubah filter.', tone: 'danger' });
     }
   };
 
@@ -136,7 +138,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         await loadDashboard();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mereset filter');
+      setNotice({ title: 'Reset Filter Gagal', message: err.message || 'Gagal mereset filter.', tone: 'danger' });
     }
   };
 
@@ -145,7 +147,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
       await api.updateValidationAlert(alert.id, action, action === 'CLOSE' ? closeNote.trim() : undefined);
       setCloseAlert(null); setCloseNote('');
       await loadDashboard();
-    } catch (error: any) { window.alert(error.message || 'Gagal memperbarui validation alert.'); }
+    } catch (error: any) {
+      setNotice({ title: 'Validation Alert Gagal', message: error.message || 'Gagal memperbarui validation alert.', tone: 'danger' });
+    }
   };
 
   // Helper for active filter text
@@ -569,6 +573,14 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
       {detailAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-detail-title"><div className="flex justify-between gap-3"><h3 id="validation-detail-title" className="font-black">DETAIL VALIDATION ALERT</h3><button type="button" onClick={() => setDetailAlert(null)} aria-label="Tutup detail validation alert">✕</button></div><div className="mt-4 space-y-2 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div><div>Site: {detailAlert.siteId}</div><div>Jenis: {detailAlert.alertType}</div><div>Detail: {detailAlert.message}</div><div>Status: {detailAlert.status}</div>{detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}</div></div></div> : null}
 
       {closeAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-red-900 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-close-title"><h3 id="validation-close-title" className="font-black text-red-300">TUTUP VALIDATION ALERT</h3><div className="my-3 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div><div>Site: {closeAlert.siteId}</div><div>Jenis: {closeAlert.alertType}</div><div className="mt-2">Detail: {closeAlert.message}</div></div><label className="font-bold">Catatan Penyelesaian<textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal" /></label><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => setCloseAlert(null)} className="rounded-xl bg-slate-800 p-2 font-bold">BATAL</button><button disabled={!closeNote.trim()} onClick={() => void mutateAlert(closeAlert, 'CLOSE')} className="rounded-xl bg-red-700 p-2 font-bold disabled:opacity-40">CLOSE ALERT</button></div></div></div> : null}
+
+      <OpsNoticeDialog
+        isOpen={!!notice}
+        onClose={() => setNotice(null)}
+        title={notice?.title || 'Informasi'}
+        message={notice?.message || ''}
+        tone={notice?.tone || 'info'}
+      />
 
       {/* Persistent Global Filter Modal */}
       {showFilterModal && (
