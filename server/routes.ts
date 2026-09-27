@@ -6,7 +6,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { validateAndProcessScan, getMemberShiftProgress } from './patrolService';
-import { getOperationalMedia, getOperationalMediaCounts } from './mediaService';
+import { enrichOperationalMedia, getOperationalMedia, getOperationalMediaCounts } from './mediaService';
 import { checkMediaStorage, cleanupPreparedMedia, prepareMedia, prepareMediaBatch, readMediaObject } from './mediaStorage';
 import { repositories } from './repositories';
 import { RepositoryError } from './repositories/contracts';
@@ -1576,6 +1576,8 @@ apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res:
     getOperationalMediaCounts({ ...filter, from: startDate, to: endExclusive }),
   ]);
 
+  const enrichedMedia = await enrichOperationalMedia(page.items);
+
   const normalizedCounts = {
     SEMUA: counts.SEMUA || 0,
     SERTIGAS: counts.SERTIGAS || 0,
@@ -1588,7 +1590,7 @@ apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res:
 
   res.json({
     success: true,
-    media: page.items,
+    media: enrichedMedia,
     counts: normalizedCounts,
     pagination: { total: page.total, limit: page.limit, offset: page.offset, hasMore: page.hasMore },
     period: { startDate, endExclusive },
