@@ -196,9 +196,12 @@ export const api = {
 
   getMasters: () => request<{ success: boolean; customers: Customer[]; sites: Array<Site & { activeCount: number }>; personnel: User[]; checkpoints: any[] }>('/admin/masters'),
   createCustomer: (payload: { code: string; name: string }) => request<{ success: boolean; customer: Customer }>('/admin/customers', { method: 'POST', body: JSON.stringify(payload) }),
+  createCustomerWithSite: (payload: { code: string; customerName: string; siteName: string; personnelCapacity: number; targetRoundsPerShift?: number }) =>
+    request<{ success: boolean; customer: Customer; site: Site }>('/admin/customer-sites', { method: 'POST', body: JSON.stringify(payload) }),
   updateCustomer: (id: string, payload: Partial<Customer>) => request<{ success: boolean; customer: Customer }>(`/admin/customers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  createSite: (payload: { code: string; name: string; customerId: string; personnelCapacity: number; targetRoundsPerShift?: number }) => request<{ success: boolean; site: Site }>('/admin/sites', { method: 'POST', body: JSON.stringify(payload) }),
+  createSite: (payload: { code?: string; name: string; customerId: string; personnelCapacity: number; targetRoundsPerShift?: number }) => request<{ success: boolean; site: Site }>('/admin/sites', { method: 'POST', body: JSON.stringify(payload) }),
   updateSite: (id: string, payload: Partial<Site>) => request<{ success: boolean; site: Site }>(`/admin/sites/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteSite: (id: string, confirmationText: string) => request<{ success: boolean; deletedId: string }>(`/admin/sites/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmationText }) }),
   generateCheckpointToken: (id: string) => request<{ success: boolean; token: string }>(`/admin/checkpoints/${id}/generate-token`, { method: 'POST' }),
   generateCheckpointQr: (id: string) => request<{ success: boolean; qrPayload: string }>(`/admin/checkpoints/${id}/generate-qr`, { method: 'POST' }),
 
