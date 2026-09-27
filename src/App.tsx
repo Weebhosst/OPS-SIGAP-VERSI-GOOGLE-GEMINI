@@ -50,11 +50,14 @@ function AppContent() {
     const key = `ops:lastRoute:${user.id}`;
     try {
       const saved = JSON.parse(sessionStorage.getItem(key) || '{}');
-      const adminAllowed = ['command', 'master', 'checkpoints', 'users', 'audit', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
+      const superAdminAllowed = ['command', 'master', 'checkpoints', 'users', 'audit', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
+      const adminAllowed = ['command', 'master', 'checkpoints', 'users', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
       const chiefAllowed = ['command', 'master', 'handovers', 'incidents', 'gallery', 'profile'];
       const memberAllowed = ['home', 'patrol', 'handover', 'incidents', 'gallery', 'profile'];
       if (user.role === 'ANGGOTA' && memberAllowed.includes(saved.view)) setMemberTab(saved.view);
-      if (user.role !== 'ANGGOTA' && (user.role === 'CHIEF' ? chiefAllowed : adminAllowed).includes(saved.view)) setAdminTab(saved.view);
+      if (user.role === 'SUPER_ADMIN' && superAdminAllowed.includes(saved.view)) setAdminTab(saved.view);
+      if (user.role === 'ADMIN' && adminAllowed.includes(saved.view)) setAdminTab(saved.view);
+      if (user.role === 'CHIEF' && chiefAllowed.includes(saved.view)) setAdminTab(saved.view);
     } catch { /* invalid session state falls back to the authorized default */ }
     setRouteReadyUserId(user.id);
   }, [user?.id, user?.role]);
@@ -198,7 +201,7 @@ function AppContent() {
             <AdminCheckpoints onBack={() => setAdminTab('command')} />
           )}
           {adminTab === 'users' && <AdminUsers onBack={() => setAdminTab('command')} />}
-          {adminTab === 'audit' && <AdminAuditLogs onBack={() => setAdminTab('command')} />}
+          {adminTab === 'audit' && user.role === 'SUPER_ADMIN' && <AdminAuditLogs onBack={() => setAdminTab('command')} />}
           {adminTab === 'handovers' && <HandoverView onBack={() => setAdminTab('command')} />}
           {adminTab === 'incidents' && <IncidentView onBack={() => setAdminTab('command')} />}
           {adminTab === 'gallery' && <GalleryView onBack={() => setAdminTab('command')} />}
