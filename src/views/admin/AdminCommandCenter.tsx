@@ -765,87 +765,75 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         tone={notice?.tone || 'info'}
       />
 
-      {/* Persistent Global Filter Modal */}
-      {showFilterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="global-filter-title">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 id="global-filter-title" className="text-sm font-black text-white">Filter Global Command Center</h3>
-              <button type="button" onClick={() => setShowFilterModal(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Tutup filter global">
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              {/* Filter 1: Site */}
-              <div>
-                <label className="font-semibold text-slate-300 block mb-1">Site / Lokasi:</label>
-                <select
-                  value={selectedSite}
-                  onChange={(e) => setSelectedSite(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                >
-                  <option value="">Semua Site (Global)</option>
-                  {options.sites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter 2: Shift */}
-              <div>
-                <label className="font-semibold text-slate-300 block mb-1">Shift:</label>
-                <select
-                  value={selectedShift}
-                  onChange={(e) => setSelectedShift(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                >
-                  <option value="">Semua Shift</option>
-                  {options.shifts.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter 3: Anggota */}
-              <div>
-                <label className="font-semibold text-slate-300 block mb-1">Anggota Security:</label>
-                <select
-                  value={selectedMember}
-                  onChange={(e) => setSelectedMember(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                >
-                  <option value="">Semua Anggota</option>
-                  {options.users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} (NPK: {u.npk})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <button
-                onClick={handleResetFilter}
-                className="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition"
-              >
-                Reset Semua
-              </button>
-              <button
-                onClick={handleApplyFilter}
-                className="py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition"
-              >
-                Terapkan Filter
-              </button>
-            </div>
+      <OpsDialog
+        isOpen={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        title="FILTER GLOBAL COMMAND CENTER"
+        description="Filter berlaku ke panel monitoring Command Center."
+        tone="info"
+        size="md"
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={handleResetFilter} className="ops-btn-secondary px-4">
+              RESET SEMUA
+            </button>
+            <button type="button" onClick={handleApplyFilter} className="ops-btn-primary px-4">
+              TERAPKAN FILTER
+            </button>
           </div>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <label className="block font-bold text-slate-300">
+            Site / Lokasi
+            <select
+              data-autofocus="true"
+              value={selectedSite}
+              onChange={(event) => setSelectedSite(event.target.value)}
+              className="ops-input mt-1 px-3"
+            >
+              <option value="">Semua Site (Global)</option>
+              {options.sites.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.name} ({site.id})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block font-bold text-slate-300">
+            Shift
+            <select
+              value={selectedShift}
+              onChange={(event) => setSelectedShift(event.target.value)}
+              className="ops-input mt-1 px-3"
+            >
+              <option value="">Semua Shift</option>
+              {options.shifts.map((shift) => (
+                <option key={shift.code} value={shift.code}>
+                  {shift.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block font-bold text-slate-300">
+            Anggota Security
+            <select
+              value={selectedMember}
+              onChange={(event) => setSelectedMember(event.target.value)}
+              className="ops-input mt-1 px-3"
+            >
+              <option value="">Semua Anggota</option>
+              {options.users.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} (NPK: {member.npk})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      )}
+      </OpsDialog>
     </div>
   );
 };
