@@ -101,6 +101,42 @@ export const jsonRepositories: RepositoryBundle = {
       mustChangePassword: false,
       passwordChangedAt: changedAt,
     }),
+    remove: async (id) => {
+      const user = db.findUserById(id);
+      if (!user) return undefined;
+
+      const hasOperationalHistory =
+        db.getPatrolSessions({ userId: id }).length > 0 ||
+        db.getPatrolLogs().some((log) => log.userId === id) ||
+        db.getValidationAlerts().some((alert) =>
+          alert.userId === id ||
+          alert.reviewedBy === id ||
+          alert.closedBy === id ||
+          alert.reopenedBy === id
+        ) ||
+        db.getIncidents().some((incident) => incident.userId === id || incident.createdBy === id) ||
+        db.getHandovers().some((handover) =>
+          handover.fromUserId === id ||
+          handover.toUserId === id ||
+          handover.createdBy === id
+        ) ||
+        db.getMedia().some((media) => media.userId === id || media.createdBy === id) ||
+        db.getRadiusCalibrations().some((entry) => entry.testedByUserId === id);
+
+      if (hasOperationalHistory) {
+        throw new RepositoryError(
+          'USER_IN_USE',
+          'Personel sudah memiliki histori operasional dan tidak dapat dihapus. Nonaktifkan personel sebagai gantinya.',
+          409,
+        );
+      }
+
+      for (const [tokenHash, session] of jsonAuthSessions.entries()) {
+        if (session.userId === id) jsonAuthSessions.delete(tokenHash);
+      }
+
+      return db.deleteUser(id);
+    },
   },
 
   authSessions: {
