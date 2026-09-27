@@ -95,6 +95,7 @@ class OfflineQueueManager {
       }
     } catch (err) {
       console.error('[OPS SIGAP Offline] Failed to enqueue item:', err);
+      throw err instanceof Error ? err : new Error('Data offline gagal disimpan ke perangkat.');
     }
   }
 
