@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Customer, PatrolSession, Site, User } from '../../types/ops';
+import { Checkpoint, Customer, PatrolSession, Site, User } from '../../types/ops';
 import {
   OpsDangerConfirmDialog,
   OpsDialog,
@@ -39,7 +39,7 @@ interface MasterData {
   customers: Customer[];
   sites: SiteWithActive[];
   personnel: User[];
-  checkpoints: Array<{ id: string; siteId: string }>;
+  checkpoints: Checkpoint[];
 }
 
 const emptyMasters: MasterData = {
@@ -97,6 +97,12 @@ export const MasterMonitoringView: React.FC<{
   const [personnelSearch, setPersonnelSearch] = useState('');
   const [personnelCustomerFilter, setPersonnelCustomerFilter] = useState('');
   const [personnelStatusFilter, setPersonnelStatusFilter] = useState('');
+  const [expandedCheckpointCustomers, setExpandedCheckpointCustomers] = useState<Record<string, boolean>>({});
+  const [expandedCheckpointSites, setExpandedCheckpointSites] = useState<Record<string, boolean>>({});
+  const [checkpointSearch, setCheckpointSearch] = useState('');
+  const [checkpointCustomerFilter, setCheckpointCustomerFilter] = useState('');
+  const [checkpointStatusFilter, setCheckpointStatusFilter] = useState('');
+  const [checkpointQrFilter, setCheckpointQrFilter] = useState('');
 
   const [forceTarget, setForceTarget] = useState<(PatrolSession & { memberName: string; npk: string }) | null>(null);
   const [reason, setReason] = useState('');
@@ -250,6 +256,68 @@ export const MasterMonitoringView: React.FC<{
       }),
     [masters.personnel, personnelSearch, personnelStatusFilter],
   );
+
+  const checkpointGroups = useMemo(() => {
+    const query = checkpointSearch.trim().toLowerCase();
+
+    return masters.customers
+      .filter((customer) => !checkpointCustomerFilter || customer.id === checkpointCustomerFilter)
+      .map((customer) => {
+        const customerMatches =
+          !query ||
+          customer.name.toLowerCase().includes(query) ||
+          customer.code.toLowerCase().includes(query);
+
+        const sites = masters.sites
+          .filter((site) => site.customerId === customer.id)
+          .map((site) => {
+            const siteMatches = !query || site.name.toLowerCase().includes(query);
+            const checkpoints = masters.checkpoints.filter((checkpoint) => {
+              if (checkpoint.siteId !== site.id) return false;
+              if (checkpointStatusFilter && checkpoint.status !== checkpointStatusFilter) return false;
+              if (checkpointQrFilter && checkpoint.qrStatus !== checkpointQrFilter) return false;
+              if (!query || customerMatches || siteMatches) return true;
+
+              return [
+                checkpoint.code,
+                checkpoint.name,
+                checkpoint.status,
+                checkpoint.qrStatus,
+                String(checkpoint.radiusMeters),
+              ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+                .includes(query);
+            });
+
+            return { site, checkpoints };
+          })
+          .filter(({ site, checkpoints }) => {
+            if (!query) return true;
+            return site.name.toLowerCase().includes(query) || checkpoints.length > 0;
+          });
+
+        const totalCheckpoints = sites.reduce((sum, item) => sum + item.checkpoints.length, 0);
+        return { customer, sites, totalCheckpoints };
+      })
+      .filter(({ customer, sites, totalCheckpoints }) => {
+        if (!query) return sites.length > 0;
+        return (
+          customer.name.toLowerCase().includes(query) ||
+          customer.code.toLowerCase().includes(query) ||
+          totalCheckpoints > 0
+        );
+      });
+  }, [
+    masters.customers,
+    masters.sites,
+    masters.checkpoints,
+    checkpointCustomerFilter,
+    checkpointSearch,
+    checkpointStatusFilter,
+    checkpointQrFilter,
+  ]);
 
   const resetBundle = () => {
     setCustomerMode('NEW');
@@ -989,16 +1057,281 @@ export const MasterMonitoringView: React.FC<{
         ) : null}
 
         {activeTab === 'CHECKPOINT' ? (
-          <section className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-center text-sm">
-            <QrCode className="mx-auto mb-2 h-6 w-6 text-blue-400" />
-            <p>{masters.checkpoints.length} checkpoint terdaftar.</p>
-            {canMutate ? (
-              <button onClick={() => onNavigate('checkpoints')} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold">
-                BUKA CHECKPOINT BUILDER
-              </button>
-            ) : (
-              <p className="mt-2 text-xs text-slate-500">Chief: view only</p>
-            )}
+          <section className="space-y-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div className="grid flex-1 gap-2 text-xs md:grid-cols-4">
+                  <label className="relative">
+                    <span className="font-bold text-slate-300">Cari Checkpoint</span>
+                    <Search className="absolute left-3 top-[34px] h-4 w-4 text-slate-500" />
+                    <input
+                      value={checkpointSearch}
+                      onChange={(event) => setCheckpointSearch(event.target.value)}
+                      placeholder="Kode, nama titik, site"
+                      className="ops-input mt-1 py-2 pl-9 pr-3"
+                    />
+                  </label>
+                  <label>
+                    <span className="font-bold text-slate-300">Customer</span>
+                    <select
+                      value={checkpointCustomerFilter}
+                      onChange={(event) => setCheckpointCustomerFilter(event.target.value)}
+                      className="ops-input mt-1 px-3"
+                    >
+                      <option value="">Semua Customer</option>
+                      {masters.customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.code} — {customer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="font-bold text-slate-300">Status Checkpoint</span>
+                    <select
+                      value={checkpointStatusFilter}
+                      onChange={(event) => setCheckpointStatusFilter(event.target.value)}
+                      className="ops-input mt-1 px-3"
+                    >
+                      <option value="">Semua Status</option>
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="INACTIVE">INACTIVE</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="font-bold text-slate-300">Status QR</span>
+                    <select
+                      value={checkpointQrFilter}
+                      onChange={(event) => setCheckpointQrFilter(event.target.value)}
+                      className="ops-input mt-1 px-3"
+                    >
+                      <option value="">Semua QR</option>
+                      <option value="ACTIVE">QR ACTIVE</option>
+                      <option value="INACTIVE">QR INACTIVE</option>
+                    </select>
+                  </label>
+                </div>
+
+                {canMutate ? (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('checkpoints')}
+                    className="ops-btn-secondary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 px-4"
+                  >
+                    <QrCode className="h-4 w-4" />
+                    KELOLA TITIK QR
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-black text-white">DATA CHECKPOINT</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    Customer → Site → Checkpoint
+                  </div>
+                </div>
+                <div className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs font-black text-slate-300">
+                  {masters.checkpoints.length} CHECKPOINT
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {checkpointGroups.map(({ customer, sites, totalCheckpoints }) => {
+                const customerExpanded = !!expandedCheckpointCustomers[customer.id];
+
+                return (
+                  <article
+                    key={customer.id}
+                    className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedCheckpointCustomers((current) => ({
+                          ...current,
+                          [customer.id]: !current[customer.id],
+                        }))
+                      }
+                      aria-expanded={customerExpanded}
+                      className="flex min-h-16 w-full items-center gap-3 p-4 text-left transition hover:bg-slate-800/60"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-900/70 bg-blue-950/40 text-blue-300">
+                        {customerExpanded ? <FolderOpen className="h-5 w-5" /> : <Folder className="h-5 w-5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-300">
+                          CUSTOMER
+                        </div>
+                        <div className="truncate text-sm font-black text-white">{customer.name}</div>
+                        <div className="mt-0.5 text-[10px] text-slate-500">
+                          {customer.code} • {sites.length} Site • {totalCheckpoints} Checkpoint
+                        </div>
+                      </div>
+                      {customerExpanded ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      )}
+                    </button>
+
+                    {customerExpanded ? (
+                      <div className="space-y-2 border-t border-slate-800 bg-slate-950/30 p-3">
+                        {sites.map(({ site, checkpoints }) => {
+                          const siteExpanded = !!expandedCheckpointSites[site.id];
+                          const activeQrCount = checkpoints.filter(
+                            (checkpoint) => checkpoint.qrStatus === 'ACTIVE',
+                          ).length;
+
+                          return (
+                            <div
+                              key={site.id}
+                              className="overflow-hidden rounded-xl border border-slate-800 bg-[#0f172a]"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedCheckpointSites((current) => ({
+                                    ...current,
+                                    [site.id]: !current[site.id],
+                                  }))
+                                }
+                                aria-expanded={siteExpanded}
+                                className="flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-slate-800/50"
+                              >
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-900/60 bg-emerald-950/30 text-emerald-300">
+                                  {siteExpanded ? <FolderOpen className="h-4 w-4" /> : <Folder className="h-4 w-4" />}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-300">
+                                    SITE
+                                  </div>
+                                  <div className="truncate text-xs font-black text-white">{site.name}</div>
+                                  <div className="mt-0.5 text-[10px] text-slate-500">
+                                    {checkpoints.length} Checkpoint • {activeQrCount} QR Active
+                                  </div>
+                                </div>
+                                <span className="rounded-full bg-slate-950 px-2 py-1 text-[10px] font-black text-slate-300">
+                                  {checkpoints.length}
+                                </span>
+                                {siteExpanded ? (
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                                )}
+                              </button>
+
+                              {siteExpanded ? (
+                                <div className="space-y-2 border-t border-slate-800 p-2.5">
+                                  {checkpoints.length > 0 ? (
+                                    checkpoints.map((checkpoint) => {
+                                      const hasCoordinates =
+                                        Number.isFinite(checkpoint.latitude) &&
+                                        Number.isFinite(checkpoint.longitude);
+                                      const gpsLabel =
+                                        checkpoint.coordinateMethod === 'GPS'
+                                          ? checkpoint.gpsAccuracyM
+                                            ? `GPS ±${checkpoint.gpsAccuracyM.toFixed(1)}m`
+                                            : 'GPS'
+                                          : 'MANUAL';
+
+                                      return (
+                                        <div
+                                          key={checkpoint.id}
+                                          className="rounded-xl border border-slate-800 bg-slate-950/80 p-3"
+                                        >
+                                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="min-w-0">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <span className="rounded-md border border-blue-900/70 bg-blue-950/40 px-2 py-1 font-mono text-[10px] font-black text-blue-300">
+                                                  {checkpoint.code}
+                                                </span>
+                                                <span className="text-sm font-black text-white">
+                                                  {checkpoint.name}
+                                                </span>
+                                              </div>
+
+                                              <div className="mt-2 flex flex-wrap gap-2">
+                                                <span
+                                                  className={
+                                                    checkpoint.status === 'ACTIVE'
+                                                      ? 'ops-badge-success'
+                                                      : 'ops-badge-neutral'
+                                                  }
+                                                >
+                                                  {checkpoint.status}
+                                                </span>
+                                                <span
+                                                  className={
+                                                    checkpoint.qrStatus === 'ACTIVE'
+                                                      ? 'rounded-full border border-blue-800 bg-blue-950/50 px-2 py-0.5 text-[9px] font-black text-blue-300'
+                                                      : 'ops-badge-neutral'
+                                                  }
+                                                >
+                                                  QR {checkpoint.qrStatus}
+                                                </span>
+                                                <span className="ops-badge-neutral">
+                                                  Radius {checkpoint.radiusMeters} m
+                                                </span>
+                                                <span className="ops-badge-neutral">{gpsLabel}</span>
+                                              </div>
+
+                                              <div className="mt-2 font-mono text-[10px] text-slate-500">
+                                                {hasCoordinates
+                                                  ? `${checkpoint.latitude.toFixed(6)}, ${checkpoint.longitude.toFixed(6)}`
+                                                  : 'Koordinat belum tersedia'}
+                                              </div>
+                                            </div>
+
+                                            <div className="shrink-0 text-left sm:text-right">
+                                              <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">
+                                                VALIDASI
+                                              </div>
+                                              <div
+                                                className={`mt-1 text-[10px] font-black ${
+                                                  hasCoordinates && checkpoint.radiusMeters > 0
+                                                    ? 'text-emerald-300'
+                                                    : 'text-amber-300'
+                                                }`}
+                                              >
+                                                {hasCoordinates && checkpoint.radiusMeters > 0
+                                                  ? 'GPS READY'
+                                                  : 'PERLU CEK'}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <div className="rounded-xl border border-dashed border-slate-700 p-4 text-center text-xs text-slate-500">
+                                      Belum ada checkpoint pada Site ini.
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+
+              {checkpointGroups.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                  <QrCode className="mx-auto h-7 w-7 text-slate-600" />
+                  <div className="mt-2 text-sm font-bold text-slate-300">Checkpoint tidak ditemukan</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Ubah pencarian atau filter Customer / status QR.
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </section>
         ) : null}
 
