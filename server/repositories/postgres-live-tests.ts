@@ -151,6 +151,25 @@ try {
   const userTwo = await createTestUser(userTwoId, `91${suffix.slice(-6)}2`);
   assert.equal((await repositories.users.findById(userOne.id))?.siteId, siteId);
 
+  const chiefUser = await repositories.users.create({
+    id: `USR-PG-CHIEF-${suffix}`,
+    name: 'PostgreSQL Customer Chief',
+    npk: `93${suffix.slice(-6)}3`,
+    email: `chief-${suffix}@integration.local`,
+    role: 'CHIEF',
+    customerId,
+    siteId: null,
+    position: 'CHIEF',
+    assignmentHistory: [{ customerId, siteId: null, effectiveAt: now, changedBy: null }],
+    status: 'ACTIVE',
+    passwordHash: bcrypt.hashSync('ChiefTest123', 4),
+    createdAt: now,
+    updatedAt: now,
+  });
+  const storedChief = await repositories.users.findById(chiefUser.id);
+  assert.equal(storedChief?.customerId, customerId);
+  assert.equal(storedChief?.siteId, null, 'CHIEF harus customer-scoped dan tidak memiliki siteId.');
+
   const authTokenHash = `AUTH-HASH-${suffix}`;
   const authSession = await repositories.authSessions.create({
     id: `AUTH-PG-${suffix}`,
@@ -218,6 +237,13 @@ try {
       updatedAt: now,
     },
   });
+
+  assert.equal(
+    (await repositories.sessions.listFiltered({ customerId, status: 'ACTIVE' }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === sessionOne.id),
+    true,
+    'Customer scope harus melihat session aktif pada seluruh Site Customer.',
+  );
 
   await assert.rejects(
     () => repositories.sessions.startAtomic({
@@ -334,6 +360,12 @@ try {
     createdBy: userOne.id,
   }, sessionOne.id, customerId);
   assert.equal((await repositories.handovers.findById(handoverId))?.photoUrls?.includes(handoverMediaUrl), true);
+  assert.equal(
+    (await repositories.handovers.list({ customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === handoverId),
+    true,
+    'CHIEF customer scope harus dapat melihat handover dari Site di Customer-nya.',
+  );
 
   const incidentId = `INC-PG-${suffix}`;
   await repositories.incidents.create({
@@ -379,6 +411,12 @@ try {
     createdBy: userOne.id,
   }, sessionOne.id, customerId);
   assert.equal((await repositories.incidents.findById(incidentId))?.photoUrls?.includes(incidentMediaUrl), true);
+  assert.equal(
+    (await repositories.incidents.list({ customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === incidentId),
+    true,
+    'CHIEF customer scope harus dapat melihat incident dari Site di Customer-nya.',
+  );
 
   await assert.rejects(
     () => repositories.media.add({
@@ -466,6 +504,7 @@ try {
   console.log('PASS JSON -> PostgreSQL live import and idempotency');
   console.log('PASS PostgreSQL provider health and imported data visibility');
   console.log('PASS PostgreSQL customer/site/user/checkpoint CRUD');
+  console.log('PASS PostgreSQL CHIEF customer-level assignment and customer monitoring filters');
   console.log('PASS PostgreSQL authenticated session persistence and password rotation');
   console.log('PASS encrypted QR token persistence and hash lookup');
   console.log('PASS PostgreSQL active-session uniqueness and site capacity');
