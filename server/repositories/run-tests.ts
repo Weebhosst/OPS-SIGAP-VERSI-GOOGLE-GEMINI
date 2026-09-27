@@ -355,6 +355,8 @@ try {
   const profileViewSource = fs.readFileSync(path.resolve('src/views/ProfileView.tsx'), 'utf8');
   const galleryViewSource = fs.readFileSync(path.resolve('src/views/GalleryView.tsx'), 'utf8');
   const serviceWorkerSource = fs.readFileSync(path.resolve('public/sw.js'), 'utf8');
+  const serverEntrySource = fs.readFileSync(path.resolve('server.ts'), 'utf8');
+  const securityIntegrationSource = fs.readFileSync(path.resolve('server/security.run-tests.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -605,6 +607,69 @@ try {
   assert.match(galleryViewSource, /MUAT LEBIH BANYAK/);
   assert.match(galleryViewSource, /BULAN INI/);
 
+  // MEMBER-09 final security hardening regression guards.
+  assert.match(patrolServiceSource, /GPS_COORDINATES_INVALID/);
+  assert.match(patrolServiceSource, /Number\.isFinite\(input\.latitude\)/);
+  assert.match(patrolServiceSource, /input\.latitude < -90/);
+  assert.match(patrolServiceSource, /input\.longitude > 180/);
+  assert.match(patrolServiceSource, /IDEMPOTENCY_KEY_CONFLICT/);
+  assert.match(patrolServiceSource, /existingLog\.userId !== input\.userId \|\| existingLog\.sessionId !== input\.sessionId/);
+  assert.match(patrolServiceSource, /OBSERVATION_STATUS_INVALID/);
+  assert.match(patrolServiceSource, /CAPTURE_TIME_INVALID/);
+
+  assert.match(mediaStorageSource, /MEDIA_LIVE_CAPTURE_REQUIRED/);
+  assert.match(mediaStorageSource, /Bukti operasional baru wajib berasal dari capture gambar/);
+  assert.doesNotMatch(
+    mediaStorageSource,
+    /if \(!raw\.startsWith\('data:'\)\)[\s\S]{0,300}storageProvider: 'external_url'/,
+  );
+  assert.match(mediaStorageSource, /Object storage upload failed/);
+  assert.doesNotMatch(mediaStorageSource, /MEDIA_UPLOAD_FAILED'[\s\S]{0,180}\$\{detail/);
+
+  assert.match(routeSource, /function fieldWriteRateLimit\(bucket: string, maxRequests: number/);
+  assert.match(routeSource, /FIELD_WRITE_RATE_LIMITED/);
+  assert.match(routeSource, /fieldWriteRateLimit\('patrol-scan', 30\)/);
+  assert.match(routeSource, /fieldWriteRateLimit\('offline-sync', 10\)/);
+  assert.match(routeSource, /fieldWriteRateLimit\('handover-create', 20\)/);
+  assert.match(routeSource, /fieldWriteRateLimit\('incident-create', 10\)/);
+
+  assert.match(routeSource, /SYNC_BATCH_SIZE_INVALID/);
+  assert.match(routeSource, /items\.length === 0 \|\| items\.length > 50/);
+  assert.match(routeSource, /syncSource: 'ONLINE'/);
+  assert.match(routeSource, /syncSource: 'OFFLINE_QUEUE'/);
+  assert.match(routeSource, /Gagal memproses item sinkronisasi/);
+  assert.doesNotMatch(routeSource, /error:\s*err\.message \|\| 'Gagal memproses item'/);
+
+  assert.match(
+    routeSource,
+    /apiRouter\.get\('\/handover'[\s\S]{0,700}const siteId = resolveFieldSiteId\(req, res\);[\s\S]{0,100}filter\.siteId = siteId/,
+  );
+  assert.match(
+    routeSource,
+    /apiRouter\.get\('\/incidents'[\s\S]{0,700}const siteId = resolveFieldSiteId\(req, res\);[\s\S]{0,100}filter\.siteId = siteId/,
+  );
+
+  assert.match(routeSource, /HANDOVER_CONDITION_INVALID/);
+  assert.match(routeSource, /eventAt: now/);
+  assert.match(routeSource, /parseOptionalCoordinate\(latitude, -90, 90\)/);
+  assert.match(routeSource, /normalizedText\(chronology, 4000\)/);
+  assert.match(routeSource, /allowedExternalPattern = config\.isProduction/);
+
+  assert.match(routeSource, /cleanNpk\.length > 64/);
+  assert.match(routeSource, /cleanPassword\.length > 256/);
+  assert.match(routeSource, /loginAttempts\.size > 5000/);
+
+  assert.match(serverEntrySource, /app\.disable\('x-powered-by'\)/);
+  assert.match(serverEntrySource, /Strict-Transport-Security/);
+  assert.match(serverEntrySource, /Content-Security-Policy/);
+  assert.match(serverEntrySource, /X-Content-Type-Options/);
+  assert.match(serverEntrySource, /Permissions-Policy/);
+  assert.match(serverEntrySource, /CROSS_SITE_REQUEST_BLOCKED/);
+  assert.match(serverEntrySource, /ORIGIN_NOT_ALLOWED/);
+
+  assert.match(securityIntegrationSource, /GPS_COORDINATES_INVALID/);
+  assert.match(securityIntegrationSource, /SYNC_BATCH_SIZE_INVALID/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -627,6 +692,7 @@ try {
   console.log('PASS MEMBER-06 handover integrity and guided incident regression guards');
   console.log('PASS MEMBER-07 offline queue, cold-start recovery, and retry regression guards');
   console.log('PASS MEMBER-08 gallery source-context, history, and pagination regression guards');
+  console.log('PASS MEMBER-09 auth, IDOR, evidence, GPS, rate-limit, and error-exposure security guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
