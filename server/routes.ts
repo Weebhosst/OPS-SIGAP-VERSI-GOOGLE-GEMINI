@@ -2526,7 +2526,7 @@ apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, async
 // BATCH OFFLINE QUEUE SYNC
 // -------------------------------------------------------------
 
-apiRouter.post('/sync', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/sync', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
   const { items } = req.body;
   if (!Array.isArray(items)) {
     return res.status(400).json({ success: false, error: 'Payload sync harus berupa array items.' });
