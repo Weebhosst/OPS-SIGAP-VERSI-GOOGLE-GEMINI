@@ -1169,7 +1169,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, fieldWriteRateLi
     siteId,
     userId: req.user!.id,
     documentType,
-    eventAt: eventAt || now,
+    eventAt: now,
     photoUrl: evidencePhoto,
   }));
 
