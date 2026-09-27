@@ -583,20 +583,58 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         )}
 
         {!session ? (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900/90 p-5 text-center shadow-xl shadow-black/10">
-            <Shield className="mx-auto h-9 w-9 text-slate-500" />
-            <h2 className="mt-3 text-base font-black text-white">BELUM ADA SESSION PATROLI</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-400">
-              Mulai Shift dari Beranda terlebih dahulu agar urutan checkpoint dapat dibuka.
-            </p>
-            <button
-              type="button"
-              onClick={onBack}
-              className="mt-4 min-h-11 w-full rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white"
-            >
-              KEMBALI KE BERANDA
-            </button>
-          </section>
+          completedSession ? (
+            <section className="rounded-3xl border border-emerald-700/60 bg-gradient-to-br from-emerald-950/55 via-slate-900 to-slate-900 p-5 text-center shadow-2xl shadow-emerald-950/20">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-300">
+                <CheckCircle2 className="h-7 w-7" />
+              </div>
+              <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Session Completed</p>
+              <h2 className="mt-1 text-lg font-black text-white">SHIFT SELESAI</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-300">
+                Turun Jaga sudah tersimpan dan session operasional telah ditutup.
+              </p>
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-3 text-left text-xs">
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Shift</span>
+                  <span className="font-mono font-bold text-slate-200">{completedSession.shiftCode}</span>
+                </div>
+                <div className="mt-2 flex justify-between gap-3">
+                  <span className="text-slate-500">Tanggal</span>
+                  <span className="font-mono font-bold text-slate-200">{completedSession.shiftDate}</span>
+                </div>
+                <div className="mt-2 flex justify-between gap-3">
+                  <span className="text-slate-500">Checkpoint</span>
+                  <span className="font-mono font-bold text-emerald-300">{completedSession.totalValid}/{completedSession.totalRequired}</span>
+                </div>
+                <div className="mt-2 flex justify-between gap-3">
+                  <span className="text-slate-500">Status</span>
+                  <span className="font-black text-emerald-300">COMPLETED</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onBack}
+                className="mt-4 min-h-12 w-full rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-emerald-950/40"
+              >
+                KEMBALI KE BERANDA
+              </button>
+            </section>
+          ) : (
+            <section className="rounded-3xl border border-slate-800 bg-slate-900/90 p-5 text-center shadow-xl shadow-black/10">
+              <Shield className="mx-auto h-9 w-9 text-slate-500" />
+              <h2 className="mt-3 text-base font-black text-white">BELUM ADA SESSION PATROLI</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Mulai Shift dari Beranda terlebih dahulu agar urutan checkpoint dapat dibuka.
+              </p>
+              <button
+                type="button"
+                onClick={onBack}
+                className="mt-4 min-h-11 w-full rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white"
+              >
+                KEMBALI KE BERANDA
+              </button>
+            </section>
+          )
         ) : !session.startDocumentationCompleted ? (
           <section className="rounded-3xl border border-amber-700/70 bg-amber-950/35 p-5 shadow-xl shadow-amber-950/10">
             <div className="flex items-start gap-3">
@@ -984,7 +1022,222 @@ export const PatrolActiveView: React.FC<PatrolActiveViewProps> = ({ onBack }) =>
         )}
       </main>
 
-      {showCloseModal && session ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 sm:p-4"><div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="close-shift-title"><div className="flex items-center justify-between"><div><h2 id="close-shift-title" className="font-black">CLOSE SHIFT</h2><p className="text-xs text-slate-400">Checkpoint {session.totalValid}/{session.totalRequired} lengkap</p></div><button type="button" onClick={() => setShowCloseModal(false)} aria-label="Tutup dialog close shift">✕</button></div><div><span className="text-xs font-bold">Apakah ada TARUNA / serah terima khusus?</span><div className="mt-2 grid grid-cols-2 gap-2"><button onClick={() => setHasSpecialHandover(false)} className={`rounded-xl p-2 text-xs font-bold ${!hasSpecialHandover ? 'bg-blue-600' : 'bg-slate-800'}`}>TIDAK</button><button onClick={() => setHasSpecialHandover(true)} className={`rounded-xl p-2 text-xs font-bold ${hasSpecialHandover ? 'bg-amber-600' : 'bg-slate-800'}`}>YA</button></div></div>{hasSpecialHandover ? <div className="space-y-2"><label className="block text-xs font-bold">Catatan TARUNA<textarea required value={specialNotes} onChange={(e) => setSpecialNotes(e.target.value)} className="mt-1 min-h-20 w-full rounded-xl border border-slate-700 bg-slate-950 p-2 font-normal" /></label><div className="grid grid-cols-3 gap-2">{specialPhotoUrls.map((photo, index) => <div key={index} className="relative aspect-square overflow-hidden rounded-xl"><img src={photo} alt={`TARUNA ${index + 1}`} className="h-full w-full object-cover" /><button onClick={() => setSpecialPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1 top-1 rounded bg-black/70 px-1">✕</button></div>)}</div><button disabled={specialPhotoUrls.length >= 5} onClick={() => { setCameraMode('SPECIAL'); setShowCameraModal(true); }} className="w-full rounded-xl border border-dashed border-slate-600 p-2 text-xs font-bold disabled:opacity-40"><Camera className="mr-1 inline h-4 w-4" />DOKUMENTASI TARUNA ({specialPhotoUrls.length}/5)</button>{specialPhotoUrls.length < 3 ? <p className="text-xs text-amber-300">Minimal 3 foto.</p> : null}</div> : null}<div className="rounded-xl border border-blue-900 bg-blue-950/30 p-3"><h3 className="text-xs font-black text-blue-300">SERTIGAS / TURUN JAGA</h3><div className="mt-2 text-xs text-slate-300">Customer {session.customerId} • Site {session.siteId}<br />{session.shiftCode} • {session.shiftDate}<br />End Time otomatis saat konfirmasi</div>{endPhotoUrl ? <img src={endPhotoUrl} alt="Turun Jaga" className="mt-2 max-h-56 w-full rounded-xl object-cover" /> : <button onClick={() => { setCameraMode('END'); setShowCameraModal(true); }} className="mt-2 w-full rounded-xl border-2 border-dashed border-slate-700 p-3 text-xs font-bold"><Camera className="mr-1 inline h-4 w-4" />AMBIL FOTO TURUN JAGA</button>}</div><button disabled={submitting || !endPhotoUrl || (hasSpecialHandover && (!specialNotes.trim() || specialPhotoUrls.length < 3 || specialPhotoUrls.length > 5))} onClick={() => void handleCloseShift()} className="sticky bottom-0 w-full rounded-xl bg-emerald-600 p-3 text-sm font-black tracking-wide disabled:opacity-40">KONFIRMASI & SELESAIKAN SHIFT</button></div></div> : null}
+      {showCloseModal && session ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md sm:p-4">
+          <div
+            className="ops-dialog max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] shadow-2xl shadow-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="close-shift-title"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-[#08111f]/95 p-4 backdrop-blur">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Final Step</p>
+                <h2 id="close-shift-title" className="mt-1 text-base font-black text-white">TURUN JAGA</h2>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Checkpoint {session.totalValid}/{session.totalRequired} lengkap
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setShowCloseModal(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400 disabled:opacity-40"
+                aria-label="Tutup dialog Turun Jaga"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl border border-emerald-800 bg-emerald-950/30 px-2 py-2.5">
+                  <div className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-black text-white">✓</div>
+                  <p className="mt-1 text-[9px] font-black text-emerald-300">PATROLI</p>
+                </div>
+                <div className={`rounded-xl border px-2 py-2.5 ${endPhotoUrl ? 'border-emerald-800 bg-emerald-950/30' : 'border-blue-700 bg-blue-950/30'}`}>
+                  <div className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white ${endPhotoUrl ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                    {endPhotoUrl ? '✓' : '2'}
+                  </div>
+                  <p className={`mt-1 text-[9px] font-black ${endPhotoUrl ? 'text-emerald-300' : 'text-blue-300'}`}>TURUN JAGA</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-2 py-2.5">
+                  <div className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-slate-800 text-[10px] font-black text-slate-500">3</div>
+                  <p className="mt-1 text-[9px] font-black text-slate-500">SELESAI</p>
+                </div>
+              </div>
+
+              <section className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Session</p>
+                    <p className="mt-1 text-sm font-black text-white">{siteInfo?.name || session.siteId}</p>
+                  </div>
+                  <span className="rounded-full border border-emerald-700/60 bg-emerald-950/40 px-2.5 py-1 text-[10px] font-black text-emerald-300">
+                    {session.totalValid}/{session.totalRequired} VALID
+                  </span>
+                </div>
+                <p className="mt-2 font-mono text-[10px] text-slate-400">{session.shiftCode} • {session.shiftDate}</p>
+              </section>
+
+              <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-300">1. Foto Turun Jaga</p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                    Ambil satu foto live sebagai bukti penutupan shift.
+                  </p>
+                </div>
+
+                {endPhotoUrl ? (
+                  <div className="space-y-2">
+                    <div className="relative overflow-hidden rounded-2xl border border-emerald-800/60 bg-black">
+                      <img src={endPhotoUrl} alt="Turun Jaga" className="max-h-64 w-full object-contain" />
+                      <span className="absolute left-3 top-3 rounded-full bg-emerald-600 px-2 py-1 text-[9px] font-black text-white">FOTO SIAP</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => { setEndPhotoUrl(null); setCameraMode('END'); setShowCameraModal(true); }}
+                      className="min-h-10 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200"
+                    >
+                      AMBIL ULANG FOTO
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setCameraMode('END'); setShowCameraModal(true); }}
+                    className="flex min-h-14 w-full items-center justify-center rounded-xl border-2 border-dashed border-blue-700/70 bg-blue-950/20 p-3 text-xs font-black text-blue-200"
+                  >
+                    <Camera className="mr-2 h-4 w-4" />
+                    AMBIL FOTO TURUN JAGA
+                  </button>
+                )}
+              </section>
+
+              <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-300">2. Serah Terima Khusus</p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                    Isi hanya jika ada TARUNA / hal khusus yang wajib diteruskan ke anggota berikutnya.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHasSpecialHandover(false);
+                      setSpecialNotes('');
+                      setSpecialPhotoUrls([]);
+                      setSpecialToUserId('');
+                    }}
+                    className={`min-h-11 rounded-xl px-3 py-2 text-xs font-black ${!hasSpecialHandover ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                  >
+                    TIDAK ADA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHasSpecialHandover(true)}
+                    className={`min-h-11 rounded-xl px-3 py-2 text-xs font-black ${hasSpecialHandover ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                  >
+                    ADA
+                  </button>
+                </div>
+
+                {hasSpecialHandover ? (
+                  <div className="space-y-3 rounded-xl border border-amber-900/60 bg-amber-950/20 p-3">
+                    <label className="block text-xs font-bold text-slate-300">
+                      Penerima
+                      <select
+                        required
+                        value={specialToUserId}
+                        onChange={(event) => setSpecialToUserId(event.target.value)}
+                        className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal text-white outline-none"
+                      >
+                        <option value="">Pilih Anggota penerima</option>
+                        {closeSiteMembers.map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.name} • {member.npk}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block text-xs font-bold text-slate-300">
+                      Catatan TARUNA
+                      <textarea
+                        required
+                        value={specialNotes}
+                        onChange={(event) => setSpecialNotes(event.target.value)}
+                        className="mt-1.5 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal text-white outline-none"
+                        placeholder="Jelaskan barang, kondisi, temuan, atau hal khusus yang diteruskan..."
+                      />
+                    </label>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      {specialPhotoUrls.map((photo, index) => (
+                        <div key={index} className="relative aspect-square overflow-hidden rounded-xl border border-slate-800">
+                          <img src={photo} alt={`TARUNA ${index + 1}`} className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => setSpecialPhotoUrls((items) => items.filter((_, itemIndex) => itemIndex !== index))}
+                            className="absolute right-1 top-1 rounded bg-black/75 px-1.5 py-0.5 text-xs text-white"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={specialPhotoUrls.length >= 5 || submitting}
+                      onClick={() => { setCameraMode('SPECIAL'); setShowCameraModal(true); }}
+                      className="min-h-11 w-full rounded-xl border-2 border-dashed border-amber-800/70 px-3 py-2 text-xs font-black text-amber-200 disabled:opacity-40"
+                    >
+                      <Camera className="mr-1 inline h-4 w-4" />
+                      FOTO TARUNA ({specialPhotoUrls.length}/5)
+                    </button>
+                    <p className={`text-[10px] font-semibold ${specialPhotoUrls.length >= 3 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                      Minimal 3, maksimal 5 foto live.
+                    </p>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="rounded-2xl border border-emerald-900/60 bg-emerald-950/20 p-3.5">
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">3. Konfirmasi Final</p>
+                <p className="mt-1 text-[11px] leading-5 text-slate-300">
+                  Setelah dikonfirmasi, session berubah menjadi COMPLETED dan tidak dapat dilanjutkan untuk scan patroli.
+                </p>
+              </section>
+
+              <button
+                type="button"
+                disabled={
+                  submitting
+                  || !endPhotoUrl
+                  || (
+                    hasSpecialHandover
+                    && (
+                      !specialToUserId
+                      || !specialNotes.trim()
+                      || specialPhotoUrls.length < 3
+                      || specialPhotoUrls.length > 5
+                    )
+                  )
+                }
+                onClick={() => void handleCloseShift()}
+                className="sticky bottom-0 flex min-h-[52px] w-full items-center justify-center rounded-xl bg-emerald-600 p-3 text-sm font-black tracking-wide text-white shadow-lg shadow-emerald-950/40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+              >
+                {submitting ? 'MENUTUP SHIFT...' : 'KONFIRMASI TURUN JAGA & SELESAIKAN SHIFT'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* QR Scanner Modal */}
       <QRScannerModal
