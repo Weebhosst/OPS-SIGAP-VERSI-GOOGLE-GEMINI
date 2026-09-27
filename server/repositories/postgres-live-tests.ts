@@ -51,6 +51,49 @@ try {
   assert.ok(importedSites.total > 0, 'JSON import harus menghasilkan site di PostgreSQL.');
   assert.ok(importedCheckpoints.total > 0, 'JSON import harus menghasilkan checkpoint di PostgreSQL.');
 
+  const disposableCustomer = await repositories.customers.create({
+    id: `CUST-PG-DELETE-${suffix}`,
+    code: `PGD${suffix.slice(-5)}`,
+    name: 'PostgreSQL Disposable Customer',
+    status: 'ACTIVE',
+    createdAt: now,
+    updatedAt: now,
+  });
+  const disposableSite = await repositories.sites.create({
+    id: `SITE-PG-DELETE-${suffix}`,
+    code: `SITE-PG-DELETE-${suffix}`,
+    name: 'PostgreSQL Disposable Site',
+    customerId: disposableCustomer.id,
+    personnelCapacity: 1,
+    targetRoundsPerShift: 1,
+    timezone: 'Asia/Jakarta',
+    status: 'ACTIVE',
+    createdAt: now,
+    updatedAt: now,
+  });
+  const disposableNpk = `92${suffix.slice(-6)}9`;
+  const disposableUser = await repositories.users.create({
+    id: `USR-PG-DELETE-${suffix}`,
+    name: 'PostgreSQL Disposable User',
+    npk: disposableNpk,
+    email: `delete-${suffix}@integration.local`,
+    role: 'ANGGOTA',
+    customerId: disposableCustomer.id,
+    siteId: disposableSite.id,
+    position: 'ANGGOTA SECURITY',
+    assignmentHistory: [{ customerId: disposableCustomer.id, siteId: disposableSite.id, effectiveAt: now, changedBy: null }],
+    status: 'ACTIVE',
+    passwordHash: bcrypt.hashSync(disposableNpk, 4),
+    createdAt: now,
+    updatedAt: now,
+  });
+  assert.equal((await repositories.users.remove(disposableUser.id))?.id, disposableUser.id);
+  assert.equal(await repositories.users.findById(disposableUser.id), undefined);
+  assert.equal((await repositories.sites.remove(disposableSite.id))?.id, disposableSite.id);
+  assert.equal(await repositories.sites.findById(disposableSite.id), undefined);
+  assert.equal((await repositories.customers.remove(disposableCustomer.id))?.id, disposableCustomer.id);
+  assert.equal(await repositories.customers.findById(disposableCustomer.id), undefined);
+
   const customerId = `CUST-PG-${suffix}`;
   const siteId = `SITE-PG-${suffix}`;
   const userOneId = `USR-PG-A-${suffix}`;
@@ -107,6 +150,25 @@ try {
   const userOne = await createTestUser(userOneId, `91${suffix.slice(-6)}1`);
   const userTwo = await createTestUser(userTwoId, `91${suffix.slice(-6)}2`);
   assert.equal((await repositories.users.findById(userOne.id))?.siteId, siteId);
+
+  const chiefUser = await repositories.users.create({
+    id: `USR-PG-CHIEF-${suffix}`,
+    name: 'PostgreSQL Customer Chief',
+    npk: `93${suffix.slice(-6)}3`,
+    email: `chief-${suffix}@integration.local`,
+    role: 'CHIEF',
+    customerId,
+    siteId: null,
+    position: 'CHIEF',
+    assignmentHistory: [{ customerId, siteId: null, effectiveAt: now, changedBy: null }],
+    status: 'ACTIVE',
+    passwordHash: bcrypt.hashSync('ChiefTest123', 4),
+    createdAt: now,
+    updatedAt: now,
+  });
+  const storedChief = await repositories.users.findById(chiefUser.id);
+  assert.equal(storedChief?.customerId, customerId);
+  assert.equal(storedChief?.siteId, null, 'CHIEF harus customer-scoped dan tidak memiliki siteId.');
 
   const authTokenHash = `AUTH-HASH-${suffix}`;
   const authSession = await repositories.authSessions.create({
@@ -176,6 +238,13 @@ try {
     },
   });
 
+  assert.equal(
+    (await repositories.sessions.listFiltered({ customerId, status: 'ACTIVE' }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === sessionOne.id),
+    true,
+    'Customer scope harus melihat session aktif pada seluruh Site Customer.',
+  );
+
   await assert.rejects(
     () => repositories.sessions.startAtomic({
       personnelCapacity: 1,
@@ -238,6 +307,8 @@ try {
   assert.equal((await repositories.alerts.transition(alert!.id, 'REVIEW', userOne.id)).status, 'UNDER_REVIEW');
   assert.equal((await repositories.alerts.transition(alert!.id, 'CLOSE', userOne.id, 'Integration verified')).status, 'CLOSED');
   assert.equal((await repositories.alerts.transition(alert!.id, 'REOPEN', userOne.id)).status, 'OPEN');
+  assert.equal((await repositories.alerts.remove(alert!.id))?.id, alert!.id);
+  assert.equal(await repositories.alerts.findById(alert!.id), undefined);
 
   const handoverId = `HND-PG-${suffix}`;
   await repositories.handovers.create({
@@ -289,6 +360,12 @@ try {
     createdBy: userOne.id,
   }, sessionOne.id, customerId);
   assert.equal((await repositories.handovers.findById(handoverId))?.photoUrls?.includes(handoverMediaUrl), true);
+  assert.equal(
+    (await repositories.handovers.list({ customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === handoverId),
+    true,
+    'CHIEF customer scope harus dapat melihat handover dari Site di Customer-nya.',
+  );
 
   const incidentId = `INC-PG-${suffix}`;
   await repositories.incidents.create({
@@ -334,6 +411,12 @@ try {
     createdBy: userOne.id,
   }, sessionOne.id, customerId);
   assert.equal((await repositories.incidents.findById(incidentId))?.photoUrls?.includes(incidentMediaUrl), true);
+  assert.equal(
+    (await repositories.incidents.list({ customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === incidentId),
+    true,
+    'CHIEF customer scope harus dapat melihat incident dari Site di Customer-nya.',
+  );
 
   await assert.rejects(
     () => repositories.media.add({
@@ -405,10 +488,23 @@ try {
   });
   assert.equal(sessionTwo.status, 'ACTIVE', 'Setelah force close, slot capacity harus tersedia kembali.');
 
+  await assert.rejects(
+    () => repositories.users.remove(userOne.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
+    'Personel PostgreSQL dengan histori operasional tidak boleh hard-delete.',
+  );
+  await assert.rejects(
+    () => repositories.sites.remove(site.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'SITE_IN_USE',
+    'Site PostgreSQL dengan histori operasional tidak boleh hard-delete.',
+  );
+
+  console.log('PASS PostgreSQL destructive-action guards and disposable deletes');
   console.log('PASS PostgreSQL migrations apply and are idempotent');
   console.log('PASS JSON -> PostgreSQL live import and idempotency');
   console.log('PASS PostgreSQL provider health and imported data visibility');
   console.log('PASS PostgreSQL customer/site/user/checkpoint CRUD');
+  console.log('PASS PostgreSQL CHIEF customer-level assignment and customer monitoring filters');
   console.log('PASS PostgreSQL authenticated session persistence and password rotation');
   console.log('PASS encrypted QR token persistence and hash lookup');
   console.log('PASS PostgreSQL active-session uniqueness and site capacity');

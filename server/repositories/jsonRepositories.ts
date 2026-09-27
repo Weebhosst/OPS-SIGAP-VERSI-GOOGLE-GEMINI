@@ -24,6 +24,7 @@ const paginate = <T>(items: T[], request: PageRequest) => {
 
 function sessionMatches(session: PatrolSession, filter: SessionFilter) {
   if (filter.userId && session.userId !== filter.userId) return false;
+  if (filter.customerId && session.customerId !== filter.customerId) return false;
   if (filter.siteId && session.siteId !== filter.siteId) return false;
   if (filter.shiftCode && session.shiftCode !== filter.shiftCode) return false;
   if (filter.status && session.status !== filter.status) return false;
@@ -101,6 +102,42 @@ export const jsonRepositories: RepositoryBundle = {
       mustChangePassword: false,
       passwordChangedAt: changedAt,
     }),
+    remove: async (id) => {
+      const user = db.findUserById(id);
+      if (!user) return undefined;
+
+      const hasOperationalHistory =
+        db.getPatrolSessions({ userId: id }).length > 0 ||
+        db.getPatrolLogs().some((log) => log.userId === id) ||
+        db.getValidationAlerts().some((alert) =>
+          alert.userId === id ||
+          alert.reviewedBy === id ||
+          alert.closedBy === id ||
+          alert.reopenedBy === id
+        ) ||
+        db.getIncidents().some((incident) => incident.userId === id || incident.createdBy === id) ||
+        db.getHandovers().some((handover) =>
+          handover.fromUserId === id ||
+          handover.toUserId === id ||
+          handover.createdBy === id
+        ) ||
+        db.getMedia().some((media) => media.userId === id || media.createdBy === id) ||
+        db.getRadiusCalibrations().some((entry) => entry.testedByUserId === id);
+
+      if (hasOperationalHistory) {
+        throw new RepositoryError(
+          'USER_IN_USE',
+          'Personel sudah memiliki histori operasional dan tidak dapat dihapus. Nonaktifkan personel sebagai gantinya.',
+          409,
+        );
+      }
+
+      for (const [tokenHash, session] of jsonAuthSessions.entries()) {
+        if (session.userId === id) jsonAuthSessions.delete(tokenHash);
+      }
+
+      return db.deleteUser(id);
+    },
   },
 
   authSessions: {
@@ -139,6 +176,12 @@ export const jsonRepositories: RepositoryBundle = {
     list: async (page) => paginate(db.getCustomers(), page),
     create: async (customer) => db.addCustomer(customer),
     update: async (id, updates) => db.updateCustomer(id, updates),
+    remove: async (id) => {
+      if (db.getSites().some((site) => site.customerId === id)) {
+        throw new RepositoryError('CUSTOMER_IN_USE', 'Customer masih memiliki Site dan tidak dapat dihapus.', 409);
+      }
+      return db.deleteCustomer(id);
+    },
   },
 
   sites: {
@@ -146,6 +189,28 @@ export const jsonRepositories: RepositoryBundle = {
     list: async (page) => paginate(db.getSites(), page),
     create: async (site) => db.addSite(site),
     update: async (id, updates) => db.updateSite(id, updates),
+    remove: async (id) => {
+      const hasPersonnel = db.getUsers().some((user) =>
+        user.siteId === id || (user.assignmentHistory || []).some((assignment) => assignment.siteId === id)
+      );
+      const hasDependencies =
+        hasPersonnel ||
+        db.getCheckpoints(id).length > 0 ||
+        db.getPatrolSessions({ siteId: id }).length > 0 ||
+        db.getHandovers({ siteId: id }).length > 0 ||
+        db.getIncidents({ siteId: id }).length > 0 ||
+        db.getValidationAlerts().some((alert) => alert.siteId === id) ||
+        db.getMedia({ siteId: id }).length > 0;
+
+      if (hasDependencies) {
+        throw new RepositoryError(
+          'SITE_IN_USE',
+          'Site sudah memiliki personel, checkpoint, session, laporan, media, atau histori operasional. Nonaktifkan Site sebagai gantinya.',
+          409,
+        );
+      }
+      return db.deleteSite(id);
+    },
   },
 
   checkpoints: {
@@ -237,7 +302,12 @@ export const jsonRepositories: RepositoryBundle = {
         siteId: filter.siteId || null,
         shiftCode: filter.shiftCode || null,
         userId: filter.userId || null,
-      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      })
+        .filter((item) => {
+          if (!filter.customerId) return true;
+          return db.findSiteById(item.siteId)?.customerId === filter.customerId;
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
       page,
     ),
     create: async (handover) => db.addHandover(handover),
@@ -252,7 +322,12 @@ export const jsonRepositories: RepositoryBundle = {
         shiftCode: filter.shiftCode || null,
         userId: filter.userId || null,
         status: filter.status || null,
-      }).sort((a, b) => new Date(b.incidentAt).getTime() - new Date(a.incidentAt).getTime()),
+      })
+        .filter((item) => {
+          if (!filter.customerId) return true;
+          return item.customerId === filter.customerId || db.findSiteById(item.siteId)?.customerId === filter.customerId;
+        })
+        .sort((a, b) => new Date(b.incidentAt).getTime() - new Date(a.incidentAt).getTime()),
       page,
     ),
     create: async (incident) => db.addIncident(incident),
@@ -285,6 +360,7 @@ export const jsonRepositories: RepositoryBundle = {
       }
       return db.updateValidationAlert(id, updates)!;
     },
+    remove: async (id) => db.deleteValidationAlert(id),
   },
 
   adminState: {

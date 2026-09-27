@@ -147,6 +147,19 @@ function requireMonitoring(req: AuthenticatedRequest, res: Response, next: NextF
   next();
 }
 
+function resolveMonitoringCustomerScope(req: AuthenticatedRequest, res: Response): string | null | undefined {
+  if (req.user?.role !== 'CHIEF') return null;
+  if (!req.user.customerId) {
+    res.status(403).json({
+      success: false,
+      code: 'CHIEF_CUSTOMER_SCOPE_REQUIRED',
+      error: 'Customer penugasan Chief belum dikonfigurasi.',
+    });
+    return undefined;
+  }
+  return req.user.customerId;
+}
+
 function requireOperationalWrite(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({ success: false, error: 'Unauthorized.' });
@@ -848,7 +861,14 @@ apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, async (req: A
 
 apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-  if (!isAdministrator(req.user!.role)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+    if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
+    if (req.query.userId) filter.userId = String(req.query.userId);
+  } else if (!isAdministrator(req.user!.role)) {
     filter.userId = req.user!.id;
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
@@ -866,7 +886,13 @@ apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedReque
 
 apiRouter.get('/handover', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-  if (!isAdministrator(req.user!.role)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+    if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
+  } else if (!isAdministrator(req.user!.role)) {
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
@@ -1066,7 +1092,14 @@ apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, async (r
 
 apiRouter.get('/incidents', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-  if (!isAdministrator(req.user!.role)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+    if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
+    if (req.query.status) filter.status = String(req.query.status);
+  } else if (!isAdministrator(req.user!.role)) {
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
@@ -1265,8 +1298,14 @@ apiRouter.get('/media/:id/content', authMiddleware, async (req: AuthenticatedReq
   const ref = await repositories.media.findObjectRef(req.params.id);
   if (!ref) return res.status(404).json({ success: false, error: 'Media tidak ditemukan.' });
 
-  const canViewGlobal = isAdministrator(req.user!.role) || req.user!.role === 'CHIEF';
-  if (!canViewGlobal && (ref.userId !== req.user!.id || ref.siteId !== req.user!.siteId)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    const mediaSite = await repositories.sites.findById(ref.siteId);
+    if (!mediaSite || mediaSite.customerId !== customerId) {
+      return res.status(403).json({ success: false, error: 'Media berada di luar Customer penugasan Chief.' });
+    }
+  } else if (!isAdministrator(req.user!.role) && (ref.userId !== req.user!.id || ref.siteId !== req.user!.siteId)) {
     return res.status(403).json({ success: false, error: 'Anda tidak memiliki akses ke media ini.' });
   }
 
@@ -1300,10 +1339,14 @@ apiRouter.get('/admin/media-storage/health', authMiddleware, requireAdmin, async
 // -------------------------------------------------------------
 
 apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-  const canViewGlobal = isAdministrator(req.user!.role) || req.user!.role === 'CHIEF';
   const filter: any = {};
 
-  if (!canViewGlobal) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+  } else if (!isAdministrator(req.user!.role)) {
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
     filter.userId = req.user!.id;
   } else {
@@ -1361,16 +1404,25 @@ apiRouter.get('/gallery', authMiddleware, async (req: AuthenticatedRequest, res:
   });
 });
 
-apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, async (_req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/monitoring/active-sessions', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const [sitePage, activeSessions] = await Promise.all([
     repositories.sites.list({ limit: 500, offset: 0 }),
-    repositories.sessions.listFiltered({ status: 'ACTIVE' }, { limit: 500, offset: 0 }),
+    repositories.sessions.listFiltered(
+      { status: 'ACTIVE', ...(customerId ? { customerId } : {}) },
+      { limit: 500, offset: 0 },
+    ),
   ]);
+  const scopedSites = customerId
+    ? sitePage.items.filter((site) => site.customerId === customerId)
+    : sitePage.items;
   const uniqueUserIds = [...new Set(activeSessions.items.map((session) => session.userId))];
   const userEntries = await Promise.all(uniqueUserIds.map(async (id) => [id, await repositories.users.findById(id)] as const));
   const users = new Map(userEntries);
 
-  const sites = sitePage.items.map((site) => {
+  const sites = scopedSites.map((site) => {
     const sessions = activeSessions.items
       .filter((session) => session.siteId === site.id)
       .map((session) => {
@@ -1417,6 +1469,9 @@ apiRouter.post('/admin/sessions/:id/force-close', authMiddleware, requireAdmin, 
 // -------------------------------------------------------------
 
 apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const adminId = req.user!.id;
   const storedFilter = await repositories.adminState.get(adminId);
   const filterState = storedFilter || {
@@ -1429,21 +1484,32 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
   };
 
   const { dateString: todayJakarta } = getJakartaDateParts();
-  const siteId = filterState.siteId || undefined;
+  let siteId = filterState.siteId || undefined;
+  let memberUserId = filterState.memberUserId || undefined;
   const shiftCode = filterState.shiftCode || undefined;
-  const memberUserId = filterState.memberUserId || undefined;
 
-  const sessionFilter:any = { status: 'ACTIVE' };
+  if (customerId && siteId) {
+    const selectedSite = await repositories.sites.findById(siteId);
+    if (!selectedSite || selectedSite.customerId !== customerId) siteId = undefined;
+  }
+  if (customerId && memberUserId) {
+    const selectedMember = await repositories.users.findById(memberUserId);
+    if (!selectedMember || selectedMember.customerId !== customerId || selectedMember.role !== 'ANGGOTA') {
+      memberUserId = undefined;
+    }
+  }
+
+  const sessionFilter:any = { status: 'ACTIVE', ...(customerId ? { customerId } : {}) };
   if (siteId) sessionFilter.siteId = siteId;
   if (shiftCode) sessionFilter.shiftCode = shiftCode;
   if (memberUserId) sessionFilter.userId = memberUserId;
 
-  const incidentFilter:any = {};
+  const incidentFilter:any = { ...(customerId ? { customerId } : {}) };
   if (siteId) incidentFilter.siteId = siteId;
   if (shiftCode) incidentFilter.shiftCode = shiftCode;
   if (memberUserId) incidentFilter.userId = memberUserId;
 
-  const handoverFilter:any = {};
+  const handoverFilter:any = { ...(customerId ? { customerId } : {}) };
   if (siteId) handoverFilter.siteId = siteId;
   if (shiftCode) handoverFilter.shiftCode = shiftCode;
   if (memberUserId) handoverFilter.userId = memberUserId;
@@ -1461,15 +1527,21 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
     repositories.incidents.list(incidentFilter, { limit: 500, offset: 0 }),
     repositories.handovers.list(handoverFilter, { limit: 500, offset: 0 }),
     repositories.alerts.list(undefined, { limit: 500, offset: 0 }),
-    getOperationalMedia({ siteId, userId: memberUserId, shiftCode }, { limit: 12, offset: 0 }),
+    getOperationalMedia({ customerId: customerId || undefined, siteId, userId: memberUserId, shiftCode }, { limit: 12, offset: 0 }),
     repositories.sites.list({ limit: 500, offset: 0 }),
     repositories.users.list({ limit: 500, offset: 0 }),
   ]);
+
+  const scopedSites = customerId
+    ? sitesPage.items.filter((site) => site.customerId === customerId)
+    : sitesPage.items;
+  const scopedSiteIds = new Set(scopedSites.map((site) => site.id));
 
   const activePatrols = activeSessionsPage.items;
   const openIncidents = incidentsPage.items.filter((incident) => incident.status !== 'CLOSED');
   const handoversToday = handoversPage.items.filter((handover) => handover.shiftDate === todayJakarta);
   const filteredAlerts = alertsPage.items
+    .filter((alert) => (!customerId || scopedSiteIds.has(alert.siteId)))
     .filter((alert) => (!siteId || alert.siteId === siteId) && (!memberUserId || alert.userId === memberUserId))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const rejectedToday = filteredAlerts.filter((alert) => getJakartaDateParts(new Date(alert.createdAt)).dateString === todayJakarta);
@@ -1486,11 +1558,16 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
 
   const users = usersPage.items
     .filter((user) => user.role === 'ANGGOTA')
+    .filter((user) => !customerId || user.customerId === customerId)
     .map(({ passwordHash, ...user }) => user);
 
   res.json({
     success: true,
-    filterState,
+    filterState: {
+      ...filterState,
+      siteId: siteId || null,
+      memberUserId: memberUserId || null,
+    },
     kpis: {
       patroliAktif: activePatrols.length,
       kejadianOpen: openIncidents.length,
@@ -1505,7 +1582,7 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
       recentMedia: mediaPage.items,
     },
     options: {
-      sites: sitesPage.items,
+      sites: scopedSites,
       users,
       shifts: [
         { code: 'SHIFT_1', name: 'Shift 1 (07:00 - 15:00)' },
@@ -1518,10 +1595,30 @@ apiRouter.get('/admin/command-center', authMiddleware, requireMonitoring, async 
 
 apiRouter.post('/admin/filter-state', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
   const { siteId, shiftCode, memberUserId } = req.body;
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
+  const normalizedSiteId = siteId === '' ? null : siteId;
+  const normalizedMemberId = memberUserId === '' ? null : memberUserId;
+
+  if (customerId && normalizedSiteId) {
+    const selectedSite = await repositories.sites.findById(normalizedSiteId);
+    if (!selectedSite || selectedSite.customerId !== customerId) {
+      return res.status(403).json({ success: false, error: 'Site berada di luar Customer penugasan Chief.' });
+    }
+  }
+
+  if (customerId && normalizedMemberId) {
+    const selectedMember = await repositories.users.findById(normalizedMemberId);
+    if (!selectedMember || selectedMember.customerId !== customerId || selectedMember.role !== 'ANGGOTA') {
+      return res.status(403).json({ success: false, error: 'Personel berada di luar Customer penugasan Chief.' });
+    }
+  }
+
   const updated = await repositories.adminState.set(req.user!.id, {
-    siteId: siteId === '' ? null : siteId,
+    siteId: normalizedSiteId,
     shiftCode: shiftCode === '' ? null : shiftCode,
-    memberUserId: memberUserId === '' ? null : memberUserId,
+    memberUserId: normalizedMemberId,
   });
   res.json({ success: true, filterState: updated });
 });
@@ -1554,42 +1651,205 @@ apiRouter.patch('/admin/validation-alerts/:id', authMiddleware, requireAdmin, as
   }
 });
 
+apiRouter.delete('/admin/validation-alerts/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const previous = await repositories.alerts.findById(req.params.id);
+    if (!previous) return res.status(404).json({ success: false, error: 'Validation alert tidak ditemukan.' });
+
+    const expectedConfirmation = `HAPUS ${previous.id}`;
+    const confirmationText = String(req.body.confirmationText || '').trim();
+    if (confirmationText !== expectedConfirmation) {
+      return res.status(400).json({
+        success: false,
+        code: 'DELETE_CONFIRMATION_MISMATCH',
+        error: 'Konfirmasi hapus tidak sesuai. Ketik ulang teks konfirmasi yang ditampilkan.',
+      });
+    }
+
+    const removed = await repositories.alerts.remove(previous.id);
+    if (!removed) return res.status(404).json({ success: false, error: 'Validation alert tidak ditemukan atau sudah dihapus.' });
+
+    try {
+      await repositories.audit.append({
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'VALIDATION_ALERT_DELETE',
+        entityType: 'validation_alert',
+        entityId: previous.id,
+        oldValue: {
+          id: previous.id,
+          patrolLogId: previous.patrolLogId,
+          sessionId: previous.sessionId,
+          userId: previous.userId,
+          siteId: previous.siteId,
+          checkpointId: previous.checkpointId,
+          alertType: previous.alertType,
+          status: previous.status,
+          message: previous.message,
+          createdAt: previous.createdAt,
+        },
+        newValue: null,
+        reason: `Hapus validation alert ${previous.id}`,
+      });
+    } catch (auditError) {
+      console.error('[alert] Validation alert deleted but audit append failed:', auditError instanceof Error ? auditError.message : 'unknown');
+      return res.status(500).json({
+        success: false,
+        code: 'AUDIT_APPEND_FAILED_AFTER_DELETE',
+        error: 'Validation alert sudah dihapus, tetapi pencatatan Audit Trail gagal. Segera periksa log sistem.',
+      });
+    }
+
+    res.json({ success: true, deletedId: previous.id });
+  } catch (error: any) {
+    const controlled = error instanceof RepositoryError;
+    const code = controlled ? error.code : 'DATABASE_OPERATION_FAILED';
+    console.error('[alert] Delete failed:', error instanceof Error ? error.message : 'unknown');
+    res.status(controlled ? error.status : 500).json({ success: false, code, error: controlled ? error.message : 'Validation alert gagal dihapus karena gangguan database.' });
+  }
+});
+
 // Admin User Management
-apiRouter.get('/admin/users', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
+apiRouter.get('/admin/users', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const page = await repositories.users.list({ limit: 500, offset: 0 });
-  const users = page.items.map(({ passwordHash, ...user }) => user);
+  const scopedUsers = customerId
+    ? page.items.filter((user) => user.customerId === customerId)
+    : page.items;
+  const users = scopedUsers.map(({ passwordHash, ...user }) => user);
   res.json({ success: true, users });
 });
 
-apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, async (_req: Request, res: Response) => {
+apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, async (req: AuthenticatedRequest, res: Response) => {
+  const customerId = resolveMonitoringCustomerScope(req, res);
+  if (customerId === undefined) return;
+
   const [customersPage, sitesPage, usersPage, checkpointsPage, activeSessionsPage] = await Promise.all([
     repositories.customers.list({ limit: 500, offset: 0 }),
     repositories.sites.list({ limit: 500, offset: 0 }),
     repositories.users.list({ limit: 500, offset: 0 }),
     repositories.checkpoints.list({ limit: 500, offset: 0 }),
-    repositories.sessions.listFiltered({ status: 'ACTIVE' }, { limit: 500, offset: 0 }),
+    repositories.sessions.listFiltered(
+      { status: 'ACTIVE', ...(customerId ? { customerId } : {}) },
+      { limit: 500, offset: 0 },
+    ),
   ]);
-  const customersById = new Map(customersPage.items.map((customer) => [customer.id, customer]));
+
+  const customers = customerId
+    ? customersPage.items.filter((customer) => customer.id === customerId)
+    : customersPage.items;
+  const scopedSites = customerId
+    ? sitesPage.items.filter((site) => site.customerId === customerId)
+    : sitesPage.items;
+  const scopedSiteIds = new Set(scopedSites.map((site) => site.id));
+  const customersById = new Map(customers.map((customer) => [customer.id, customer]));
+
   const activeCountBySite = new Map<string, number>();
   for (const session of activeSessionsPage.items) {
     activeCountBySite.set(session.siteId, (activeCountBySite.get(session.siteId) || 0) + 1);
   }
-  const sites = sitesPage.items.map((site) => ({
+
+  const sites = scopedSites.map((site) => ({
     ...site,
     customer: customersById.get(site.customerId) || null,
     activeCount: activeCountBySite.get(site.id) || 0,
   }));
   const personnel = usersPage.items
     .filter((user) => user.role === 'ANGGOTA')
+    .filter((user) => !customerId || user.customerId === customerId)
     .map(({ passwordHash, ...user }) => user);
+  const checkpoints = customerId
+    ? checkpointsPage.items.filter((checkpoint) => scopedSiteIds.has(checkpoint.siteId))
+    : checkpointsPage.items;
 
   res.json({
     success: true,
-    customers: customersPage.items,
+    customers,
     sites,
     personnel,
-    checkpoints: checkpointsPage.items,
+    checkpoints,
   });
+});
+
+apiRouter.post('/admin/customer-sites', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const code = String(req.body.code || '').trim().toUpperCase();
+  const customerName = String(req.body.customerName || '').trim();
+  const siteName = String(req.body.siteName || '').trim();
+  const personnelCapacity = Number(req.body.personnelCapacity);
+  const targetRoundsPerShift = Number(req.body.targetRoundsPerShift || 1);
+
+  if (!code || !customerName || !siteName) {
+    return res.status(400).json({ success: false, error: 'Kode Customer, nama Customer, dan nama Site wajib diisi.' });
+  }
+  if (!Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
+    return res.status(400).json({ success: false, error: 'Personnel capacity minimal 1.' });
+  }
+  if (!Number.isInteger(targetRoundsPerShift) || targetRoundsPerShift < 1 || targetRoundsPerShift > 20) {
+    return res.status(400).json({ success: false, error: 'Target ronde harus bilangan 1 sampai 20.' });
+  }
+
+  const existing = await repositories.customers.list({ limit: 500, offset: 0 });
+  if (existing.items.some((item) => item.code === code)) {
+    return res.status(409).json({ success: false, error: 'Kode Customer sudah digunakan.' });
+  }
+
+  const now = new Date().toISOString();
+  const siteId = `SITE-${code}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  let customer: Awaited<ReturnType<typeof repositories.customers.create>> | undefined;
+  let site: Awaited<ReturnType<typeof repositories.sites.create>> | undefined;
+
+  try {
+    customer = await repositories.customers.create({
+      id: `CUST-${code}`,
+      code,
+      name: customerName,
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    site = await repositories.sites.create({
+      id: siteId,
+      code: siteId,
+      name: siteName,
+      customerId: customer.id,
+      personnelCapacity,
+      targetRoundsPerShift,
+      timezone: 'Asia/Jakarta',
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'CUSTOMER_SITE_CREATE',
+      entityType: 'customer_site',
+      entityId: customer.id,
+      newValue: { customer, site },
+      reason: `Tambah customer ${customerName} dengan site awal ${siteName}`,
+    });
+
+    res.status(201).json({ success: true, customer, site });
+  } catch (error: any) {
+    if (site) {
+      try { await repositories.sites.remove(site.id); } catch (rollbackError) {
+        console.error('[master] Rollback site failed:', rollbackError instanceof Error ? rollbackError.message : 'unknown');
+      }
+    }
+    if (customer) {
+      try { await repositories.customers.remove(customer.id); } catch (rollbackError) {
+        console.error('[master] Rollback customer failed:', rollbackError instanceof Error ? rollbackError.message : 'unknown');
+      }
+    }
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    throw error;
+  }
 });
 
 apiRouter.post('/admin/customers', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
@@ -1649,23 +1909,28 @@ apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, async (req
 });
 
 apiRouter.post('/admin/sites', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  const code = String(req.body.code || '').trim().toUpperCase();
+  const requestedCode = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
   const customerId = String(req.body.customerId || '');
   const personnelCapacity = Number(req.body.personnelCapacity);
   const customer = await repositories.customers.findById(customerId);
 
-  if (!code || !name || !customer || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
-    return res.status(400).json({ success: false, error: 'Customer, kode, nama, dan capacity minimal 1 wajib valid.' });
+  if (!name || !customer || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
+    return res.status(400).json({ success: false, error: 'Customer, nama Site, dan capacity minimal 1 wajib valid.' });
   }
-  if (await repositories.sites.findById(code)) return res.status(409).json({ success: false, error: 'Kode Site sudah digunakan.' });
 
+  const targetRoundsPerShift = Number(req.body.targetRoundsPerShift || 1);
+  if (!Number.isInteger(targetRoundsPerShift) || targetRoundsPerShift < 1 || targetRoundsPerShift > 20) {
+    return res.status(400).json({ success: false, error: 'Target ronde harus bilangan 1 sampai 20.' });
+  }
+
+  const generatedId = `SITE-${customer.code}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const siteId = requestedCode || generatedId;
   const now = new Date().toISOString();
-  const targetRoundsPerShift = Math.max(1, Number(req.body.targetRoundsPerShift) || 1);
   try {
     const site = await repositories.sites.create({
-      id: code,
-      code,
+      id: siteId,
+      code: siteId,
       name,
       customerId,
       personnelCapacity,
@@ -1727,8 +1992,57 @@ apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, async (req: Au
   res.json({ success: true, site: updated });
 });
 
+apiRouter.delete('/admin/sites/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const site = await repositories.sites.findById(req.params.id);
+    if (!site) return res.status(404).json({ success: false, error: 'Site tidak ditemukan.' });
+
+    const confirmationText = String(req.body.confirmationText || '').trim();
+    const expectedConfirmation = `HAPUS ${site.name}`;
+    if (confirmationText !== expectedConfirmation) {
+      return res.status(400).json({
+        success: false,
+        code: 'DELETE_CONFIRMATION_MISMATCH',
+        error: 'Konfirmasi hapus tidak sesuai. Ketik ulang nama Site sesuai instruksi.',
+      });
+    }
+
+    const allSites = await repositories.sites.list({ limit: 500, offset: 0 });
+    const customerSites = allSites.items.filter((item) => item.customerId === site.customerId);
+    if (customerSites.length <= 1) {
+      return res.status(409).json({
+        success: false,
+        code: 'CUSTOMER_REQUIRES_SITE',
+        error: 'Site ini adalah satu-satunya Site Customer. Tambahkan Site lain terlebih dahulu karena setiap Customer wajib memiliki minimal satu Site.',
+      });
+    }
+
+    const removed = await repositories.sites.remove(site.id);
+    if (!removed) return res.status(404).json({ success: false, error: 'Site tidak ditemukan atau sudah dihapus.' });
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'SITE_DELETE',
+      entityType: 'site',
+      entityId: site.id,
+      oldValue: site,
+      newValue: null,
+      reason: `Hapus site ${site.name}`,
+    });
+
+    res.json({ success: true, deletedId: site.id });
+  } catch (error: any) {
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    throw error;
+  }
+});
+
+
 apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  const { name, npk, email, role, siteId, position } = req.body;
+  const { name, npk, email, role, customerId, siteId, position } = req.body;
   if (!name || !npk) return res.status(400).json({ success: false, error: 'Nama dan NPK wajib diisi.' });
 
   const cleanNpk = String(npk).trim();
@@ -1737,23 +2051,39 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
   const now = new Date().toISOString();
   const allowedRoles: Role[] = ['ANGGOTA', 'ADMIN', 'CHIEF', 'SUPER_ADMIN'];
   const selectedRole: Role = allowedRoles.includes(role) ? role : 'ANGGOTA';
-  const selectedSite = selectedRole === 'SUPER_ADMIN' ? null : await repositories.sites.findById(siteId || '');
-  if (selectedRole !== 'SUPER_ADMIN' && !selectedSite) {
-    return res.status(400).json({ success: false, error: 'Site penugasan wajib valid.' });
+
+  let assignmentCustomerId: string | null = null;
+  let assignmentSiteId: string | null = null;
+
+  if (selectedRole === 'CHIEF') {
+    const selectedCustomer = await repositories.customers.findById(String(customerId || ''));
+    if (!selectedCustomer) {
+      return res.status(400).json({ success: false, error: 'Customer penugasan wajib dipilih untuk CHIEF.' });
+    }
+    assignmentCustomerId = selectedCustomer.id;
+  } else if (selectedRole !== 'SUPER_ADMIN') {
+    const selectedSite = await repositories.sites.findById(String(siteId || ''));
+    if (!selectedSite) {
+      return res.status(400).json({ success: false, error: 'Site penugasan wajib valid untuk role ini.' });
+    }
+    assignmentCustomerId = selectedSite.customerId;
+    assignmentSiteId = selectedSite.id;
   }
 
+  const scopeId = assignmentSiteId || assignmentCustomerId || 'GEN';
+  const hasAssignment = assignmentCustomerId !== null || assignmentSiteId !== null;
   const newUser: User = {
-    id: `USR-${siteId || 'GEN'}-${Date.now().toString().slice(-6)}`,
+    id: `USR-${scopeId}-${Date.now().toString().slice(-6)}`,
     name: String(name).trim(),
     npk: cleanNpk,
     email: email ? String(email).trim() : `${cleanNpk}@sigap.local`,
     role: selectedRole,
-    customerId: selectedSite?.customerId || null,
-    siteId: selectedSite?.id || null,
+    customerId: assignmentCustomerId,
+    siteId: assignmentSiteId,
     position: String(position || (selectedRole === 'ANGGOTA' ? 'ANGGOTA SECURITY' : selectedRole.replace('_', ' '))),
-    assignmentHistory: selectedSite ? [{
-      customerId: selectedSite.customerId,
-      siteId: selectedSite.id,
+    assignmentHistory: hasAssignment ? [{
+      customerId: assignmentCustomerId,
+      siteId: assignmentSiteId,
       effectiveAt: now,
       changedBy: req.user!.id,
     }] : [],
@@ -1771,7 +2101,13 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
       action: 'USER_CREATE',
       entityType: 'user',
       entityId: created.id,
-      newValue: { name: created.name, npk: created.npk, role: created.role, siteId: created.siteId },
+      newValue: {
+        name: created.name,
+        npk: created.npk,
+        role: created.role,
+        customerId: created.customerId,
+        siteId: created.siteId,
+      },
       reason: `Tambah pengguna baru ${created.name}`,
     });
     const { passwordHash, ...safeUser } = created;
@@ -1783,35 +2119,72 @@ apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: Authent
 });
 
 apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  const { name, email, role, siteId, status, position } = req.body;
+  const { name, email, role, customerId, siteId, status, position } = req.body;
   const user = await repositories.users.findById(req.params.id);
   if (!user) return res.status(404).json({ success: false, error: 'Pengguna tidak ditemukan.' });
 
-  const oldValues = { name: user.name, role: user.role, siteId: user.siteId, status: user.status };
+  const allowedRoles: Role[] = ['ANGGOTA', 'ADMIN', 'CHIEF', 'SUPER_ADMIN'];
+  const requestedRole = (role || user.role) as Role;
+  if (!allowedRoles.includes(requestedRole)) {
+    return res.status(400).json({ success: false, error: 'Role pengguna tidak valid.' });
+  }
+
+  const oldValues = {
+    name: user.name,
+    role: user.role,
+    customerId: user.customerId,
+    siteId: user.siteId,
+    status: user.status,
+  };
   const updates: Partial<User> = {};
   if (name !== undefined) updates.name = String(name).trim();
   if (email !== undefined) updates.email = String(email).trim();
-  if (role !== undefined) updates.role = role;
+  if (role !== undefined) updates.role = requestedRole;
   if (position !== undefined) updates.position = String(position).trim();
   if (status !== undefined) updates.status = status;
 
-  let assignment;
-  const requestedRole = (role || user.role) as Role;
+  let assignment:
+    | { customerId: string | null; siteId: string | null; effectiveAt: string; changedBy: string }
+    | undefined;
+  const effectiveAt = new Date().toISOString();
+
   if (requestedRole === 'SUPER_ADMIN') {
     if (user.siteId !== null || user.customerId !== null) {
-      assignment = { customerId: null, siteId: null, effectiveAt: new Date().toISOString(), changedBy: req.user!.id };
+      assignment = { customerId: null, siteId: null, effectiveAt, changedBy: req.user!.id };
     }
-  } else if (siteId !== undefined && siteId !== user.siteId) {
-    const selectedSite = siteId ? await repositories.sites.findById(siteId) : undefined;
-    if (!selectedSite) return res.status(400).json({ success: false, error: 'Site penugasan tidak valid.' });
-    assignment = {
-      customerId: selectedSite.customerId,
-      siteId: selectedSite.id,
-      effectiveAt: new Date().toISOString(),
-      changedBy: req.user!.id,
-    };
-  } else if (!user.siteId) {
-    return res.status(400).json({ success: false, error: 'Site penugasan wajib valid untuk role ini.' });
+  } else if (requestedRole === 'CHIEF') {
+    const targetCustomerId = customerId !== undefined ? String(customerId || '') : String(user.customerId || '');
+    const selectedCustomer = await repositories.customers.findById(targetCustomerId);
+    if (!selectedCustomer) {
+      return res.status(400).json({ success: false, error: 'Customer penugasan wajib dipilih untuk CHIEF.' });
+    }
+    if (user.customerId !== selectedCustomer.id || user.siteId !== null || user.role !== 'CHIEF') {
+      assignment = {
+        customerId: selectedCustomer.id,
+        siteId: null,
+        effectiveAt,
+        changedBy: req.user!.id,
+      };
+    }
+  } else {
+    const targetSiteId = siteId !== undefined ? String(siteId || '') : String(user.siteId || '');
+    const selectedSite = await repositories.sites.findById(targetSiteId);
+    if (!selectedSite) {
+      return res.status(400).json({ success: false, error: 'Site penugasan wajib valid untuk role ini.' });
+    }
+    if (
+      user.siteId !== selectedSite.id ||
+      user.customerId !== selectedSite.customerId ||
+      user.role === 'CHIEF' ||
+      user.role === 'SUPER_ADMIN'
+    ) {
+      assignment = {
+        customerId: selectedSite.customerId,
+        siteId: selectedSite.id,
+        effectiveAt,
+        changedBy: req.user!.id,
+      };
+    }
   }
 
   const updated = await repositories.users.update(user.id, updates, assignment);
@@ -1823,13 +2196,72 @@ apiRouter.patch('/admin/users/:id', authMiddleware, requireAdmin, async (req: Au
     entityType: 'user',
     entityId: user.id,
     oldValue: oldValues,
-    newValue: { ...updates, ...(assignment ? { customerId: assignment.customerId, siteId: assignment.siteId } : {}) },
+    newValue: {
+      ...updates,
+      ...(assignment ? { customerId: assignment.customerId, siteId: assignment.siteId } : {}),
+    },
     reason: `Perubahan data pengguna ${user.name}`,
   });
 
   const { passwordHash, ...safeUser } = updated;
   res.json({ success: true, user: safeUser });
 });
+
+apiRouter.delete('/admin/users/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const target = await repositories.users.findById(req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: 'Personel tidak ditemukan.' });
+
+    if (target.id === req.user!.id) {
+      return res.status(409).json({ success: false, code: 'CANNOT_DELETE_SELF', error: 'Akun yang sedang digunakan tidak dapat dihapus.' });
+    }
+    if (target.role === 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, code: 'SUPER_ADMIN_DELETE_BLOCKED', error: 'Akun Super Admin tidak dapat dihapus dari menu Petugas.' });
+    }
+
+    const expectedConfirmation = `HAPUS ${target.name}`;
+    const confirmationText = String(req.body.confirmationText || '').trim();
+    if (confirmationText !== expectedConfirmation) {
+      return res.status(400).json({
+        success: false,
+        code: 'DELETE_CONFIRMATION_MISMATCH',
+        error: 'Konfirmasi hapus tidak sesuai. Ketik ulang nama personel sesuai instruksi.',
+      });
+    }
+
+    const removed = await repositories.users.remove(target.id);
+    if (!removed) return res.status(404).json({ success: false, error: 'Personel tidak ditemukan atau sudah dihapus.' });
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'USER_DELETE',
+      entityType: 'user',
+      entityId: target.id,
+      oldValue: {
+        id: target.id,
+        name: target.name,
+        npk: target.npk,
+        email: target.email,
+        role: target.role,
+        position: target.position,
+        customerId: target.customerId,
+        siteId: target.siteId,
+        status: target.status,
+      },
+      newValue: null,
+      reason: `Hapus personel ${target.name}`,
+    });
+
+    res.json({ success: true, deletedId: target.id });
+  } catch (error: any) {
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    throw error;
+  }
+});
+
 
 // Admin Checkpoint Management
 apiRouter.get('/admin/checkpoints', authMiddleware, async (_req: Request, res: Response) => {
@@ -2012,7 +2444,7 @@ apiRouter.post('/admin/radius-calibrations', authMiddleware, requireAdmin, async
 });
 
 // Admin Audit Logs
-apiRouter.get('/admin/audit-logs', authMiddleware, requireAdmin, async (_req: Request, res: Response) => {
+apiRouter.get('/admin/audit-logs', authMiddleware, requireSuperAdmin, async (_req: Request, res: Response) => {
   const page = await repositories.audit.list({ limit: 100, offset: 0 });
   res.json({ success: true, logs: page.items });
 });

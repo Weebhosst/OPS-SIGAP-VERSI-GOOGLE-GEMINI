@@ -24,6 +24,54 @@ try {
   const source = JSON.parse(fs.readFileSync(temporaryDatabase, 'utf8'));
   assert.deepEqual(validateJsonImport(normalizeLegacyJson(source)), []);
 
+  const disposableSuffix = Date.now();
+  const disposableCustomer = await jsonRepositories.customers.create({
+    id: `CUST-DELETE-${disposableSuffix}`,
+    code: `DEL${String(disposableSuffix).slice(-6)}`,
+    name: 'Disposable Regression Customer',
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  const disposableSite = await jsonRepositories.sites.create({
+    id: `SITE-DELETE-${disposableSuffix}`,
+    code: `SITE-DELETE-${disposableSuffix}`,
+    name: 'Disposable Regression Site',
+    customerId: disposableCustomer.id,
+    personnelCapacity: 1,
+    targetRoundsPerShift: 1,
+    timezone: 'Asia/Jakarta',
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  const disposableUser = await jsonRepositories.users.create({
+    id: `USR-DELETE-${disposableSuffix}`,
+    name: 'Disposable Regression User',
+    npk: `DEL${String(disposableSuffix).slice(-7)}`,
+    email: `delete-${disposableSuffix}@integration.local`,
+    role: 'ANGGOTA',
+    customerId: disposableCustomer.id,
+    siteId: disposableSite.id,
+    position: 'ANGGOTA SECURITY',
+    assignmentHistory: [{
+      customerId: disposableCustomer.id,
+      siteId: disposableSite.id,
+      effectiveAt: new Date().toISOString(),
+      changedBy: null,
+    }],
+    status: 'ACTIVE',
+    passwordHash: 'TEST-HASH',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  assert.equal((await jsonRepositories.users.remove(disposableUser.id))?.id, disposableUser.id);
+  assert.equal(await jsonRepositories.users.findById(disposableUser.id), undefined);
+  assert.equal((await jsonRepositories.sites.remove(disposableSite.id))?.id, disposableSite.id);
+  assert.equal(await jsonRepositories.sites.findById(disposableSite.id), undefined);
+  assert.equal((await jsonRepositories.customers.remove(disposableCustomer.id))?.id, disposableCustomer.id);
+  assert.equal(await jsonRepositories.customers.findById(disposableCustomer.id), undefined);
+
   const authNow = new Date();
   const authRecord = await jsonRepositories.authSessions.create({
     id: `AUTH-TEST-${Date.now()}`,
@@ -78,6 +126,14 @@ try {
   );
 
   assert.equal((await jsonRepositories.sessions.findById(active.id))?.shiftDate, active.shiftDate);
+  const customerSessions = await jsonRepositories.sessions.listFiltered(
+    { customerId: site.customerId, status: 'ACTIVE' },
+    { limit: 100, offset: 0 },
+  );
+  assert.ok(
+    customerSessions.items.some((item) => item.id === active!.id),
+    'Customer scope harus mengembalikan active session dari seluruh Site Customer.',
+  );
 
   const filteredSessions = await jsonRepositories.sessions.listFiltered(
     { userId: active.userId, siteId: active.siteId, status: 'ACTIVE', operationalDate: active.shiftDate },
@@ -125,6 +181,8 @@ try {
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'REVIEW', user.id)).status, 'UNDER_REVIEW');
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'CLOSE', user.id, 'Sudah diverifikasi')).status, 'CLOSED');
   assert.equal((await jsonRepositories.alerts.transition(alert.id, 'REOPEN', user.id)).status, 'OPEN');
+  assert.equal((await jsonRepositories.alerts.remove(alert.id))?.id, alert.id);
+  assert.equal(await jsonRepositories.alerts.findById(alert.id), undefined);
 
   const mediaId = `TEST-MEDIA-${Date.now()}`;
   await jsonRepositories.media.add({
@@ -178,6 +236,11 @@ try {
     updatedAt: new Date().toISOString(),
   });
   assert.equal((await jsonRepositories.handovers.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === handover.id), true);
+  assert.equal(
+    (await jsonRepositories.handovers.list({ customerId: site.customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === handover.id),
+    true,
+  );
   assert.equal((await jsonRepositories.handovers.update(handover.id, { ackTo: true, status: 'ACKNOWLEDGED', toUserId: user.id }))?.ackTo, true);
 
   const incidentId = `TEST-INCIDENT-${Date.now()}`;
@@ -203,6 +266,11 @@ try {
     updatedAt: new Date().toISOString(),
   });
   assert.equal((await jsonRepositories.incidents.list({ siteId: site.id }, { limit: 100, offset: 0 })).items.some((item) => item.id === incident.id), true);
+  assert.equal(
+    (await jsonRepositories.incidents.list({ customerId: site.customerId }, { limit: 100, offset: 0 }))
+      .items.some((item) => item.id === incident.id),
+    true,
+  );
   assert.equal((await jsonRepositories.incidents.update(incident.id, { status: 'CLOSED', closedAt: new Date().toISOString() }))?.status, 'CLOSED');
 
   const calibration = await jsonRepositories.radiusCalibrations.create({
@@ -243,6 +311,11 @@ try {
   const apiClientSource = fs.readFileSync(path.resolve('src/lib/api.ts'), 'utf8');
   const authContextSource = fs.readFileSync(path.resolve('src/context/AuthContext.tsx'), 'utf8');
   const loginViewSource = fs.readFileSync(path.resolve('src/views/LoginView.tsx'), 'utf8');
+  const appSource = fs.readFileSync(path.resolve('src/App.tsx'), 'utf8');
+  const adminCheckpointSource = fs.readFileSync(path.resolve('src/views/admin/AdminCheckpoints.tsx'), 'utf8');
+  const masterMonitoringSource = fs.readFileSync(path.resolve('src/views/admin/MasterMonitoringView.tsx'), 'utf8');
+  const adminUsersSource = fs.readFileSync(path.resolve('src/views/admin/AdminUsers.tsx'), 'utf8');
+  const chiefScopeMigration = fs.readFileSync(path.resolve('server/db/migrations/006_chief_customer_scope.sql'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -276,7 +349,42 @@ try {
   assert.match(mediaStorageSource, /railway_s3/);
   assert.match(routeSource, /\/media\/:id\/content/);
   assert.doesNotMatch(postgresSource, /storage_provider[^\n]+external_url[^\n]+item\.photoUrl/);
+  assert.match(routeSource, /apiRouter\.get\('\/admin\/audit-logs', authMiddleware, requireSuperAdmin/);
+  assert.match(routeSource, /apiRouter\.delete\('\/admin\/validation-alerts\/:id', authMiddleware, requireAdmin/);
+  assert.match(routeSource, /apiRouter\.delete\('\/admin\/sites\/:id', authMiddleware, requireAdmin/);
+  assert.match(routeSource, /apiRouter\.delete\('\/admin\/users\/:id', authMiddleware, requireAdmin/);
+  assert.match(routeSource, /DELETE_CONFIRMATION_MISMATCH/);
+  assert.match(routeSource, /CUSTOMER_REQUIRES_SITE/);
+  assert.doesNotMatch(appSource, /AdminRadiusCalibration|Kalibrasi Radius/);
+  assert.match(appSource, /adminTab === 'audit' && user\.role === 'SUPER_ADMIN'/);
+  assert.match(adminCheckpointSource, /Math\.max\(0, \.\.\.existingSequences\) \+ 1/);
+  assert.match(masterMonitoringSource, /ops:masterWorkspace:/);
+  assert.match(masterMonitoringSource, /scrollByTab/);
+  assert.match(masterMonitoringSource, /refreshDataInPlace/);
+  assert.match(routeSource, /resolveMonitoringCustomerScope/);
+  assert.match(routeSource, /selectedRole === 'CHIEF'/);
+  assert.match(routeSource, /Customer penugasan wajib dipilih untuk CHIEF/);
+  assert.match(adminUsersSource, /Customer Penugasan CHIEF/);
+  assert.match(adminUsersSource, /CHIEF tidak ditempatkan pada satu Site/);
+  assert.match(chiefScopeMigration, /231117/);
+  assert.match(chiefScopeMigration, /230599/);
+  assert.match(chiefScopeMigration, /site_id = NULL|site_id, effective_from/);
 
+  await assert.rejects(
+    () => jsonRepositories.users.remove(user.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
+    'Personel dengan histori operasional tidak boleh hard-delete.',
+  );
+  await assert.rejects(
+    () => jsonRepositories.sites.remove(site.id),
+    (error: unknown) => error instanceof RepositoryError && error.code === 'SITE_IN_USE',
+    'Site dengan histori operasional tidak boleh hard-delete.',
+  );
+
+  console.log('PASS destructive-action regression guards and disposable deletes');
+  console.log('PASS Super Admin audit policy and order-safe checkpoint sequence source guards');
+  console.log('PASS Master Monitoring sticky workspace and in-place refresh source guards');
+  console.log('PASS CHIEF customer-level assignment and monitoring scope guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');

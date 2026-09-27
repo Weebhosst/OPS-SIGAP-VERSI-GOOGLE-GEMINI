@@ -124,7 +124,52 @@ class DatabaseStore {
 
   private migrateLegacyData() {
     const now = new Date().toISOString();
+    this.data.customers ||= [];
     this.data.validation_alerts ||= [];
+
+    const bb92Site = this.data.sites.find((site) => site.id === 'BB92');
+    if (bb92Site) {
+      let aisCustomer = this.data.customers.find((customer) => customer.code === 'AIS' || customer.id === 'CUST-AIS');
+      if (!aisCustomer) {
+        aisCustomer = {
+          id: 'CUST-AIS',
+          code: 'AIS',
+          name: 'PT. ASTRA INFRA SOLUTIONS - SUBANG',
+          status: 'ACTIVE',
+          createdAt: bb92Site.createdAt || now,
+          updatedAt: now,
+        };
+        this.data.customers.push(aisCustomer);
+      } else {
+        aisCustomer.code = 'AIS';
+        aisCustomer.name = 'PT. ASTRA INFRA SOLUTIONS - SUBANG';
+        aisCustomer.status = 'ACTIVE';
+        aisCustomer.updatedAt = now;
+      }
+
+      bb92Site.customerId = aisCustomer.id;
+      bb92Site.code ||= 'BB92';
+
+      for (const user of this.data.users) {
+        if (user.siteId === 'BB92') {
+          user.customerId = aisCustomer.id;
+          if (Array.isArray(user.assignmentHistory)) {
+            for (const assignment of user.assignmentHistory) {
+              if (assignment.siteId === 'BB92') assignment.customerId = aisCustomer.id;
+            }
+          }
+        }
+      }
+
+      for (const session of this.data.patrol_sessions) {
+        if (session.siteId === 'BB92') session.customerId = aisCustomer.id;
+      }
+
+      for (const incident of this.data.incident_reports) {
+        if (incident.siteId === 'BB92') incident.customerId = aisCustomer.id;
+      }
+    }
+
     for (const site of this.data.sites) site.targetRoundsPerShift = Math.max(1, Number(site.targetRoundsPerShift) || 1);
     for (const site of this.data.sites) {
       site.customerId ||= this.data.customers[0]?.id || 'UNASSIGNED';
@@ -477,6 +522,14 @@ class DatabaseStore {
     return user;
   }
 
+  public deleteUser(id: string): User | undefined {
+    const index = this.data.users.findIndex((user) => user.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.users.splice(index, 1);
+    this.save();
+    return removed;
+  }
+
   // -------------------------------------------------------------
   // SITES & CHECKPOINTS
   // -------------------------------------------------------------
@@ -503,6 +556,14 @@ class DatabaseStore {
     return customer;
   }
 
+  public deleteCustomer(id: string): Customer | undefined {
+    const index = this.data.customers.findIndex((customer) => customer.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.customers.splice(index, 1);
+    this.save();
+    return removed;
+  }
+
   public getSites(): Site[] {
     return this.data.sites;
   }
@@ -523,6 +584,14 @@ class DatabaseStore {
     Object.assign(site, updates, { updatedAt: new Date().toISOString() });
     this.save();
     return site;
+  }
+
+  public deleteSite(id: string): Site | undefined {
+    const index = this.data.sites.findIndex((site) => site.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.sites.splice(index, 1);
+    this.save();
+    return removed;
   }
 
   public getCheckpoints(siteId?: string): Checkpoint[] {
@@ -652,6 +721,14 @@ class DatabaseStore {
     Object.assign(alert, updates);
     this.save();
     return alert;
+  }
+
+  public deleteValidationAlert(id: string): ValidationAlert | undefined {
+    const index = this.data.validation_alerts.findIndex((alert) => alert.id === id);
+    if (index < 0) return undefined;
+    const [removed] = this.data.validation_alerts.splice(index, 1);
+    this.save();
+    return removed;
   }
 
   // -------------------------------------------------------------

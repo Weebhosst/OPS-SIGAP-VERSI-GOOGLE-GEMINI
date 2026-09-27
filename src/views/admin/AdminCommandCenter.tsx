@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { OpsDangerConfirmDialog, OpsDialog, OpsNoticeDialog, type OpsDialogTone } from '../../components/OpsDialog';
 import { api } from '../../lib/api';
 import {
   AdminFilterState,
@@ -80,7 +81,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   const [loading, setLoading] = useState(true);
   const [detailAlert, setDetailAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeAlert, setCloseAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
+  const [deleteAlert, setDeleteAlert] = useState<(ValidationAlert & { patrolLog?: PatrolLog | null }) | null>(null);
   const [closeNote, setCloseNote] = useState('');
+  const [notice, setNotice] = useState<{ title: string; message: string; tone: OpsDialogTone } | null>(null);
 
   const loadDashboard = async () => {
     try {
@@ -121,7 +124,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         await loadDashboard();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mengubah filter');
+      setNotice({ title: 'Filter Gagal', message: err.message || 'Gagal mengubah filter.', tone: 'danger' });
     }
   };
 
@@ -136,7 +139,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         await loadDashboard();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mereset filter');
+      setNotice({ title: 'Reset Filter Gagal', message: err.message || 'Gagal mereset filter.', tone: 'danger' });
     }
   };
 
@@ -145,7 +148,42 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
       await api.updateValidationAlert(alert.id, action, action === 'CLOSE' ? closeNote.trim() : undefined);
       setCloseAlert(null); setCloseNote('');
       await loadDashboard();
-    } catch (error: any) { window.alert(error.message || 'Gagal memperbarui validation alert.'); }
+    } catch (error: any) {
+      setNotice({ title: 'Validation Alert Gagal', message: error.message || 'Gagal memperbarui validation alert.', tone: 'danger' });
+    }
+  };
+
+  const removeValidationAlert = async (alert: ValidationAlert) => {
+    try {
+      await api.deleteValidationAlert(alert.id, `HAPUS ${alert.id}`);
+      setDeleteAlert(null);
+      setDetailAlert(null);
+      await loadDashboard();
+      setNotice({
+        title: 'Validation Dihapus',
+        message: `Validation alert ${alert.id} berhasil dihapus dari data aktif. Jejak penghapusan tetap dicatat di Audit Trail.`,
+        tone: 'success',
+      });
+    } catch (error: any) {
+      setDeleteAlert(null);
+      await loadDashboard();
+      setNotice({
+        title: 'Hapus Validation Gagal',
+        message: error.message || 'Validation alert gagal dihapus.',
+        tone: 'danger',
+      });
+    }
+  };
+
+  const openActiveSessionPersonnel = () => {
+    if (user?.id) {
+      sessionStorage.setItem(`ops:masterTab:${user.id}`, 'ACTIVE_SESSION');
+    }
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'master');
+    params.set('tab', 'active_session');
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    onNavigateTab('master');
   };
 
   // Helper for active filter text
@@ -263,19 +301,29 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         {/* 4 TOP KPI CARDS */}
         <div className={`grid grid-cols-2 gap-3 ${isChief ? '' : 'lg:grid-cols-4'}`}>
           {/* 1. Patroli Aktif */}
-          <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
+          <button
+            type="button"
+            onClick={openActiveSessionPersonnel}
+            className={`group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 text-left shadow-sm transition hover:border-blue-700/70 hover:bg-slate-900/80 focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${isChief ? 'p-3.5' : 'p-4'}`}
+            aria-label="Buka Active Session Personel"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Patroli Aktif
               </span>
-              <Activity className="w-4 h-4 text-blue-400" />
+              <Activity className="h-4 w-4 text-blue-400 transition group-hover:scale-110" />
             </div>
-            <div className="text-3xl font-black text-white mt-2 font-mono">
+            <div className="mt-2 font-mono text-3xl font-black text-white">
               {kpis.patroliAktif}
             </div>
-            <p className="text-[11px] text-blue-400 font-medium mt-1">Sesi ronde OPEN</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-blue-400">Sesi ronde OPEN</p>
+              <span className="inline-flex items-center gap-1 text-[10px] font-black text-blue-300">
+                LIHAT <ChevronRight className="h-3 w-3" />
+              </span>
+            </div>
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500" />
-          </div>
+          </button>
 
           {/* 2. Kejadian Open */}
           <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
@@ -327,14 +375,23 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         <div className={`grid grid-cols-1 gap-3 ${isChief ? '' : 'lg:grid-cols-2'}`}>
           {/* Panel: Patroli Aktif */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-blue-400" />
+            <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Activity className="h-4 w-4 shrink-0 text-blue-400" />
                 <h2 className="text-sm font-black text-white">{isChief ? 'PATROLI AKTIF' : 'PATROLI AKTIF LAPANGAN'}</h2>
               </div>
-              <span className="text-xs font-mono font-bold text-slate-400">
-                {panels.activePatrols.length} Sesi
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="font-mono text-xs font-bold text-slate-400">
+                  {panels.activePatrols.length} Sesi
+                </span>
+                <button
+                  type="button"
+                  onClick={openActiveSessionPersonnel}
+                  className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-blue-800/80 bg-blue-950/40 px-2 py-1 text-[10px] font-black text-blue-300 transition hover:bg-blue-900/50"
+                >
+                  ACTIVE SESSION <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
             </div>
 
             {panels.activePatrols.length === 0 ? (
@@ -566,91 +623,217 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         )}
       </main>
 
-      {detailAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-detail-title"><div className="flex justify-between gap-3"><h3 id="validation-detail-title" className="font-black">DETAIL VALIDATION ALERT</h3><button type="button" onClick={() => setDetailAlert(null)} aria-label="Tutup detail validation alert">✕</button></div><div className="mt-4 space-y-2 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div><div>Site: {detailAlert.siteId}</div><div>Jenis: {detailAlert.alertType}</div><div>Detail: {detailAlert.message}</div><div>Status: {detailAlert.status}</div>{detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}</div></div></div> : null}
-
-      {closeAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-red-900 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-close-title"><h3 id="validation-close-title" className="font-black text-red-300">TUTUP VALIDATION ALERT</h3><div className="my-3 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div><div>Site: {closeAlert.siteId}</div><div>Jenis: {closeAlert.alertType}</div><div className="mt-2">Detail: {closeAlert.message}</div></div><label className="font-bold">Catatan Penyelesaian<textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal" /></label><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => setCloseAlert(null)} className="rounded-xl bg-slate-800 p-2 font-bold">BATAL</button><button disabled={!closeNote.trim()} onClick={() => void mutateAlert(closeAlert, 'CLOSE')} className="rounded-xl bg-red-700 p-2 font-bold disabled:opacity-40">CLOSE ALERT</button></div></div></div> : null}
-
-      {/* Persistent Global Filter Modal */}
-      {showFilterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="global-filter-title">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 id="global-filter-title" className="text-sm font-black text-white">Filter Global Command Center</h3>
-              <button type="button" onClick={() => setShowFilterModal(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Tutup filter global">
-                ✕
+      <OpsDialog
+        isOpen={!!detailAlert}
+        onClose={() => setDetailAlert(null)}
+        title="DETAIL VALIDATION ALERT"
+        description="Detail hasil validasi lapangan dan status workflow."
+        tone={detailAlert?.patrolLog?.validationStatus === 'REJECTED' ? 'danger' : 'warning'}
+        size="md"
+        footer={
+          detailAlert ? (
+            <div className={`grid gap-2 ${isAdministrator(user?.role) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <button type="button" onClick={() => setDetailAlert(null)} className="ops-btn-secondary px-4">
+                TUTUP
               </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              {/* Filter 1: Site */}
-              <div>
-                <label className="font-semibold text-slate-300 block mb-1">Site / Lokasi:</label>
-                <select
-                  value={selectedSite}
-                  onChange={(e) => setSelectedSite(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+              {isAdministrator(user?.role) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteAlert(detailAlert);
+                    setDetailAlert(null);
+                  }}
+                  className="ops-btn-danger px-4"
                 >
-                  <option value="">Semua Site (Global)</option>
-                  {options.sites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter 2: Shift */}
-              <div>
-                <label className="font-semibold text-slate-300 block mb-1">Shift:</label>
-                <select
-                  value={selectedShift}
-                  onChange={(e) => setSelectedShift(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                >
-                  <option value="">Semua Shift</option>
-                  {options.shifts.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter 3: Anggota */}
-              <div>
-                <label className="font-semibold text-slate-300 block mb-1">Anggota Security:</label>
-                <select
-                  value={selectedMember}
-                  onChange={(e) => setSelectedMember(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                >
-                  <option value="">Semua Anggota</option>
-                  {options.users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} (NPK: {u.npk})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  HAPUS VALIDATION
+                </button>
+              ) : null}
             </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <button
-                onClick={handleResetFilter}
-                className="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition"
-              >
-                Reset Semua
-              </button>
-              <button
-                onClick={handleApplyFilter}
-                className="py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition"
-              >
-                Terapkan Filter
-              </button>
+          ) : null
+        }
+      >
+        {detailAlert ? (
+          <div className="space-y-3 text-xs">
+            <div className="grid gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-2">
+              <div><span className="text-slate-500">Petugas</span><div className="mt-0.5 font-bold text-white">{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</div></div>
+              <div><span className="text-slate-500">NPK</span><div className="mt-0.5 font-mono text-slate-200">{options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div></div>
+              <div><span className="text-slate-500">Site</span><div className="mt-0.5 font-mono text-slate-200">{detailAlert.siteId}</div></div>
+              <div><span className="text-slate-500">Jenis</span><div className="mt-0.5 font-mono text-slate-200">{detailAlert.alertType}</div></div>
+              <div><span className="text-slate-500">Status</span><div className="mt-0.5 font-bold text-slate-200">{detailAlert.status}</div></div>
+              <div><span className="text-slate-500">Validation ID</span><div className="mt-0.5 break-all font-mono text-slate-300">{detailAlert.id}</div></div>
             </div>
+            <div className="rounded-2xl border border-red-950/80 bg-red-950/20 p-3 leading-5 text-red-200">
+              {detailAlert.message}
+            </div>
+            {detailAlert.patrolLog ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-slate-300">
+                Jarak terhitung: <b>{detailAlert.patrolLog.calculatedDistanceM.toFixed(1)} m</b>
+                {detailAlert.patrolLog.isLowGpsAccuracy ? <div className="mt-1 font-bold text-amber-300">GPS LOW ACCURACY</div> : null}
+              </div>
+            ) : null}
+            {detailAlert.closeNote ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <span className="text-slate-500">Catatan Penyelesaian</span>
+                <div className="mt-1 leading-5 text-slate-200">{detailAlert.closeNote}</div>
+              </div>
+            ) : null}
           </div>
+        ) : null}
+      </OpsDialog>
+
+      <OpsDialog
+        isOpen={!!closeAlert}
+        onClose={() => {
+          setCloseAlert(null);
+          setCloseNote('');
+        }}
+        title="TUTUP VALIDATION ALERT"
+        description="Masukkan catatan penyelesaian sebelum menutup alert."
+        tone="danger"
+        size="md"
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCloseAlert(null);
+                setCloseNote('');
+              }}
+              className="ops-btn-secondary px-4"
+            >
+              BATAL
+            </button>
+            <button
+              type="button"
+              disabled={!closeAlert || !closeNote.trim()}
+              onClick={() => closeAlert && void mutateAlert(closeAlert, 'CLOSE')}
+              className="ops-btn-danger px-4 disabled:opacity-40"
+            >
+              CLOSE ALERT
+            </button>
+          </div>
+        }
+      >
+        {closeAlert ? (
+          <div className="space-y-3 text-xs">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+              <div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div>
+              <div className="mt-1 text-slate-400">NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div>
+              <div className="mt-1 text-slate-400">Site: {closeAlert.siteId}</div>
+              <div className="mt-1 text-slate-400">Jenis: {closeAlert.alertType}</div>
+              <div className="mt-2 leading-5 text-red-200">{closeAlert.message}</div>
+            </div>
+            <label className="block font-bold text-slate-300">
+              Catatan Penyelesaian
+              <textarea
+                data-autofocus="true"
+                required
+                value={closeNote}
+                onChange={(event) => setCloseNote(event.target.value)}
+                placeholder="Tuliskan alasan atau hasil pemeriksaan"
+                className="ops-input mt-2 min-h-28 p-3 font-normal"
+              />
+            </label>
+          </div>
+        ) : null}
+      </OpsDialog>
+
+      <OpsDangerConfirmDialog
+        isOpen={!!deleteAlert}
+        onCancel={() => setDeleteAlert(null)}
+        onConfirm={() => deleteAlert ? removeValidationAlert(deleteAlert) : Promise.resolve()}
+        title="HAPUS VALIDATION"
+        message="Validation alert akan dihapus dari data aktif. Patrol Log, session, foto, dan histori patroli tidak ikut dihapus."
+        confirmationText={deleteAlert ? `HAPUS ${deleteAlert.id}` : ''}
+        entityLabel="ID validation"
+        confirmLabel="HAPUS VALIDATION"
+      >
+        {deleteAlert ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-xs">
+            <div className="font-bold text-white">{options.users.find((u) => u.id === deleteAlert.userId)?.name || deleteAlert.userId}</div>
+            <div className="mt-1 text-slate-400">{deleteAlert.alertType} • {deleteAlert.siteId}</div>
+            <div className="mt-2 break-words leading-5 text-red-200">{deleteAlert.message}</div>
+          </div>
+        ) : null}
+      </OpsDangerConfirmDialog>
+
+      <OpsNoticeDialog
+        isOpen={!!notice}
+        onClose={() => setNotice(null)}
+        title={notice?.title || 'Informasi'}
+        message={notice?.message || ''}
+        tone={notice?.tone || 'info'}
+      />
+
+      <OpsDialog
+        isOpen={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        title="FILTER GLOBAL COMMAND CENTER"
+        description="Filter berlaku ke panel monitoring Command Center."
+        tone="info"
+        size="md"
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={handleResetFilter} className="ops-btn-secondary px-4">
+              RESET SEMUA
+            </button>
+            <button type="button" onClick={handleApplyFilter} className="ops-btn-primary px-4">
+              TERAPKAN FILTER
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <label className="block font-bold text-slate-300">
+            Site / Lokasi
+            <select
+              data-autofocus="true"
+              value={selectedSite}
+              onChange={(event) => setSelectedSite(event.target.value)}
+              className="ops-input mt-1 px-3"
+            >
+              <option value="">Semua Site (Global)</option>
+              {options.sites.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.name} ({site.id})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block font-bold text-slate-300">
+            Shift
+            <select
+              value={selectedShift}
+              onChange={(event) => setSelectedShift(event.target.value)}
+              className="ops-input mt-1 px-3"
+            >
+              <option value="">Semua Shift</option>
+              {options.shifts.map((shift) => (
+                <option key={shift.code} value={shift.code}>
+                  {shift.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block font-bold text-slate-300">
+            Anggota Security
+            <select
+              value={selectedMember}
+              onChange={(event) => setSelectedMember(event.target.value)}
+              className="ops-input mt-1 px-3"
+            >
+              <option value="">Semua Anggota</option>
+              {options.users.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} (NPK: {member.npk})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      )}
+      </OpsDialog>
     </div>
   );
 };

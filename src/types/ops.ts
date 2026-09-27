@@ -14,7 +14,7 @@ export interface User {
   email: string;
   role: Role;
   customerId?: string | null;
-  siteId: string | null; // e.g. "BB92" or null for global Super Admin
+  siteId: string | null; // Site-scoped roles use Site ID; CHIEF and SUPER_ADMIN use null.
   position?: string;
   assignmentHistory?: Array<{
     customerId: string | null;

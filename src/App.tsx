@@ -13,7 +13,6 @@ import {
   User as UserIcon,
   Users,
   QrCode,
-  Sliders,
   History,
   Home,
   LogOut,
@@ -33,7 +32,6 @@ import { ProfileView } from './views/ProfileView';
 import { AdminCommandCenter } from './views/admin/AdminCommandCenter';
 import { AdminCheckpoints } from './views/admin/AdminCheckpoints';
 import { AdminUsers } from './views/admin/AdminUsers';
-import { AdminRadiusCalibration } from './views/admin/AdminRadiusCalibration';
 import { AdminAuditLogs } from './views/admin/AdminAuditLogs';
 import { MasterMonitoringView } from './views/admin/MasterMonitoringView';
 
@@ -43,7 +41,7 @@ function AppContent() {
     'home' | 'patrol' | 'handover' | 'incidents' | 'gallery' | 'profile'
   >('home');
   const [adminTab, setAdminTab] = useState<
-    'command' | 'master' | 'checkpoints' | 'users' | 'calibration' | 'audit' | 'handovers' | 'incidents' | 'gallery' | 'patrol_test' | 'profile'
+    'command' | 'master' | 'checkpoints' | 'users' | 'audit' | 'handovers' | 'incidents' | 'gallery' | 'patrol_test' | 'profile'
   >('command');
   const [routeReadyUserId, setRouteReadyUserId] = useState<string | null>(null);
 
@@ -52,11 +50,14 @@ function AppContent() {
     const key = `ops:lastRoute:${user.id}`;
     try {
       const saved = JSON.parse(sessionStorage.getItem(key) || '{}');
-      const adminAllowed = ['command', 'master', 'checkpoints', 'users', 'calibration', 'audit', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
+      const superAdminAllowed = ['command', 'master', 'checkpoints', 'users', 'audit', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
+      const adminAllowed = ['command', 'master', 'checkpoints', 'users', 'handovers', 'incidents', 'gallery', 'patrol_test', 'profile'];
       const chiefAllowed = ['command', 'master', 'handovers', 'incidents', 'gallery', 'profile'];
       const memberAllowed = ['home', 'patrol', 'handover', 'incidents', 'gallery', 'profile'];
       if (user.role === 'ANGGOTA' && memberAllowed.includes(saved.view)) setMemberTab(saved.view);
-      if (user.role !== 'ANGGOTA' && (user.role === 'CHIEF' ? chiefAllowed : adminAllowed).includes(saved.view)) setAdminTab(saved.view);
+      if (user.role === 'SUPER_ADMIN' && superAdminAllowed.includes(saved.view)) setAdminTab(saved.view);
+      if (user.role === 'ADMIN' && adminAllowed.includes(saved.view)) setAdminTab(saved.view);
+      if (user.role === 'CHIEF' && chiefAllowed.includes(saved.view)) setAdminTab(saved.view);
     } catch { /* invalid session state falls back to the authorized default */ }
     setRouteReadyUserId(user.id);
   }, [user?.id, user?.role]);
@@ -130,9 +131,7 @@ function AppContent() {
                 { id: 'master', label: 'Master Monitoring', icon: Building2 },
                 { id: 'checkpoints', label: 'Titik QR', icon: QrCode },
                 { id: 'users', label: 'Petugas', icon: Users },
-                { id: 'calibration', label: 'Kalibrasi Radius', icon: Sliders },
                 { id: 'gallery', label: 'Galeri', icon: ImageIcon },
-                { id: 'audit', label: 'Audit Trail', icon: History },
               ].map((item) => {
                 const Icon = item.icon;
                 const active = adminTab === item.id;
@@ -154,6 +153,25 @@ function AppContent() {
                 );
               })}
             </nav>
+
+            <div className="border-t border-slate-800 px-3 py-3">
+              <div className="px-3 pb-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-600">
+                SYSTEM
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminTab('audit')}
+                aria-current={adminTab === 'audit' ? 'page' : undefined}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition ${
+                  adminTab === 'audit'
+                    ? 'bg-slate-800 text-white ring-1 ring-slate-700'
+                    : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
+                }`}
+              >
+                <History className="h-4 w-4 shrink-0" />
+                <span>Audit Trail</span>
+              </button>
+            </div>
 
             <div className="border-t border-slate-800 p-3">
               <div className="mb-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
@@ -183,10 +201,7 @@ function AppContent() {
             <AdminCheckpoints onBack={() => setAdminTab('command')} />
           )}
           {adminTab === 'users' && <AdminUsers onBack={() => setAdminTab('command')} />}
-          {adminTab === 'calibration' && (
-            <AdminRadiusCalibration onBack={() => setAdminTab('command')} />
-          )}
-          {adminTab === 'audit' && <AdminAuditLogs onBack={() => setAdminTab('command')} />}
+          {adminTab === 'audit' && user.role === 'SUPER_ADMIN' && <AdminAuditLogs onBack={() => setAdminTab('command')} />}
           {adminTab === 'handovers' && <HandoverView onBack={() => setAdminTab('command')} />}
           {adminTab === 'incidents' && <IncidentView onBack={() => setAdminTab('command')} />}
           {adminTab === 'gallery' && <GalleryView onBack={() => setAdminTab('command')} />}
@@ -246,18 +261,6 @@ function AppContent() {
               <span>Petugas</span>
             </button>}
 
-            {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && <button
-              onClick={() => setAdminTab('calibration')}
-              aria-current={adminTab === 'calibration' ? 'page' : undefined}
-              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
-                adminTab === 'calibration'
-                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
-                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
-              }`}
-            >
-              <Sliders className="w-4 h-4" />
-              <span>Radius</span>
-            </button>}
 
             <button
               onClick={() => setAdminTab('gallery')}
@@ -268,18 +271,20 @@ function AppContent() {
               <span>Galeri</span>
             </button>
 
-            <button
-              onClick={() => setAdminTab('audit')}
-              aria-current={adminTab === 'audit' ? 'page' : undefined}
-              className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
-                adminTab === 'audit'
-                  ? 'bg-blue-600/15 text-blue-300 ring-1 ring-blue-500/30'
-                  : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              <span>Audit</span>
-            </button>
+            {user.role === 'SUPER_ADMIN' && (
+              <button
+                onClick={() => setAdminTab('audit')}
+                aria-current={adminTab === 'audit' ? 'page' : undefined}
+                className={`flex min-h-[52px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] font-bold transition ${
+                  adminTab === 'audit'
+                    ? 'bg-slate-700/70 text-slate-100 ring-1 ring-slate-600'
+                    : 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200'
+                }`}
+              >
+                <History className="h-4 w-4" />
+                <span>Sistem</span>
+              </button>
+            )}
 
           </div>
         </nav>

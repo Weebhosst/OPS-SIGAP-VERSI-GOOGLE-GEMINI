@@ -340,6 +340,7 @@ function buildSessionWhere(filter: SessionFilter) {
     clauses.push(sql.replace('?', `$${values.length}`));
   };
   if (filter.userId) add('s.user_id=?', filter.userId);
+  if (filter.customerId) add('s.customer_id=?', filter.customerId);
   if (filter.siteId) add('s.site_id=?', filter.siteId);
   if (filter.shiftCode) add('s.shift_code=?', filter.shiftCode);
   if (filter.status) add('s.status=?', filter.status);
@@ -437,6 +438,51 @@ export const postgresRepositories: RepositoryBundle = {
       if(!result.rows[0]) return undefined;
       return postgresRepositories.users.findById(id);
     },
+    remove: async (id) => {
+      const target = await postgresRepositories.users.findById(id);
+      if (!target) return undefined;
+
+      return transaction(async (client) => {
+        await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [id]);
+
+        const dependencyResult = await client.query<{ in_use: boolean }>(
+          `SELECT (
+            EXISTS(SELECT 1 FROM shift_sessions WHERE user_id=$1 OR force_closed_by=$1)
+            OR EXISTS(SELECT 1 FROM patrol_logs WHERE user_id=$1)
+            OR EXISTS(SELECT 1 FROM validation_alerts WHERE user_id=$1 OR reviewed_by=$1 OR closed_by=$1 OR reopened_by=$1)
+            OR EXISTS(SELECT 1 FROM incident_reports WHERE user_id=$1 OR created_by=$1)
+            OR EXISTS(SELECT 1 FROM handovers WHERE from_user_id=$1 OR to_user_id=$1 OR created_by=$1)
+            OR EXISTS(SELECT 1 FROM shift_documentation WHERE created_by=$1)
+            OR EXISTS(SELECT 1 FROM media WHERE user_id=$1)
+            OR EXISTS(SELECT 1 FROM radius_calibrations WHERE tested_by_user_id=$1)
+          ) AS in_use`,
+          [id],
+        );
+
+        if (dependencyResult.rows[0]?.in_use) {
+          throw new RepositoryError(
+            'USER_IN_USE',
+            'Personel sudah memiliki histori operasional dan tidak dapat dihapus. Nonaktifkan personel sebagai gantinya.',
+            409,
+          );
+        }
+
+        await client.query('DELETE FROM user_assignments WHERE user_id=$1', [id]);
+        try {
+          const deleted = await client.query('DELETE FROM users WHERE id=$1 RETURNING id', [id]);
+          return deleted.rows[0] ? target : undefined;
+        } catch (error: any) {
+          if (error?.code === '23503') {
+            throw new RepositoryError(
+              'USER_IN_USE',
+              'Personel masih terhubung ke data sistem dan tidak dapat dihapus. Nonaktifkan personel sebagai gantinya.',
+              409,
+            );
+          }
+          throw error;
+        }
+      });
+    },
   },
 
   authSessions: {
@@ -502,6 +548,17 @@ export const postgresRepositories: RepositoryBundle = {
       values.push(id); const result=await query(`UPDATE customers SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
       return result.rows[0]?mapCustomer(result.rows[0]):undefined;
     },
+    remove: async (id) => {
+      try {
+        const result = await query('DELETE FROM customers WHERE id=$1 RETURNING *', [id]);
+        return result.rows[0] ? mapCustomer(result.rows[0]) : undefined;
+      } catch (error: any) {
+        if (error?.code === '23503') {
+          throw new RepositoryError('CUSTOMER_IN_USE', 'Customer masih memiliki Site atau data terkait dan tidak dapat dihapus.', 409);
+        }
+        throw error;
+      }
+    },
   },
 
   sites: {
@@ -553,6 +610,21 @@ export const postgresRepositories: RepositoryBundle = {
       );
       return result.rows[0]?mapSite(result.rows[0]):undefined;
     }),
+    remove: async (id) => {
+      try {
+        const result = await query('DELETE FROM sites WHERE id=$1 RETURNING *', [id]);
+        return result.rows[0] ? mapSite(result.rows[0]) : undefined;
+      } catch (error: any) {
+        if (error?.code === '23503') {
+          throw new RepositoryError(
+            'SITE_IN_USE',
+            'Site sudah memiliki personel, checkpoint, session, laporan, media, atau histori operasional. Nonaktifkan Site sebagai gantinya.',
+            409,
+          );
+        }
+        throw error;
+      }
+    },
   },
 
   checkpoints: {
@@ -899,7 +971,9 @@ export const postgresRepositories: RepositoryBundle = {
     },
     list: async (filter, request) => {
       const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
-      if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=$${values.length} OR h.to_user_id=$${values.length})`);}
+      if(filter.customerId)add('EXISTS(SELECT 1 FROM sites hs WHERE hs.id=h.site_id AND hs.customer_id=',filter.customerId);
+      if(filter.customerId) clauses[clauses.length - 1] += ')';
+      if(filter.siteId)add('h.site_id=',filter.siteId); if(filter.shiftCode)add('h.shift_code=',filter.shiftCode); if(filter.userId){values.push(filter.userId);clauses.push(`(h.from_user_id=${values.length} OR h.to_user_id=${values.length})`);}
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
       const select = `SELECT h.*,med.media_urls,med.primary_media_url
         FROM handovers h
@@ -933,7 +1007,7 @@ export const postgresRepositories: RepositoryBundle = {
     },
     list: async (filter, request) => {
       const clauses:string[]=[]; const values:unknown[]=[]; const add=(expr:string,val:unknown)=>{values.push(val);clauses.push(`${expr}$${values.length}`);};
-      if(filter.siteId)add('i.site_id=',filter.siteId); if(filter.shiftCode)add('i.shift_code=',filter.shiftCode); if(filter.userId)add('i.user_id=',filter.userId); if(filter.status)add('i.status=',filter.status);
+      if(filter.customerId)add('i.customer_id=',filter.customerId); if(filter.siteId)add('i.site_id=',filter.siteId); if(filter.shiftCode)add('i.shift_code=',filter.shiftCode); if(filter.userId)add('i.user_id=',filter.userId); if(filter.status)add('i.status=',filter.status);
       const where=clauses.length?` WHERE ${clauses.join(' AND ')}`:'';
       const select = `SELECT i.*,med.media_urls,med.primary_media_url
         FROM incident_reports i
@@ -1006,6 +1080,10 @@ export const postgresRepositories: RepositoryBundle = {
       }
       return mapAlert(result.rows[0]);
     }),
+    remove: async (id) => {
+      const result = await query('DELETE FROM validation_alerts WHERE id=$1 RETURNING *', [id]);
+      return result.rows[0] ? mapAlert(result.rows[0]) : undefined;
+    },
   },
 
   adminState: {

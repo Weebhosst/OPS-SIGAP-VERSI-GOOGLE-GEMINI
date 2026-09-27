@@ -35,6 +35,7 @@ export interface UserRepository {
   update(id: string, updates: Partial<User>, assignment?: UserAssignmentChange): Promise<User | undefined>;
   resetPassword(id: string, passwordHash: string, changedAt: string): Promise<User | undefined>;
   changePassword(id: string, passwordHash: string, changedAt: string): Promise<User | undefined>;
+  remove(id: string): Promise<User | undefined>;
 }
 
 export interface AuthSessionRecord {
@@ -62,6 +63,7 @@ export interface CustomerRepository {
   list(page: PageRequest): Promise<Page<Customer>>;
   create(customer: Customer): Promise<Customer>;
   update(id: string, updates: Partial<Customer>): Promise<Customer | undefined>;
+  remove(id: string): Promise<Customer | undefined>;
 }
 
 export interface SiteRepository {
@@ -69,6 +71,7 @@ export interface SiteRepository {
   list(page: PageRequest): Promise<Page<Site>>;
   create(site: Site): Promise<Site>;
   update(id: string, updates: Partial<Site>): Promise<Site | undefined>;
+  remove(id: string): Promise<Site | undefined>;
 }
 
 export interface CheckpointRepository {
@@ -84,6 +87,7 @@ export interface CheckpointRepository {
 export interface StartSessionInput { session: PatrolSession; personnelCapacity: number }
 export interface SessionFilter {
   userId?: string;
+  customerId?: string;
   siteId?: string;
   shiftCode?: ShiftCode;
   status?: PatrolSession['status'];
@@ -111,6 +115,7 @@ export interface PatrolRepository {
 }
 
 export interface HandoverFilter {
+  customerId?: string;
   siteId?: string;
   shiftCode?: ShiftCode;
   userId?: string;
@@ -123,6 +128,7 @@ export interface HandoverRepository {
 }
 
 export interface IncidentFilter {
+  customerId?: string;
   siteId?: string;
   shiftCode?: ShiftCode;
   userId?: string;
@@ -139,6 +145,7 @@ export interface AlertRepository {
   findById(id: string): Promise<ValidationAlert | undefined>;
   list(status: ValidationAlertStatus | undefined, page: PageRequest): Promise<Page<ValidationAlert>>;
   transition(id: string, action: 'REVIEW' | 'CLOSE' | 'REOPEN', actorUserId: string, closeNote?: string): Promise<ValidationAlert>;
+  remove(id: string): Promise<ValidationAlert | undefined>;
 }
 
 export interface AdminStateRepository {
