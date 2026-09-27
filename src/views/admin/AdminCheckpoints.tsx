@@ -207,11 +207,14 @@ export const AdminCheckpoints: React.FC<{ onBack: () => void }> = ({ onBack }) =
 
     setSaving(true);
     try {
-      const existingAtSite = checkpoints.filter((checkpoint) => checkpoint.siteId === addSiteId).length;
-      const alreadySavedInBatch = newRows
-        .slice(0, index)
-        .filter((entry) => entry.name.trim() === '').length;
-      const sequence = existingAtSite + index + 1 - alreadySavedInBatch;
+      const existingSequences = checkpoints
+        .filter((checkpoint) => checkpoint.siteId === addSiteId)
+        .map((checkpoint) => {
+          const match = /^CP(\d+)$/i.exec(String(checkpoint.code || '').trim());
+          return match ? Number(match[1]) : 0;
+        })
+        .filter((value) => Number.isInteger(value) && value > 0);
+      const sequence = Math.max(0, ...existingSequences) + 1;
 
       await api.createAdminCheckpoint({
         siteId: addSiteId,
