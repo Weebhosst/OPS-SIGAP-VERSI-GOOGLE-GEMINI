@@ -62,7 +62,6 @@ try {
     updatedAt: now,
   });
   const qrToken = `M10-TOKEN-${suffix}`;
-  await repositories.checkpoints.replaceToken(checkpoint.id, qrToken, null, true);
 
   const createUser = async (
     id: string,
@@ -118,6 +117,8 @@ try {
     'CHIEF',
     chiefPassword,
   );
+
+  await repositories.checkpoints.replaceToken(checkpoint.id, qrToken, memberA.id, true);
 
   const { apiRouter } = await import('./routes');
   const app = express();
