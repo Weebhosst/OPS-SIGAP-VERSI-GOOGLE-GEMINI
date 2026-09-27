@@ -921,6 +921,28 @@ apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedReque
 });
 
 // -------------------------------------------------------------
+// FIELD DIRECTORY
+// -------------------------------------------------------------
+
+apiRouter.get('/field/site-members', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+  const siteId = resolveFieldSiteId(req, res);
+  if (!siteId) return;
+
+  const page = await repositories.users.list({ limit: 500, offset: 0 });
+  const members = page.items
+    .filter((member) =>
+      member.role === 'ANGGOTA'
+      && member.status === 'ACTIVE'
+      && member.siteId === siteId
+      && member.id !== req.user!.id
+    )
+    .map((member) => ({ id: member.id, name: member.name, npk: member.npk }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'id'));
+
+  res.json({ success: true, members });
+});
+
+// -------------------------------------------------------------
 // HANDOVER ROUTES
 // -------------------------------------------------------------
 
@@ -962,7 +984,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     itemQuantity,
     itemCondition,
     handedFrom,
-    handedTo,
+    handedTo: recipient.name,
     isTaruna,
   } = req.body;
 
@@ -974,6 +996,29 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
   }
   if (handoverType && handoverType !== 'SERAH_TERIMA') {
     return res.status(400).json({ success: false, error: 'Naik/Turun Jaga hanya dapat dibuat melalui alur Start/Close Shift.' });
+  }
+
+  const recipientId = String(toUserId || '').trim();
+  if (!recipientId) {
+    return res.status(400).json({
+      success: false,
+      code: 'HANDOVER_RECIPIENT_REQUIRED',
+      error: 'Penerima serah terima wajib dipilih dari Anggota aktif pada Site yang sama.',
+    });
+  }
+  const recipient = await repositories.users.findById(recipientId);
+  if (
+    !recipient
+    || recipient.role !== 'ANGGOTA'
+    || recipient.status !== 'ACTIVE'
+    || recipient.siteId !== siteId
+    || recipient.id === req.user!.id
+  ) {
+    return res.status(400).json({
+      success: false,
+      code: 'HANDOVER_RECIPIENT_INVALID',
+      error: 'Penerima serah terima tidak valid atau berada di luar Site penugasan.',
+    });
   }
 
   const evidencePhotos = Array.isArray(photoUrls)
@@ -1019,7 +1064,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
     shiftCode: activeSession.shiftCode,
     handoverType: 'SERAH_TERIMA',
     fromUserId: req.user!.id,
-    toUserId: toUserId || null,
+    toUserId: recipient.id,
     eventAt: eventAt || now,
     latitude: latitude ? Number(latitude) : null,
     longitude: longitude ? Number(longitude) : null,
@@ -1108,20 +1153,53 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, async (req: Auth
 });
 
 apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, async (req: AuthenticatedRequest, res: Response) => {
+  const siteId = resolveFieldSiteId(req, res);
+  if (!siteId) return;
+
   const handover = await repositories.handovers.findById(req.params.id);
   if (!handover) return res.status(404).json({ success: false, error: 'Data serah terima tidak ditemukan.' });
+  if (handover.siteId !== siteId) {
+    return res.status(403).json({
+      success: false,
+      code: 'HANDOVER_SITE_MISMATCH',
+      error: 'Serah terima berada di luar Site penugasan Anda.',
+    });
+  }
+  if (!handover.toUserId) {
+    return res.status(409).json({
+      success: false,
+      code: 'HANDOVER_RECIPIENT_NOT_ASSIGNED',
+      error: 'Serah terima lama ini belum memiliki penerima akun yang ditetapkan. Hubungi Administrator.',
+    });
+  }
+  if (handover.toUserId !== req.user!.id) {
+    return res.status(403).json({
+      success: false,
+      code: 'HANDOVER_RECIPIENT_MISMATCH',
+      error: 'Hanya Anggota penerima yang ditetapkan yang dapat mengonfirmasi serah terima ini.',
+    });
+  }
+  if (handover.fromUserId === req.user!.id) {
+    return res.status(409).json({
+      success: false,
+      code: 'HANDOVER_SELF_ACK_BLOCKED',
+      error: 'Pembuat serah terima tidak dapat mengonfirmasi penerimaannya sendiri.',
+    });
+  }
+  if (handover.status === 'ACKNOWLEDGED') {
+    return res.json({ success: true, handover });
+  }
 
   const updated = await repositories.handovers.update(handover.id, {
     ackTo: true,
     status: 'ACKNOWLEDGED',
-    toUserId: req.user!.id,
   });
   await repositories.audit.append({
     actorUserId: req.user!.id,
     action: 'HANDOVER_ACKNOWLEDGE',
     entityType: 'shift_handover',
     entityId: handover.id,
-    reason: `Konfirmasi penerimaan serah terima jaga oleh ${req.user!.name}`,
+    reason: `Konfirmasi penerimaan serah terima jaga oleh penerima terdaftar ${req.user!.name}`,
   });
 
   res.json({ success: true, handover: updated });
