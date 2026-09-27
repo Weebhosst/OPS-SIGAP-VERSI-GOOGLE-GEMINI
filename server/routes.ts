@@ -1650,6 +1650,85 @@ apiRouter.get('/admin/masters', authMiddleware, requireMonitoring, async (_req: 
   });
 });
 
+apiRouter.post('/admin/customer-sites', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const code = String(req.body.code || '').trim().toUpperCase();
+  const customerName = String(req.body.customerName || '').trim();
+  const siteName = String(req.body.siteName || '').trim();
+  const personnelCapacity = Number(req.body.personnelCapacity);
+  const targetRoundsPerShift = Number(req.body.targetRoundsPerShift || 1);
+
+  if (!code || !customerName || !siteName) {
+    return res.status(400).json({ success: false, error: 'Kode Customer, nama Customer, dan nama Site wajib diisi.' });
+  }
+  if (!Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
+    return res.status(400).json({ success: false, error: 'Personnel capacity minimal 1.' });
+  }
+  if (!Number.isInteger(targetRoundsPerShift) || targetRoundsPerShift < 1 || targetRoundsPerShift > 20) {
+    return res.status(400).json({ success: false, error: 'Target ronde harus bilangan 1 sampai 20.' });
+  }
+
+  const existing = await repositories.customers.list({ limit: 500, offset: 0 });
+  if (existing.items.some((item) => item.code === code)) {
+    return res.status(409).json({ success: false, error: 'Kode Customer sudah digunakan.' });
+  }
+
+  const now = new Date().toISOString();
+  const siteId = `SITE-${code}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  let customer: Awaited<ReturnType<typeof repositories.customers.create>> | undefined;
+  let site: Awaited<ReturnType<typeof repositories.sites.create>> | undefined;
+
+  try {
+    customer = await repositories.customers.create({
+      id: `CUST-${code}`,
+      code,
+      name: customerName,
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    site = await repositories.sites.create({
+      id: siteId,
+      code: siteId,
+      name: siteName,
+      customerId: customer.id,
+      personnelCapacity,
+      targetRoundsPerShift,
+      timezone: 'Asia/Jakarta',
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'CUSTOMER_SITE_CREATE',
+      entityType: 'customer_site',
+      entityId: customer.id,
+      newValue: { customer, site },
+      reason: `Tambah customer ${customerName} dengan site awal ${siteName}`,
+    });
+
+    res.status(201).json({ success: true, customer, site });
+  } catch (error: any) {
+    if (site) {
+      try { await repositories.sites.remove(site.id); } catch (rollbackError) {
+        console.error('[master] Rollback site failed:', rollbackError instanceof Error ? rollbackError.message : 'unknown');
+      }
+    }
+    if (customer) {
+      try { await repositories.customers.remove(customer.id); } catch (rollbackError) {
+        console.error('[master] Rollback customer failed:', rollbackError instanceof Error ? rollbackError.message : 'unknown');
+      }
+    }
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    throw error;
+  }
+});
+
 apiRouter.post('/admin/customers', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const code = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
@@ -1707,23 +1786,28 @@ apiRouter.patch('/admin/customers/:id', authMiddleware, requireAdmin, async (req
 });
 
 apiRouter.post('/admin/sites', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  const code = String(req.body.code || '').trim().toUpperCase();
+  const requestedCode = String(req.body.code || '').trim().toUpperCase();
   const name = String(req.body.name || '').trim();
   const customerId = String(req.body.customerId || '');
   const personnelCapacity = Number(req.body.personnelCapacity);
   const customer = await repositories.customers.findById(customerId);
 
-  if (!code || !name || !customer || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
-    return res.status(400).json({ success: false, error: 'Customer, kode, nama, dan capacity minimal 1 wajib valid.' });
+  if (!name || !customer || !Number.isInteger(personnelCapacity) || personnelCapacity < 1) {
+    return res.status(400).json({ success: false, error: 'Customer, nama Site, dan capacity minimal 1 wajib valid.' });
   }
-  if (await repositories.sites.findById(code)) return res.status(409).json({ success: false, error: 'Kode Site sudah digunakan.' });
 
+  const targetRoundsPerShift = Number(req.body.targetRoundsPerShift || 1);
+  if (!Number.isInteger(targetRoundsPerShift) || targetRoundsPerShift < 1 || targetRoundsPerShift > 20) {
+    return res.status(400).json({ success: false, error: 'Target ronde harus bilangan 1 sampai 20.' });
+  }
+
+  const generatedId = `SITE-${customer.code}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const siteId = requestedCode || generatedId;
   const now = new Date().toISOString();
-  const targetRoundsPerShift = Math.max(1, Number(req.body.targetRoundsPerShift) || 1);
   try {
     const site = await repositories.sites.create({
-      id: code,
-      code,
+      id: siteId,
+      code: siteId,
       name,
       customerId,
       personnelCapacity,
@@ -1784,6 +1868,55 @@ apiRouter.patch('/admin/sites/:id', authMiddleware, requireAdmin, async (req: Au
   });
   res.json({ success: true, site: updated });
 });
+
+apiRouter.delete('/admin/sites/:id', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const site = await repositories.sites.findById(req.params.id);
+    if (!site) return res.status(404).json({ success: false, error: 'Site tidak ditemukan.' });
+
+    const confirmationText = String(req.body.confirmationText || '').trim();
+    const expectedConfirmation = `HAPUS ${site.name}`;
+    if (confirmationText !== expectedConfirmation) {
+      return res.status(400).json({
+        success: false,
+        code: 'DELETE_CONFIRMATION_MISMATCH',
+        error: 'Konfirmasi hapus tidak sesuai. Ketik ulang nama Site sesuai instruksi.',
+      });
+    }
+
+    const allSites = await repositories.sites.list({ limit: 500, offset: 0 });
+    const customerSites = allSites.items.filter((item) => item.customerId === site.customerId);
+    if (customerSites.length <= 1) {
+      return res.status(409).json({
+        success: false,
+        code: 'CUSTOMER_REQUIRES_SITE',
+        error: 'Site ini adalah satu-satunya Site Customer. Tambahkan Site lain terlebih dahulu karena setiap Customer wajib memiliki minimal satu Site.',
+      });
+    }
+
+    const removed = await repositories.sites.remove(site.id);
+    if (!removed) return res.status(404).json({ success: false, error: 'Site tidak ditemukan atau sudah dihapus.' });
+
+    await repositories.audit.append({
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'SITE_DELETE',
+      entityType: 'site',
+      entityId: site.id,
+      oldValue: site,
+      newValue: null,
+      reason: `Hapus site ${site.name}`,
+    });
+
+    res.json({ success: true, deletedId: site.id });
+  } catch (error: any) {
+    if (error instanceof RepositoryError) {
+      return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    }
+    throw error;
+  }
+});
+
 
 apiRouter.post('/admin/users', authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const { name, npk, email, role, siteId, position } = req.body;
