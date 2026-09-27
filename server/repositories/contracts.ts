@@ -62,6 +62,7 @@ export interface CustomerRepository {
   list(page: PageRequest): Promise<Page<Customer>>;
   create(customer: Customer): Promise<Customer>;
   update(id: string, updates: Partial<Customer>): Promise<Customer | undefined>;
+  remove(id: string): Promise<Customer | undefined>;
 }
 
 export interface SiteRepository {
@@ -69,6 +70,7 @@ export interface SiteRepository {
   list(page: PageRequest): Promise<Page<Site>>;
   create(site: Site): Promise<Site>;
   update(id: string, updates: Partial<Site>): Promise<Site | undefined>;
+  remove(id: string): Promise<Site | undefined>;
 }
 
 export interface CheckpointRepository {
