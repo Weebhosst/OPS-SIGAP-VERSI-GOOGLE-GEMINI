@@ -497,9 +497,9 @@ export const postgresRepositories: RepositoryBundle = {
     },
     update: async (id, updates) => {
       const fields:string[]=[]; const values:unknown[]=[];
-      for(const [key,column] of [['name','name'],['status','status']] as const) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=${values.length}`);}
+      for(const [key,column] of [['name','name'],['status','status']] as const) if((updates as any)[key]!==undefined){values.push((updates as any)[key]);fields.push(`${column}=$${values.length}`);}
       if(!fields.length) return postgresRepositories.customers.findById(id);
-      values.push(id); const result=await query(`UPDATE customers SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,values);
+      values.push(id); const result=await query(`UPDATE customers SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,values);
       return result.rows[0]?mapCustomer(result.rows[0]):undefined;
     },
     remove: async (id) => {
@@ -553,13 +553,13 @@ export const postgresRepositories: RepositoryBundle = {
       for(const [key,column] of Object.entries(columns)) {
         if((updates as any)[key]!==undefined){
           values.push((updates as any)[key]);
-          fields.push(`${column}=${values.length}`);
+          fields.push(`${column}=$${values.length}`);
         }
       }
       if(!fields.length) return mapSite(current.rows[0]);
       values.push(id);
       const result=await client.query(
-        `UPDATE sites SET ${fields.join(',')},updated_at=now() WHERE id=${values.length} RETURNING *`,
+        `UPDATE sites SET ${fields.join(',')},updated_at=now() WHERE id=$${values.length} RETURNING *`,
         values,
       );
       return result.rows[0]?mapSite(result.rows[0]):undefined;
