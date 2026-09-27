@@ -118,11 +118,26 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
           activeRound?.required
             || Math.max(0, currentRes.checkpoints?.length || 0),
         );
+
+        if (user?.id) {
+          await offlineQueue.savePatrolSnapshot(user.id, {
+            session: currentRes.session,
+            site: currentRes.site || progressRes.site || null,
+            checkpoints: currentRes.checkpoints || [],
+            logs: currentRes.logs || [],
+            rounds,
+            currentRound: roundNumber,
+            targetRounds: currentRes.targetRounds || progressRes.targetRounds || 0,
+          });
+        }
       } else {
         setActiveSession(null);
         setCurrentRound(1);
         setCurrentRoundCompleted(0);
         setCurrentRoundRequired(0);
+        if (user?.id) {
+          await offlineQueue.clearPatrolSnapshot(user.id);
+        }
       }
 
       if (galleryRes.success) {
@@ -137,13 +152,41 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
       setLastUpdatedAt(new Date());
     } catch (err: any) {
       console.warn('Error loading member home data:', err);
-      setErrorMsg(err?.message || 'Data operasional belum dapat dimuat. Periksa koneksi lalu coba lagi.');
+
+      let recovered = false;
+      if (err?.status !== 401 && err?.status !== 403 && user?.id && user.role === 'ANGGOTA') {
+        const snapshot = await offlineQueue.getPatrolSnapshot(user.id);
+        if (snapshot?.session) {
+          const activeRound = snapshot.rounds.find(
+            (round) => round.roundNumber === snapshot.currentRound,
+          );
+          setActiveSession(snapshot.session);
+          setSiteInfo(snapshot.site || null);
+          setTargetRounds(Math.max(1, snapshot.targetRounds || 1));
+          setCompletedRounds(
+            snapshot.rounds.filter((round) => round.completed >= round.required).length,
+          );
+          setIsTargetAchieved(snapshot.session.totalValid >= snapshot.session.totalRequired);
+          setCurrentRound(snapshot.currentRound || 1);
+          setCurrentRoundCompleted(activeRound?.completed || 0);
+          setCurrentRoundRequired(
+            activeRound?.required || Math.max(0, snapshot.checkpoints.length),
+          );
+          setLastUpdatedAt(new Date(snapshot.capturedAt));
+          setErrorMsg('MODE RECOVERY OFFLINE • Dashboard memakai snapshot server terakhir. Status final akan diverifikasi saat koneksi kembali.');
+          recovered = true;
+        }
+      }
+
+      if (!recovered) {
+        setErrorMsg(err?.message || 'Data operasional belum dapat dimuat. Periksa koneksi lalu coba lagi.');
+      }
       await loadOfflineState();
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadOfflineState]);
+  }, [loadOfflineState, user?.id, user?.role]);
 
   useEffect(() => {
     void loadData();
@@ -219,17 +262,39 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
 
     if (needsStartDocumentation) {
       return {
-        label: 'LENGKAPI NAIK JAGA',
-        description: 'Foto Sertigas wajib disimpan sebelum checkpoint dapat dipindai.',
+        label: isOnline ? 'LENGKAPI NAIK JAGA' : 'KONEKSI DIPERLUKAN',
+        description: isOnline
+          ? 'Foto Sertigas wajib disimpan sebelum checkpoint dapat dipindai.'
+          : 'Naik Jaga harus dikirim langsung ke server sebelum patroli dibuka.',
         tone: 'amber' as const,
         icon: ClipboardCheck,
       };
     }
 
+    if (failedSyncCount > 0) {
+      return {
+        label: 'RECOVERY SINKRONISASI',
+        description: `${failedSyncCount} data patroli gagal sinkron. Bukti masih tersimpan di perangkat.`,
+        tone: 'amber' as const,
+        icon: RefreshCw,
+      };
+    }
+
+    if (pendingSyncCount > 0) {
+      return {
+        label: 'MENUNGGU VALIDASI SERVER',
+        description: `${pendingSyncCount} data patroli belum final. Jangan lanjut checkpoint berikutnya sebelum sinkronisasi selesai.`,
+        tone: 'amber' as const,
+        icon: RefreshCw,
+      };
+    }
+
     if (patrolTargetComplete) {
       return {
-        label: 'TURUN JAGA & SELESAIKAN SHIFT',
-        description: 'Target patroli tercapai. Lengkapi dokumentasi Turun Jaga.',
+        label: isOnline ? 'TURUN JAGA & SELESAIKAN SHIFT' : 'KONEKSI DIPERLUKAN',
+        description: isOnline
+          ? 'Target patroli tercapai. Lengkapi dokumentasi Turun Jaga.'
+          : 'Turun Jaga adalah penutupan final dan membutuhkan koneksi server.',
         tone: 'emerald' as const,
         icon: CheckCircle2,
       };
@@ -246,14 +311,18 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
     currentRound,
     currentRoundCompleted,
     currentRoundRequired,
+    failedSyncCount,
     isOnline,
     needsStartDocumentation,
     patrolTargetComplete,
+    pendingSyncCount,
   ]);
 
   const handlePrimaryAction = async () => {
     if (activeSession) {
-      if (needsStartDocumentation) {
+      if (failedSyncCount > 0) {
+        onNavigate('profile');
+      } else if (needsStartDocumentation) {
         onNavigate('handover');
       } else {
         onNavigate('patrol');
