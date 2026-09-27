@@ -95,18 +95,18 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+    <div className="min-h-screen bg-[#020817] text-slate-100 pb-28">
       {/* Top Tactical App Bar */}
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/40 bg-blue-600/15 text-blue-300 shadow-lg shadow-blue-950/20">
               <Shield className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-extrabold tracking-tight text-white text-base">OPS SIGAP</span>
-                <span className="text-[10px] bg-blue-900/60 border border-blue-700/60 text-blue-300 font-mono px-1.5 py-0.2 rounded">
+                <span className="text-base font-black tracking-tight text-white">OPS SIGAP</span>
+                <span className="rounded-md border border-blue-700/60 bg-blue-900/50 px-1.5 py-0.5 font-mono text-[9px] font-bold text-blue-300">
                   BB92
                 </span>
               </div>
@@ -118,8 +118,9 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
             <PWAInstallButton compact />
             <button
               onClick={() => onNavigate('profile')}
-              className="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               title="Profil & Pengaturan"
+              aria-label="Buka profil dan pengaturan"
             >
               <UserIcon className="w-4 h-4" />
             </button>
@@ -127,18 +128,18 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+      <main className="mx-auto max-w-md space-y-4 px-4 pt-4">
         {/* Guard Profile & Active Shift Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-lg shadow-black/10">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-xs text-slate-400 font-medium">Petugas Jaga:</div>
-              <div className="text-base font-bold text-white mt-0.5">{user?.name}</div>
-              <div className="text-xs text-slate-400 font-mono">NPK: {user?.npk}</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Petugas Jaga:</div>
+              <div className="mt-1 text-lg font-black text-white">{user?.name}</div>
+              <div className="font-mono text-[11px] text-slate-400">NPK: {user?.npk}</div>
             </div>
             <div className="text-right">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.12)]" />
                 {shiftInfo?.name.split(' ')[0] || 'Shift Aktif'}
               </span>
               <p className="text-[11px] text-slate-400 font-mono mt-1">
@@ -159,14 +160,14 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
         )}
 
         {/* PRIMARY HERO: Patrol Round & Progress */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 border border-blue-900/40 rounded-3xl p-5 shadow-xl shadow-blue-950/20 relative overflow-hidden">
+        <div className="relative overflow-hidden rounded-3xl border border-blue-900/50 bg-gradient-to-br from-[#0f172a] via-[#0f172a] to-[#0c1d3a] p-5 shadow-2xl shadow-blue-950/20">
           {/* Subtle radar background ring */}
           <div className="absolute -right-12 -bottom-12 w-44 h-44 rounded-full border border-blue-500/10 pointer-events-none" />
 
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-800/80 pb-4">
             <div className="flex items-center gap-2">
               <Radio className="w-4 h-4 text-blue-400 animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-200">
                 Status Patroli Lapangan
               </span>
             </div>
@@ -184,13 +185,13 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
           {/* Progress Counters (2-Level: Checkpoint per round & Rounds per shift) */}
           <div className="grid grid-cols-2 gap-3 my-4">
             {/* Round Checkpoints */}
-            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3">
-              <div className="text-[11px] font-medium text-slate-400">Ronde Berjalan:</div>
+            <div className="rounded-2xl border border-slate-800/90 bg-slate-950/60 p-3.5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ronde Berjalan:</div>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-2xl font-black text-white">
+                <span className="text-3xl font-black leading-none text-white">
                   {activeSession ? activeSession.totalValid : 0}
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="font-mono text-[11px] text-slate-400">
                   / {activeSession ? activeSession.totalRequired : 0} CP
                 </span>
               </div>
@@ -203,13 +204,13 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
             </div>
 
             {/* Shift Rounds Target */}
-            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3">
-              <div className="text-[11px] font-medium text-slate-400">Target Shift:</div>
+            <div className="rounded-2xl border border-slate-800/90 bg-slate-950/60 p-3.5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Target Shift:</div>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-2xl font-black text-emerald-400">
+                <span className="text-3xl font-black leading-none text-emerald-400">
                   {completedRounds}
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="font-mono text-[11px] text-slate-400">
                   / {targetRounds} Ronde
                 </span>
               </div>
@@ -228,7 +229,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
           <button
             onClick={handleStartPatrol}
             disabled={startingPatrol}
-            className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98] ${
+            className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-black text-white shadow-lg transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${
               activeSession
                 ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-950/50'
                 : 'bg-blue-600 hover:bg-blue-500 shadow-blue-950/50'
@@ -250,63 +251,63 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
 
         {/* Operational Modules Grid */}
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-1 mb-2.5">
+          <h2 className="mb-2.5 px-1 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">
             Modul Operasional
           </h2>
           <div className="grid grid-cols-2 gap-3">
             {/* Patroli */}
             <button
               onClick={() => onNavigate('patrol')}
-              className="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 p-4 rounded-2xl text-left transition flex flex-col justify-between group"
+              className="group flex min-h-[132px] flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left shadow-sm transition hover:border-slate-700 hover:bg-slate-800/90"
             >
-              <div className="w-10 h-10 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400 mb-3 group-hover:scale-105 transition">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/30 bg-blue-600/15 text-blue-300 transition group-hover:scale-105">
                 <Shield className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-bold text-white text-sm">Patroli QR</div>
-                <p className="text-[11px] text-slate-400 mt-0.5">Target checkpoint sesuai Site</p>
+                <div className="text-sm font-black text-white">Patroli QR</div>
+                <p className="mt-1 text-[11px] leading-4 text-slate-400">Target checkpoint sesuai Site</p>
               </div>
             </button>
 
             {/* Serah Terima Jaga */}
             <button
               onClick={() => onNavigate('handover')}
-              className="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 p-4 rounded-2xl text-left transition flex flex-col justify-between group"
+              className="group flex min-h-[132px] flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left shadow-sm transition hover:border-slate-700 hover:bg-slate-800/90"
             >
-              <div className="w-10 h-10 rounded-xl bg-emerald-600/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-3 group-hover:scale-105 transition">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600/15 text-emerald-300 transition group-hover:scale-105">
                 <FileText className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-bold text-white text-sm">Serah Terima</div>
-                <p className="text-[11px] text-slate-400 mt-0.5">Naik / Turun Jaga</p>
+                <div className="text-sm font-black text-white">Serah Terima</div>
+                <p className="mt-1 text-[11px] leading-4 text-slate-400">Naik / Turun Jaga</p>
               </div>
             </button>
 
             {/* Lapor Kejadian */}
             <button
               onClick={() => onNavigate('incidents')}
-              className="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 p-4 rounded-2xl text-left transition flex flex-col justify-between group"
+              className="group flex min-h-[132px] flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left shadow-sm transition hover:border-slate-700 hover:bg-slate-800/90"
             >
-              <div className="w-10 h-10 rounded-xl bg-amber-600/15 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3 group-hover:scale-105 transition">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-600/15 text-amber-300 transition group-hover:scale-105">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-bold text-white text-sm">Lapor Kejadian</div>
-                <p className="text-[11px] text-slate-400 mt-0.5">Insiden & Temuan</p>
+                <div className="text-sm font-black text-white">Lapor Kejadian</div>
+                <p className="mt-1 text-[11px] leading-4 text-slate-400">Insiden & Temuan</p>
               </div>
             </button>
 
             {/* Galeri Dokumentasi */}
             <button
               onClick={() => onNavigate('gallery')}
-              className="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 p-4 rounded-2xl text-left transition flex flex-col justify-between group"
+              className="group flex min-h-[132px] flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left shadow-sm transition hover:border-slate-700 hover:bg-slate-800/90"
             >
-              <div className="w-10 h-10 rounded-xl bg-purple-600/15 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-3 group-hover:scale-105 transition">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-600/15 text-violet-300 transition group-hover:scale-105">
                 <ImageIcon className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-bold text-white text-sm">Galeri Media</div>
-                <p className="text-[11px] text-slate-400 mt-0.5">Bukti Foto Terpusat</p>
+                <div className="text-sm font-black text-white">Galeri Media</div>
+                <p className="mt-1 text-[11px] leading-4 text-slate-400">Bukti Foto Terpusat</p>
               </div>
             </button>
           </div>
@@ -314,7 +315,7 @@ export const MemberHome: React.FC<MemberHomeProps> = ({ onNavigate }) => {
 
         {/* Latest Documentation Preview */}
         {recentMedia.length > 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Dokumentasi Terbaru

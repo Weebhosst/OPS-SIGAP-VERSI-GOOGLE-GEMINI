@@ -23,6 +23,7 @@ import {
   Sliders,
   History,
   LogOut,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
@@ -44,6 +45,7 @@ interface AdminCommandCenterProps {
 
 export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNavigateTab }) => {
   const { user, logout } = useAuth();
+  const isChief = user?.role === 'CHIEF';
   const [filterState, setFilterState] = useState<AdminFilterState | null>(null);
   const [kpis, setKpis] = useState<AdminKpis>({
     patroliAktif: 0,
@@ -160,31 +162,33 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
+    <div className={`min-h-screen bg-[#020817] text-slate-100 ${isChief ? 'pb-28' : 'pb-28 lg:pb-8'}`}>
       {/* Tactical Top Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-black">
-              <Shield className="w-5 h-5" />
+      <header className={`sticky top-0 z-30 border-b border-slate-800/90 bg-[#08111f]/95 px-4 py-3 backdrop-blur-xl ${isChief ? '' : 'lg:px-6'}`}>
+        <div className={`mx-auto flex items-center justify-between ${isChief ? 'max-w-md' : 'max-w-7xl'}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-blue-500/40 bg-blue-600/20 text-blue-400">
+              <Shield className="h-5 w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="font-black text-white text-base tracking-tight">COMMAND CENTER</h1>
-                <span className="text-[10px] bg-red-950/80 border border-red-800 text-red-300 font-mono px-2 py-0.5 rounded font-bold">
-                  SUPER ADMIN
-                </span>
+                <h1 className="text-base font-black leading-tight tracking-tight text-white">{isChief ? 'MONITOR OPERASIONAL' : 'COMMAND CENTER'}</h1>
+                {!isChief && (
+                  <span className="rounded border border-red-800 bg-red-950/80 px-2 py-0.5 font-mono text-[10px] font-bold text-red-300">
+                    SUPER ADMIN
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-400 font-medium">
-                OPS SIGAP — Security Operations System
+              <p className={`mt-0.5 font-medium text-slate-400 ${isChief ? 'text-[10px] leading-4' : 'text-xs'}`}>
+                {isChief ? 'CHIEF • READ ONLY · Monitoring site & operasional' : 'OPS SIGAP — Security Operations System'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={() => setShowFilterModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-950/40 transition"
+              className="flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-2.5 py-2 text-xs font-bold text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500"
             >
               <Filter className="w-3.5 h-3.5" />
               <span>Filter</span>
@@ -200,12 +204,12 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pt-4 space-y-5">
+      <main className={`mx-auto space-y-5 px-4 pt-4 ${isChief ? 'max-w-md' : 'max-w-7xl lg:px-6 lg:pt-6'}`}>
         {/* Active Filter Indicator Bar */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-400 font-semibold">Filter Aktif:</span>
-            <span className="font-mono font-bold text-blue-400 bg-blue-950/60 border border-blue-900/60 px-2.5 py-1 rounded-lg">
+        <div className={`flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-3 shadow-lg shadow-black/10 ${isChief ? '' : 'sm:flex-row sm:items-center sm:justify-between'}`}>
+          <div className={`text-xs ${isChief ? 'space-y-2' : 'flex items-center gap-2'}`}>
+            <span className={`${isChief ? 'block text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500' : 'text-slate-400 font-semibold'}`}>{isChief ? 'Filter Operasional' : 'Filter Aktif:'}</span>
+            <span className={`font-mono font-bold text-blue-300 bg-blue-950/60 border border-blue-900/60 px-2.5 py-1 rounded-lg ${isChief ? 'block break-words leading-5' : ''}`}>
               {getFilterSummaryText()}
             </span>
           </div>
@@ -227,10 +231,39 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
           </div>
         </div>
 
+        {isChief && (
+          <section className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('handovers')}
+              className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 px-2 text-[10px] font-black text-slate-300 shadow-sm transition hover:border-blue-800 hover:bg-slate-800"
+            >
+              <FileText className="h-4 w-4 text-blue-300" />
+              <span>Mutasi</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('incidents')}
+              className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 px-2 text-[10px] font-black text-slate-300 shadow-sm transition hover:border-amber-800 hover:bg-slate-800"
+            >
+              <AlertTriangle className="h-4 w-4 text-amber-300" />
+              <span>Insiden</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('gallery')}
+              className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-800 bg-slate-900/90 px-2 text-[10px] font-black text-slate-300 shadow-sm transition hover:border-violet-800 hover:bg-slate-800"
+            >
+              <ImageIcon className="h-4 w-4 text-violet-300" />
+              <span>Galeri</span>
+            </button>
+          </section>
+        )}
+
         {/* 4 TOP KPI CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className={`grid grid-cols-2 gap-3 ${isChief ? '' : 'lg:grid-cols-4'}`}>
           {/* 1. Patroli Aktif */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+          <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 Patroli Aktif
@@ -245,7 +278,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
           </div>
 
           {/* 2. Kejadian Open */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+          <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 Kejadian Open
@@ -260,7 +293,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
           </div>
 
           {/* 3. Rejected Hari Ini */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+          <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 Rejected Hari Ini
@@ -275,7 +308,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
           </div>
 
           {/* 4. Serah Terima Hari Ini */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+          <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 Serah Terima Hari Ini
@@ -291,13 +324,13 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         </div>
 
         {/* Tactical Panels Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 gap-3 ${isChief ? '' : 'lg:grid-cols-2'}`}>
           {/* Panel: Patroli Aktif */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-blue-400" />
-                <h2 className="font-bold text-sm text-white">PATROLI AKTIF LAPANGAN</h2>
+                <h2 className="text-sm font-black text-white">{isChief ? 'PATROLI AKTIF' : 'PATROLI AKTIF LAPANGAN'}</h2>
               </div>
               <span className="text-xs font-mono font-bold text-slate-400">
                 {panels.activePatrols.length} Sesi
@@ -315,7 +348,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
                     key={s.id}
                     className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className={`flex gap-2 ${isChief ? 'flex-col' : 'items-center justify-between'}`}>
                       <div>
                         <div className="font-bold text-white text-xs">
                           {options.users.find((u) => u.id === s.userId)?.name || s.userId}
@@ -324,7 +357,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
                           {s.siteId} • Ronde #{s.roundNumber || 1} • {s.shiftCode}
                         </div>
                       </div>
-                      <span className="text-xs font-bold text-emerald-400 font-mono">
+                      <span className={`font-mono text-xs font-bold text-emerald-400 ${isChief ? 'self-start' : ''}`}>
                         {s.totalValid}/{s.totalRequired} CP ({s.completionPct}%)
                       </span>
                     </div>
@@ -342,10 +375,10 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
 
           {/* Panel: Validation Alerts (REJECTED / REVIEW) */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-red-400" />
-                <h2 className="font-bold text-sm text-white">VALIDATION ALERTS (REJECTED & REVIEW)</h2>
+            <div className={`flex border-b border-slate-800 pb-2 ${isChief ? 'items-start justify-between gap-2' : 'items-center justify-between'}`}>
+              <div className="flex min-w-0 items-center gap-2">
+                <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                <h2 className="text-sm font-black text-white">{isChief ? 'ALERT VALIDASI' : 'VALIDATION ALERTS (REJECTED & REVIEW)'}</h2>
               </div>
               <span className="text-xs font-mono font-bold text-red-400">
                 {panels.validationAlerts.length} Peringatan
@@ -357,32 +390,32 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
                 Tidak ada alert penolakan atau scan mencurigakan.
               </p>
             ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <div className={`space-y-2 ${isChief ? '' : 'max-h-72 overflow-y-auto pr-1'}`}>
                 {panels.validationAlerts.map((l) => (
                   <div
                     key={l.id}
-                    className="p-3 bg-slate-950 border border-red-950/80 rounded-xl space-y-1.5"
+                    className="space-y-2 rounded-xl border border-red-950/80 bg-slate-950 p-3"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
+                    <div className={`flex gap-2 ${isChief ? 'flex-col' : 'items-center justify-between'}`}>
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         <span className="text-[10px] bg-red-950 border border-red-800 text-red-300 font-mono px-1.5 rounded font-bold">
                           {l.patrolLog?.validationStatus || 'ALERT'}
                         </span>
                         <span className={`text-[10px] rounded px-1.5 font-bold ${l.status === 'CLOSED' ? 'bg-slate-700 text-slate-200' : l.status === 'UNDER_REVIEW' ? 'bg-amber-950 text-amber-300' : 'bg-blue-950 text-blue-300'}`}>{l.status.replace('_', ' ')}</span>
-                        <span className="font-bold text-xs text-white">
+                        <span className="break-words text-xs font-bold text-white">
                           {options.users.find((u) => u.id === l.userId)?.name || l.userId}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className={`font-mono text-[10px] text-slate-400 ${isChief ? 'self-start' : ''}`}>
                         {new Date(l.createdAt).toLocaleTimeString('id-ID')} WIB
                       </span>
                     </div>
 
-                    <div className="text-xs text-red-300 font-medium">
+                    <div className="break-words text-xs font-medium leading-5 text-red-300">
                       {l.message}
                     </div>
 
-                    <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 break-words font-mono text-[10px] text-slate-500">
                       <span>{l.alertType} • {l.siteId}</span>
                       {l.patrolLog ? <span>Jarak: {l.patrolLog.calculatedDistanceM.toFixed(1)}m</span> : null}
                       {l.patrolLog?.isLowGpsAccuracy ? <span className="text-amber-400 font-bold">• GPS LOW ACCURACY</span> : null}
@@ -400,13 +433,13 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
-                <h2 className="font-bold text-sm text-white">KEJADIAN OPEN & TINGGI / KRITIS</h2>
+                <h2 className="text-sm font-black text-white">{isChief ? 'KEJADIAN PRIORITAS' : 'KEJADIAN OPEN & TINGGI / KRITIS'}</h2>
               </div>
               <button
                 onClick={() => onNavigateTab('incidents')}
                 className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-0.5"
               >
-                <span>Kelola</span>
+                <span>{isChief ? 'Lihat' : 'Kelola'}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -420,10 +453,10 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
                 {panels.criticalIncidents.map((i) => (
                   <div
                     key={i.id}
-                    className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-start justify-between gap-3"
+                    className={`rounded-xl border border-slate-800 bg-slate-950 p-3 ${isChief ? 'space-y-2' : 'flex items-start justify-between gap-3'}`}
                   >
                     <div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
                             i.severity === 'KRITIS'
@@ -454,13 +487,13 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-emerald-400" />
-                <h2 className="font-bold text-sm text-white">SERAH TERIMA JAGA TERBARU</h2>
+                <h2 className="text-sm font-black text-white">{isChief ? 'SERAH TERIMA TERBARU' : 'SERAH TERIMA JAGA TERBARU'}</h2>
               </div>
               <button
                 onClick={() => onNavigateTab('handovers')}
                 className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-0.5"
               >
-                <span>Kelola</span>
+                <span>{isChief ? 'Lihat' : 'Kelola'}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -474,7 +507,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
                 {panels.recentHandovers.map((h) => (
                   <div
                     key={h.id}
-                    className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs"
+                    className={`rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs ${isChief ? 'space-y-2' : 'flex items-center justify-between'}`}
                   >
                     <div>
                       <div className="font-bold text-white">{h.handoverType}</div>
@@ -502,7 +535,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         {panels.recentMedia.length > 0 && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-sm text-white">DOKUMENTASI MEDIA LAPANGAN TERBARU</h2>
+              <h2 className="text-sm font-black text-white">{isChief ? 'DOKUMENTASI TERBARU' : 'DOKUMENTASI MEDIA LAPANGAN TERBARU'}</h2>
               <button
                 onClick={() => onNavigateTab('gallery')}
                 className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-0.5"
@@ -512,7 +545,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
               </button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <div className={`grid grid-cols-2 gap-2.5 ${isChief ? '' : 'md:grid-cols-4'}`}>
               {panels.recentMedia.map((m) => (
                 <div
                   key={m.id}
@@ -533,17 +566,17 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         )}
       </main>
 
-      {detailAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 text-xs"><div className="flex justify-between"><h3 className="font-black">DETAIL VALIDATION ALERT</h3><button onClick={() => setDetailAlert(null)}>✕</button></div><div className="mt-4 space-y-2 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div><div>Site: {detailAlert.siteId}</div><div>Jenis: {detailAlert.alertType}</div><div>Detail: {detailAlert.message}</div><div>Status: {detailAlert.status}</div>{detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}</div></div></div> : null}
+      {detailAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-detail-title"><div className="flex justify-between gap-3"><h3 id="validation-detail-title" className="font-black">DETAIL VALIDATION ALERT</h3><button type="button" onClick={() => setDetailAlert(null)} aria-label="Tutup detail validation alert">✕</button></div><div className="mt-4 space-y-2 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === detailAlert.userId)?.name || detailAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === detailAlert.userId)?.npk || '-'}</div><div>Site: {detailAlert.siteId}</div><div>Jenis: {detailAlert.alertType}</div><div>Detail: {detailAlert.message}</div><div>Status: {detailAlert.status}</div>{detailAlert.closeNote ? <div>Catatan Penyelesaian: {detailAlert.closeNote}</div> : null}</div></div></div> : null}
 
-      {closeAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="w-full max-w-md rounded-2xl border border-red-900 bg-slate-900 p-5 text-xs"><h3 className="font-black text-red-300">TUTUP VALIDATION ALERT</h3><div className="my-3 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div><div>Site: {closeAlert.siteId}</div><div>Jenis: {closeAlert.alertType}</div><div className="mt-2">Detail: {closeAlert.message}</div></div><label className="font-bold">Catatan Penyelesaian<textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal" /></label><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => setCloseAlert(null)} className="rounded-xl bg-slate-800 p-2 font-bold">BATAL</button><button disabled={!closeNote.trim()} onClick={() => void mutateAlert(closeAlert, 'CLOSE')} className="rounded-xl bg-red-700 p-2 font-bold disabled:opacity-40">CLOSE ALERT</button></div></div></div> : null}
+      {closeAlert ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="ops-dialog w-full max-w-md overflow-y-auto rounded-3xl border border-red-900 bg-[#0f172a] p-5 text-xs shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="validation-close-title"><h3 id="validation-close-title" className="font-black text-red-300">TUTUP VALIDATION ALERT</h3><div className="my-3 rounded-xl bg-slate-950 p-3"><div>Petugas: <b>{options.users.find((u) => u.id === closeAlert.userId)?.name || closeAlert.userId}</b></div><div>NPK: {options.users.find((u) => u.id === closeAlert.userId)?.npk || '-'}</div><div>Site: {closeAlert.siteId}</div><div>Jenis: {closeAlert.alertType}</div><div className="mt-2">Detail: {closeAlert.message}</div></div><label className="font-bold">Catatan Penyelesaian<textarea autoFocus required value={closeNote} onChange={(event) => setCloseNote(event.target.value)} className="mt-1 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-normal" /></label><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => setCloseAlert(null)} className="rounded-xl bg-slate-800 p-2 font-bold">BATAL</button><button disabled={!closeNote.trim()} onClick={() => void mutateAlert(closeAlert, 'CLOSE')} className="rounded-xl bg-red-700 p-2 font-bold disabled:opacity-40">CLOSE ALERT</button></div></div></div> : null}
 
       {/* Persistent Global Filter Modal */}
       {showFilterModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4">
+          <div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-slate-700 bg-[#0f172a] p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="global-filter-title">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-sm">Filter Global Command Center</h3>
-              <button onClick={() => setShowFilterModal(false)} className="text-slate-400 hover:text-white">
+              <h3 id="global-filter-title" className="text-sm font-black text-white">Filter Global Command Center</h3>
+              <button type="button" onClick={() => setShowFilterModal(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Tutup filter global">
                 ✕
               </button>
             </div>
