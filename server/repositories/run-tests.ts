@@ -316,6 +316,13 @@ try {
   const masterMonitoringSource = fs.readFileSync(path.resolve('src/views/admin/MasterMonitoringView.tsx'), 'utf8');
   const adminUsersSource = fs.readFileSync(path.resolve('src/views/admin/AdminUsers.tsx'), 'utf8');
   const chiefScopeMigration = fs.readFileSync(path.resolve('server/db/migrations/006_chief_customer_scope.sql'), 'utf8');
+  const memberHomeSource = fs.readFileSync(path.resolve('src/views/MemberHome.tsx'), 'utf8');
+  const patrolViewSource = fs.readFileSync(path.resolve('src/views/PatrolActiveView.tsx'), 'utf8');
+  const qrScannerSource = fs.readFileSync(path.resolve('src/components/QRScannerModal.tsx'), 'utf8');
+  const cameraCaptureSource = fs.readFileSync(path.resolve('src/components/CameraCaptureModal.tsx'), 'utf8');
+  const handoverViewSource = fs.readFileSync(path.resolve('src/views/HandoverView.tsx'), 'utf8');
+  const incidentViewSource = fs.readFileSync(path.resolve('src/views/IncidentView.tsx'), 'utf8');
+  const offlineQueueSource = fs.readFileSync(path.resolve('src/lib/offlineQueue.ts'), 'utf8');
   assert.match(schemaSql, /shift_sessions_one_active_user[\s\S]+WHERE status='ACTIVE'/);
   assert.match(schemaSql, /patrol_logs_unique_valid_checkpoint_round[\s\S]+WHERE validation_status='VALID'/);
   assert.match(postgresSource, /personnel_capacity[\s\S]+FOR UPDATE/);
@@ -370,6 +377,53 @@ try {
   assert.match(chiefScopeMigration, /230599/);
   assert.match(chiefScopeMigration, /site_id = NULL|site_id, effective_from/);
 
+  // MEMBER-02 security critical regression guards.
+  assert.doesNotMatch(patrolViewSource, /setSimulationGps|GPS Simulasi|Set GPS 0m|14\.86m \(VALID\)|16\.3m \(REJECT\)|Default around CP02|Menggunakan koordinat area site BB92/);
+  assert.match(patrolViewSource, /GPS BELUM SIAP/);
+  assert.match(patrolViewSource, /disabled=\{!currentGps\}/);
+
+  assert.doesNotMatch(qrScannerSource, /manualToken|availableTokens|Simulasi Scan Cepat Lapangan|masukkan kode token manual/);
+  assert.match(qrScannerSource, /harus dipindai langsung melalui kamera perangkat di lokasi/);
+  assert.match(routeSource, /function toFieldCheckpoint\(checkpoint: Checkpoint\)/);
+  assert.match(routeSource, /const \{ qrToken, \.\.\.safeCheckpoint \} = checkpoint/);
+  assert.doesNotMatch(patrolViewSource, /token:\s*c\.qrToken/);
+
+  assert.doesNotMatch(cameraCaptureSource, /handleFileFallback|Galeri Kamera|Pilih File Foto|type="file"/);
+  assert.match(cameraCaptureSource, /Bukti operasional wajib diambil langsung melalui kamera perangkat/);
+
+  assert.match(routeSource, /SITE_ASSIGNMENT_REQUIRED/);
+  assert.match(routeSource, /resolveFieldSiteId/);
+  assert.doesNotMatch(routeSource, /siteId\s*\|\|\s*['"]BB92['"]/);
+
+  assert.match(patrolServiceSource, /WRONG_CHECKPOINT_SEQUENCE/);
+  assert.match(patrolServiceSource, /localeCompare\(b\.code, undefined, \{ numeric: true, sensitivity: 'base' \}\)/);
+  assert.match(patrolServiceSource, /expectedCheckpoint/);
+
+  assert.match(offlineQueueSource, /throw err instanceof Error/);
+  assert.match(patrolViewSource, /statusInRound: 'PENDING_SYNC'/);
+  assert.doesNotMatch(patrolViewSource, /statusInRound: 'VALID', isOfflinePending: true/);
+  assert.match(routeSource, /apiRouter\.post\('\/sync', authMiddleware, requireFieldMember/);
+
+  assert.match(routeSource, /apiRouter\.get\('\/field\/site-members', authMiddleware, requireFieldMember/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_REQUIRED/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_INVALID/);
+  assert.match(routeSource, /HANDOVER_RECIPIENT_MISMATCH/);
+  assert.match(routeSource, /handover\.toUserId !== req\.user!\.id/);
+  assert.match(handoverViewSource, /h\.toUserId === user\?\.id/);
+  assert.match(handoverViewSource, /Penerima Akun/);
+
+  const memberRuntimeSources = [
+    memberHomeSource,
+    patrolViewSource,
+    handoverViewSource,
+    incidentViewSource,
+    cameraCaptureSource,
+    qrScannerSource,
+  ].join('\n');
+  assert.doesNotMatch(memberRuntimeSources, /BB92|KM 92|Barang Bukti KM 92|Radius Ketat 10-15m/);
+  assert.match(memberHomeSource, /siteInfo\?\.name/);
+  assert.match(cameraCaptureSource, /siteLabel \|\| 'FIELD'/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -385,6 +439,7 @@ try {
   console.log('PASS Super Admin audit policy and order-safe checkpoint sequence source guards');
   console.log('PASS Master Monitoring sticky workspace and in-place refresh source guards');
   console.log('PASS CHIEF customer-level assignment and monitoring scope guards');
+  console.log('PASS MEMBER-02 security critical anti-bypass regression guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
