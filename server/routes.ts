@@ -861,7 +861,14 @@ apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, async (req: A
 
 apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-  if (!isAdministrator(req.user!.role)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+    if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
+    if (req.query.userId) filter.userId = String(req.query.userId);
+  } else if (!isAdministrator(req.user!.role)) {
     filter.userId = req.user!.id;
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
@@ -879,7 +886,13 @@ apiRouter.get('/patrol/sessions', authMiddleware, async (req: AuthenticatedReque
 
 apiRouter.get('/handover', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-  if (!isAdministrator(req.user!.role)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+    if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
+  } else if (!isAdministrator(req.user!.role)) {
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
@@ -1079,7 +1092,14 @@ apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, async (r
 
 apiRouter.get('/incidents', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const filter: any = {};
-  if (!isAdministrator(req.user!.role)) {
+  if (req.user!.role === 'CHIEF') {
+    const customerId = resolveMonitoringCustomerScope(req, res);
+    if (customerId === undefined) return;
+    filter.customerId = customerId;
+    if (req.query.siteId) filter.siteId = String(req.query.siteId);
+    if (req.query.shiftCode) filter.shiftCode = String(req.query.shiftCode);
+    if (req.query.status) filter.status = String(req.query.status);
+  } else if (!isAdministrator(req.user!.role)) {
     if (req.user!.siteId) filter.siteId = req.user!.siteId;
   } else {
     if (req.query.siteId) filter.siteId = String(req.query.siteId);
