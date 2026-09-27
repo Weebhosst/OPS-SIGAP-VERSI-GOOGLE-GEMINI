@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { ShiftHandover, ConditionStatus, PatrolSession } from '../types/ops';
 import { CameraCaptureModal } from '../components/CameraCaptureModal';
+import { OpsNoticeDialog, type OpsDialogTone } from '../components/OpsDialog';
 
 export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { user } = useAuth();
@@ -41,6 +42,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [handedTo, setHandedTo] = useState('');
   const [isTaruna, setIsTaruna] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [notice, setNotice] = useState<{ title: string; message: string; tone: OpsDialogTone } | null>(null);
 
   const loadHandovers = async () => {
     try {
@@ -92,7 +94,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         await loadHandovers();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan serah terima jaga');
+      setNotice({ title: 'Serah Terima Gagal', message: err.message || 'Gagal menyimpan serah terima jaga.', tone: 'danger' });
     } finally {
       setSubmitting(false);
     }
@@ -106,7 +108,9 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setStartPhotoUrl(null);
       await loadHandovers();
       setActiveTab('SERTIGAS');
-    } catch (error: any) { alert(error.message || 'Gagal menyimpan Sertigas Naik Jaga.'); }
+    } catch (error: any) {
+      setNotice({ title: 'Sertigas Gagal', message: error.message || 'Gagal menyimpan Sertigas Naik Jaga.', tone: 'danger' });
+    }
     finally { setSubmitting(false); }
   };
 
@@ -120,7 +124,7 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         await loadHandovers();
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mengonfirmasi');
+      setNotice({ title: 'Konfirmasi Gagal', message: err.message || 'Gagal mengonfirmasi serah terima.', tone: 'danger' });
     }
   };
 
@@ -238,8 +242,8 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 </div>
               )}
 
-              {/* Ack Action */}
-              {h.status !== 'ACKNOWLEDGED' && h.fromUserId !== user?.id && (
+              {/* Ack Action — only field members can acknowledge. Monitoring roles are read-only. */}
+              {h.status !== 'ACKNOWLEDGED' && user?.role === 'ANGGOTA' && h.fromUserId !== user?.id ? (
                 <button
                   onClick={() => handleAcknowledge(h.id)}
                   className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
@@ -247,7 +251,11 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <UserCheck className="w-4 h-4" />
                   <span>Konfirmasi Terima Jaga</span>
                 </button>
-              )}
+              ) : h.status !== 'ACKNOWLEDGED' && user?.role !== 'ANGGOTA' ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-[11px] leading-5 text-slate-400">
+                  Konfirmasi penerimaan dilakukan oleh anggota penerima melalui akun ANGGOTA. Admin, Super Admin, dan Chief hanya memonitor status.
+                </div>
+              ) : null}
             </div>
           ))
         )}
@@ -325,6 +333,14 @@ export const HandoverView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       )}
 
       {canCreate && activeSession && !activeSession.startDocumentationCompleted ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-md sm:p-4"><div className="ops-dialog w-full max-w-md space-y-4 overflow-y-auto rounded-3xl border border-blue-800/80 bg-[#0f172a] p-5 shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="sertigas-start-title"><div><h2 id="sertigas-start-title" className="font-black text-blue-300">SERTIGAS NAIK JAGA</h2><p className="text-xs text-slate-400">Wajib disimpan sebelum patroli dapat dimulai.</p></div><div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs"><div>Member: <b>{user?.name}</b></div><div>NPK: {user?.npk}</div><div>Customer: {activeSession.customerId}</div><div>Site: {activeSession.siteId}</div><div>Shift: {activeSession.shiftCode}</div><div>Tanggal Operasional: {activeSession.shiftDate}</div><div>Waktu: {new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</div></div>{startPhotoUrl ? <img src={startPhotoUrl} alt="Sertigas Naik Jaga" className="max-h-64 w-full rounded-xl object-cover" /> : <button onClick={() => { setCameraTarget('START'); setShowCameraModal(true); }} className="flex min-h-14 w-full items-center justify-center rounded-xl border-2 border-dashed border-slate-700 p-4 text-sm font-black text-slate-200 transition hover:border-blue-600 hover:bg-blue-950/20"><Camera className="mr-2 inline h-5 w-5" />AMBIL FOTO SERTIGAS</button>}<button disabled={!startPhotoUrl || submitting} onClick={() => void handleStartDocumentation()} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 p-3 text-sm font-black text-white transition hover:bg-blue-500 disabled:opacity-40">SIMPAN & LANJUT PATROLI</button></div></div> : null}
+
+      <OpsNoticeDialog
+        isOpen={!!notice}
+        onClose={() => setNotice(null)}
+        title={notice?.title || 'Informasi'}
+        message={notice?.message || ''}
+        tone={notice?.tone || 'info'}
+      />
 
       <CameraCaptureModal
         isOpen={showCameraModal}
