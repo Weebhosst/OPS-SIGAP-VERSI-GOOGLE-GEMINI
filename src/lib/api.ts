@@ -154,6 +154,9 @@ export const api = {
     return request<{ success: boolean; handovers: ShiftHandover[] }>(`/handover${qs}`);
   },
 
+  getFieldSiteMembers: () =>
+    request<{ success: boolean; members: Array<{ id: string; name: string; npk: string }> }>('/field/site-members'),
+
   createHandover: (payload: Partial<ShiftHandover>) =>
     request<{ success: boolean; handover: ShiftHandover }>('/handover', {
       method: 'POST',
