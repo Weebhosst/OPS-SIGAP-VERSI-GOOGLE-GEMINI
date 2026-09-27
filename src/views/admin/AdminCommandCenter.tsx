@@ -152,6 +152,17 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
     }
   };
 
+  const openActiveSessionPersonnel = () => {
+    if (user?.id) {
+      sessionStorage.setItem(`ops:masterTab:${user.id}`, 'ACTIVE_SESSION');
+    }
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'master');
+    params.set('tab', 'active_session');
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    onNavigateTab('master');
+  };
+
   // Helper for active filter text
   const getFilterSummaryText = () => {
     const siteText = filterState?.siteId
@@ -267,19 +278,29 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         {/* 4 TOP KPI CARDS */}
         <div className={`grid grid-cols-2 gap-3 ${isChief ? '' : 'lg:grid-cols-4'}`}>
           {/* 1. Patroli Aktif */}
-          <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
+          <button
+            type="button"
+            onClick={openActiveSessionPersonnel}
+            className={`group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 text-left shadow-sm transition hover:border-blue-700/70 hover:bg-slate-900/80 focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${isChief ? 'p-3.5' : 'p-4'}`}
+            aria-label="Buka Active Session Personel"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Patroli Aktif
               </span>
-              <Activity className="w-4 h-4 text-blue-400" />
+              <Activity className="h-4 w-4 text-blue-400 transition group-hover:scale-110" />
             </div>
-            <div className="text-3xl font-black text-white mt-2 font-mono">
+            <div className="mt-2 font-mono text-3xl font-black text-white">
               {kpis.patroliAktif}
             </div>
-            <p className="text-[11px] text-blue-400 font-medium mt-1">Sesi ronde OPEN</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-blue-400">Sesi ronde OPEN</p>
+              <span className="inline-flex items-center gap-1 text-[10px] font-black text-blue-300">
+                LIHAT <ChevronRight className="h-3 w-3" />
+              </span>
+            </div>
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500" />
-          </div>
+          </button>
 
           {/* 2. Kejadian Open */}
           <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-sm ${isChief ? 'p-3.5' : 'p-4'}`}>
@@ -331,14 +352,23 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({ onNaviga
         <div className={`grid grid-cols-1 gap-3 ${isChief ? '' : 'lg:grid-cols-2'}`}>
           {/* Panel: Patroli Aktif */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-blue-400" />
+            <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Activity className="h-4 w-4 shrink-0 text-blue-400" />
                 <h2 className="text-sm font-black text-white">{isChief ? 'PATROLI AKTIF' : 'PATROLI AKTIF LAPANGAN'}</h2>
               </div>
-              <span className="text-xs font-mono font-bold text-slate-400">
-                {panels.activePatrols.length} Sesi
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="font-mono text-xs font-bold text-slate-400">
+                  {panels.activePatrols.length} Sesi
+                </span>
+                <button
+                  type="button"
+                  onClick={openActiveSessionPersonnel}
+                  className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-blue-800/80 bg-blue-950/40 px-2 py-1 text-[10px] font-black text-blue-300 transition hover:bg-blue-900/50"
+                >
+                  ACTIVE SESSION <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
             </div>
 
             {panels.activePatrols.length === 0 ? (
