@@ -138,6 +138,57 @@ async function persistRejected(
   return stored;
 }
 
+function validateScanInput(input: ScanInput): void {
+  if (!input.sessionId || input.sessionId.length > 160) {
+    throw new RepositoryError('SESSION_ID_INVALID', 'Session ID tidak valid.', 400);
+  }
+  if (!input.qrToken || input.qrToken.length > 4096) {
+    throw new RepositoryError('QR_TOKEN_INVALID', 'Token QR tidak valid.', 400);
+  }
+  if (
+    !Number.isFinite(input.latitude)
+    || !Number.isFinite(input.longitude)
+    || input.latitude < -90
+    || input.latitude > 90
+    || input.longitude < -180
+    || input.longitude > 180
+  ) {
+    throw new RepositoryError(
+      'GPS_COORDINATES_INVALID',
+      'Koordinat GPS tidak valid.',
+      400,
+    );
+  }
+  if (
+    input.gpsAccuracyM !== undefined
+    && (
+      !Number.isFinite(input.gpsAccuracyM)
+      || input.gpsAccuracyM < 0
+      || input.gpsAccuracyM > 10000
+    )
+  ) {
+    throw new RepositoryError('GPS_ACCURACY_INVALID', 'Akurasi GPS tidak valid.', 400);
+  }
+  if (
+    input.observationStatus !== undefined
+    && !['AMAN', 'TEMUAN', 'INSIDEN'].includes(input.observationStatus)
+  ) {
+    throw new RepositoryError('OBSERVATION_STATUS_INVALID', 'Status observasi tidak valid.', 400);
+  }
+  if (input.notes && input.notes.length > 2000) {
+    throw new RepositoryError('PATROL_NOTES_TOO_LONG', 'Catatan patroli maksimal 2000 karakter.', 400);
+  }
+  if (input.idempotencyId && input.idempotencyId.length > 200) {
+    throw new RepositoryError('IDEMPOTENCY_KEY_INVALID', 'Idempotency key tidak valid.', 400);
+  }
+  if (input.clientCapturedAt) {
+    const capturedAt = new Date(input.clientCapturedAt).getTime();
+    if (!Number.isFinite(capturedAt) || capturedAt > Date.now() + 10 * 60 * 1000) {
+      throw new RepositoryError('CAPTURE_TIME_INVALID', 'Waktu pengambilan bukti tidak valid.', 400);
+    }
+  }
+}
+
 function parseQr(rawValue: string) {
   const rawQr = rawValue.trim();
   let secureToken = rawQr;
@@ -155,10 +206,19 @@ function parseQr(rawValue: string) {
 }
 
 export async function validateAndProcessScan(input: ScanInput): Promise<ValidationResult> {
+  validateScanInput(input);
+
   const logId = input.idempotencyId || `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
   const existingLog = await repositories.patrol.findById(logId);
   if (existingLog) {
+    if (existingLog.userId !== input.userId || existingLog.sessionId !== input.sessionId) {
+      throw new RepositoryError(
+        'IDEMPOTENCY_KEY_CONFLICT',
+        'Idempotency key sudah digunakan oleh transaksi patroli lain.',
+        409,
+      );
+    }
     const existingSession = await repositories.sessions.findById(existingLog.sessionId);
     return resultFromLog(existingLog, existingSession);
   }
