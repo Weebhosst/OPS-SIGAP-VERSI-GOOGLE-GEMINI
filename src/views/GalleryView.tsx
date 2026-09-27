@@ -120,6 +120,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const [selectedItem, setSelectedItem] = useState<MediaGalleryItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(jakartaNow.month);
   const [selectedYear, setSelectedYear] = useState(jakartaNow.year);
   const [selectedDay, setSelectedDay] = useState(0);
@@ -145,7 +146,8 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const loadMedia = async (offset = 0) => {
     try {
-      setLoading(true);
+      if (offset > 0) setLoadingMore(true);
+      else setLoading(true);
       const params: Record<string, string> = {
         month: String(appliedPeriod.month),
         year: String(appliedPeriod.year),
@@ -163,7 +165,12 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       const res = await api.getGallery(params);
       if (res.success) {
-        setMediaList((current) => (offset ? [...current, ...res.media] : res.media));
+        setMediaList((current) => {
+          if (!offset) return res.media;
+          const byId = new Map(current.map((item) => [item.id, item]));
+          res.media.forEach((item) => byId.set(item.id, item));
+          return Array.from(byId.values());
+        });
         setPagination({ total: res.pagination.total, hasMore: res.pagination.hasMore });
         setCounts(res.counts || {});
       }
@@ -174,7 +181,8 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         tone: 'danger',
       });
     } finally {
-      setLoading(false);
+      if (offset > 0) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
@@ -567,10 +575,11 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             {pagination.hasMore ? (
               <button
                 type="button"
+                disabled={loadingMore}
                 onClick={() => void loadMedia(mediaList.length)}
-                className="flex min-h-10 w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs font-black text-slate-300 transition hover:bg-slate-800"
+                className="flex min-h-10 w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs font-black text-slate-300 transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
               >
-                MUAT LEBIH BANYAK ({mediaList.length}/{pagination.total})
+                {loadingMore ? 'MEMUAT RIWAYAT...' : `MUAT LEBIH BANYAK (${mediaList.length}/${pagination.total})`}
               </button>
             ) : null}
           </div>
