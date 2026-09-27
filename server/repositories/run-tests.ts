@@ -424,6 +424,22 @@ try {
   assert.match(memberHomeSource, /siteInfo\?\.name/);
   assert.match(cameraCaptureSource, /siteLabel \|\| 'FIELD'/);
 
+  // MEMBER-03 member home operational-state regression guards.
+  assert.match(memberHomeSource, /Tindakan Berikutnya/);
+  assert.match(memberHomeSource, /MULAI SHIFT/);
+  assert.match(memberHomeSource, /LENGKAPI NAIK JAGA/);
+  assert.match(memberHomeSource, /LANJUTKAN RONDE/);
+  assert.match(memberHomeSource, /TURUN JAGA & SELESAIKAN SHIFT/);
+  assert.match(memberHomeSource, /KONEKSI DIPERLUKAN/);
+  assert.match(memberHomeSource, /SERAH TERIMA MENUNGGU KONFIRMASI/);
+  assert.match(memberHomeSource, /offlineQueue\.getPendingCount/);
+  assert.match(memberHomeSource, /visibilitychange/);
+  assert.match(memberHomeSource, /30_000/);
+  assert.match(memberHomeSource, /currentRoundCompleted/);
+  assert.match(memberHomeSource, /incomingHandoverCount/);
+  assert.match(memberHomeSource, /siteInfo\?\.name/);
+  assert.doesNotMatch(memberHomeSource, /Ronde Berjalan:/);
+
   await assert.rejects(
     () => jsonRepositories.users.remove(user.id),
     (error: unknown) => error instanceof RepositoryError && error.code === 'USER_IN_USE',
@@ -440,6 +456,7 @@ try {
   console.log('PASS Master Monitoring sticky workspace and in-place refresh source guards');
   console.log('PASS CHIEF customer-level assignment and monitoring scope guards');
   console.log('PASS MEMBER-02 security critical anti-bypass regression guards');
+  console.log('PASS MEMBER-03 next-action dashboard and live status regression guards');
   console.log('PASS repository provider health and pagination');
   console.log('PASS JSON import referential validation');
   console.log('PASS atomic active-session uniqueness');
