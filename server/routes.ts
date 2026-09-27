@@ -205,7 +205,7 @@ function sendRepositoryError(res: Response, error: unknown): boolean {
 
 const fieldWriteWindows = new Map<string, { startedAt: number; count: number }>();
 
-function fieldWriteRateLimit(maxRequests: number, windowMs = 60_000) {
+function fieldWriteRateLimit(bucket: string, maxRequests: number, windowMs = 60_000) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized.' });
@@ -217,8 +217,7 @@ function fieldWriteRateLimit(maxRequests: number, windowMs = 60_000) {
       }
     }
 
-    const routeKey = String(req.route?.path || req.path || 'field-write');
-    const key = `${userId}:${routeKey}`;
+    const key = `${userId}:${bucket}`;
     const existing = fieldWriteWindows.get(key);
     const current = !existing || now - existing.startedAt >= windowMs
       ? { startedAt: now, count: 0 }
@@ -523,7 +522,7 @@ apiRouter.get('/patrol/current', authMiddleware, async (req: AuthenticatedReques
   });
 });
 
-apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, fieldWriteRateLimit('shift-lifecycle', 10), async (req: AuthenticatedRequest, res: Response) => {
   const siteId = resolveFieldSiteId(req, res);
   if (!siteId) return;
   const existingOpen = await repositories.sessions.getActiveByUser(req.user!.id);
@@ -590,7 +589,7 @@ apiRouter.post('/patrol/session/start', authMiddleware, requireFieldMember, fiel
   }
 });
 
-apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requireFieldMember, fieldWriteRateLimit('shift-lifecycle', 10), async (req: AuthenticatedRequest, res: Response) => {
   const photoUrl = String(req.body.photoUrl || '').trim();
   if (!photoUrl) return res.status(400).json({ success: false, error: 'Foto Sertigas Naik Jaga wajib diambil.' });
 
@@ -697,7 +696,7 @@ apiRouter.post('/patrol/session/:id/start-documentation', authMiddleware, requir
   }
 });
 
-apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, fieldWriteRateLimit('shift-lifecycle', 10), async (req: AuthenticatedRequest, res: Response) => {
   const session = await repositories.sessions.findById(req.params.id);
   if (!session || session.userId !== req.user!.id) return res.status(404).json({ success: false, error: 'Active session milik Anda tidak ditemukan.' });
   if (session.status !== 'ACTIVE') return res.status(409).json({ success: false, error: 'Session sudah tidak aktif.' });
@@ -962,7 +961,7 @@ apiRouter.post('/patrol/session/:id/close', authMiddleware, requireFieldMember, 
   }
 });
 
-apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, fieldWriteRateLimit(30), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/patrol/scan', authMiddleware, requireFieldMember, fieldWriteRateLimit('patrol-scan', 30), async (req: AuthenticatedRequest, res: Response) => {
   const {
     sessionId,
     qrToken,
@@ -1082,7 +1081,7 @@ apiRouter.get('/handover', authMiddleware, async (req: AuthenticatedRequest, res
   res.json({ success: true, handovers: page.items });
 });
 
-apiRouter.post('/handover', authMiddleware, requireFieldMember, fieldWriteRateLimit(20), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/handover', authMiddleware, requireFieldMember, fieldWriteRateLimit('handover-create', 20), async (req: AuthenticatedRequest, res: Response) => {
   const {
     handoverType,
     toUserId,
@@ -1278,7 +1277,7 @@ apiRouter.post('/handover', authMiddleware, requireFieldMember, fieldWriteRateLi
   }
 });
 
-apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, fieldWriteRateLimit(30), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/handover/:id/ack', authMiddleware, requireFieldMember, fieldWriteRateLimit('handover-ack', 30), async (req: AuthenticatedRequest, res: Response) => {
   const siteId = resolveFieldSiteId(req, res);
   if (!siteId) return;
 
@@ -1357,7 +1356,7 @@ apiRouter.get('/incidents', authMiddleware, async (req: AuthenticatedRequest, re
   res.json({ success: true, incidents: page.items });
 });
 
-apiRouter.post('/incidents', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/incidents', authMiddleware, requireFieldMember, fieldWriteRateLimit('incident-create', 10), async (req: AuthenticatedRequest, res: Response) => {
   const {
     category,
     severity,
@@ -2758,7 +2757,7 @@ apiRouter.post('/admin/override-validation', authMiddleware, requireAdmin, async
 // BATCH OFFLINE QUEUE SYNC
 // -------------------------------------------------------------
 
-apiRouter.post('/sync', authMiddleware, requireFieldMember, fieldWriteRateLimit(10), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/sync', authMiddleware, requireFieldMember, fieldWriteRateLimit('offline-sync', 10), async (req: AuthenticatedRequest, res: Response) => {
   const { items } = req.body;
   if (!Array.isArray(items)) {
     return res.status(400).json({ success: false, error: 'Payload sync harus berupa array items.' });
