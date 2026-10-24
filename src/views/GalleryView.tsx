@@ -10,6 +10,10 @@ import {
   Download,
   Image as ImageIcon,
   MapPin,
+  CheckCircle2,
+  AlertTriangle,
+  User as UserIcon,
+  Clock,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import {
@@ -51,6 +55,52 @@ const documentTypeMap: Record<string, string> = {
   LAINNYA: 'LAINNYA',
 };
 
+function sourceContextLabel(item: MediaGalleryItem): string {
+  const context = item.sourceContext;
+  if (item.sourceModule === 'PATROL') {
+    return [
+      context?.roundNumber ? `R${context.roundNumber}` : null,
+      context?.checkpointCode || null,
+      context?.validationStatus || null,
+    ].filter(Boolean).join(' • ') || 'PATROLI';
+  }
+  if (item.sourceModule === 'HANDOVER') {
+    return [
+      context?.handoverType?.replaceAll('_', ' ') || null,
+      context?.handoverStatus || null,
+    ].filter(Boolean).join(' • ') || 'SERAH TERIMA';
+  }
+  if (item.sourceModule === 'INCIDENT') {
+    return [
+      context?.incidentSeverity || null,
+      context?.incidentStatus || null,
+    ].filter(Boolean).join(' • ') || 'INSIDEN';
+  }
+  return item.documentType || item.sourceModule;
+}
+
+function sourceContextTone(item: MediaGalleryItem): string {
+  const context = item.sourceContext;
+  if (context?.validationStatus === 'REJECTED' || context?.incidentSeverity === 'KRITIS') {
+    return 'bg-red-600/90 text-white';
+  }
+  if (
+    context?.validationStatus === 'REVIEW'
+    || context?.incidentSeverity === 'TINGGI'
+    || context?.handoverStatus === 'SUBMITTED'
+  ) {
+    return 'bg-amber-600/90 text-white';
+  }
+  if (
+    context?.validationStatus === 'VALID'
+    || context?.handoverStatus === 'ACKNOWLEDGED'
+    || context?.incidentStatus === 'CLOSED'
+  ) {
+    return 'bg-emerald-600/90 text-white';
+  }
+  return 'bg-slate-900/90 text-slate-100';
+}
+
 export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { user } = useAuth();
   const isWideAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'CHIEF';
@@ -70,6 +120,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const [selectedItem, setSelectedItem] = useState<MediaGalleryItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(jakartaNow.month);
   const [selectedYear, setSelectedYear] = useState(jakartaNow.year);
   const [selectedDay, setSelectedDay] = useState(0);
@@ -95,7 +146,8 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const loadMedia = async (offset = 0) => {
     try {
-      setLoading(true);
+      if (offset > 0) setLoadingMore(true);
+      else setLoading(true);
       const params: Record<string, string> = {
         month: String(appliedPeriod.month),
         year: String(appliedPeriod.year),
@@ -113,7 +165,12 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       const res = await api.getGallery(params);
       if (res.success) {
-        setMediaList((current) => (offset ? [...current, ...res.media] : res.media));
+        setMediaList((current) => {
+          if (!offset) return res.media;
+          const byId = new Map(current.map((item) => [item.id, item]));
+          res.media.forEach((item) => byId.set(item.id, item));
+          return Array.from(byId.values());
+        });
         setPagination({ total: res.pagination.total, hasMore: res.pagination.hasMore });
         setCounts(res.counts || {});
       }
@@ -124,7 +181,8 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         tone: 'danger',
       });
     } finally {
-      setLoading(false);
+      if (offset > 0) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
@@ -180,6 +238,18 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     [groupedByDate, currentShift.operationalDate],
   );
 
+  const todaySummary = useMemo(() => ({
+    total: todayItems.length,
+    patrol: todayItems.filter((item) => item.sourceModule === 'PATROL').length,
+    handover: todayItems.filter((item) => item.sourceModule === 'HANDOVER').length,
+    incident: todayItems.filter((item) => item.sourceModule === 'INCIDENT').length,
+  }), [todayItems]);
+
+  const availableYears = useMemo(() => {
+    const currentYear = jakartaNow.year;
+    return Array.from({ length: 4 }, (_, index) => currentYear - index);
+  }, [jakartaNow.year]);
+
   const renderShiftGroup = (
     shiftCode: ShiftCode,
     items: MediaGalleryItem[],
@@ -228,9 +298,22 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                       alt={item.caption}
                       className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.03]"
                     />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent px-1.5 pb-1.5 pt-4">
+                    <div className="absolute left-1.5 top-1.5">
+                      <span className={`rounded-md px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide shadow-sm ${sourceContextTone(item)}`}>
+                        {sourceContextLabel(item)}
+                      </span>
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent px-1.5 pb-1.5 pt-5">
                       <div className="truncate text-[8px] font-black uppercase tracking-wide text-white">
-                        {item.documentType || item.sourceModule}
+                        {item.sourceContext?.checkpointName
+                          || item.sourceContext?.incidentTitle
+                          || item.sourceContext?.itemName
+                          || item.caption
+                          || item.documentType
+                          || item.sourceModule}
+                      </div>
+                      <div className="mt-0.5 truncate font-mono text-[7px] text-slate-300">
+                        {new Date(item.eventAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })} WIB
                       </div>
                     </div>
                   </div>
@@ -268,8 +351,8 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </button>
             <div className="min-w-0">
               <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-blue-300">Media & History</p>
-              <h1 className="truncate text-base font-black tracking-tight text-white">Dokumentasi Shift</h1>
-              <p className="text-[10px] font-medium text-slate-500">Latest first • 48 item / page</p>
+              <h1 className="truncate text-base font-black tracking-tight text-white">Galeri & Riwayat</h1>
+              <p className="text-[10px] font-medium text-slate-500">Bukti operasional • terbaru lebih dulu</p>
             </div>
           </div>
           <span className="shrink-0 rounded-full border border-blue-700/50 bg-blue-900/30 px-2.5 py-1 font-mono text-[10px] font-black text-blue-300">
@@ -279,6 +362,34 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </header>
 
       <main className={`mx-auto space-y-3 px-3 pt-3 sm:px-4 ${isWideAdmin ? 'max-w-7xl lg:px-6 lg:pt-5' : 'max-w-md'}`}>
+        {!isWideAdmin ? (
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-3.5 shadow-lg shadow-black/10">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-300">Hari Ini</p>
+                <p className="mt-1 text-sm font-black text-white">{todaySummary.total} bukti operasional</p>
+              </div>
+              <span className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 font-mono text-[9px] font-black text-slate-400">
+                {currentShift.operationalDate}
+              </span>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-blue-900/60 bg-blue-950/20 p-2.5 text-center">
+                <p className="text-lg font-black text-white">{todaySummary.patrol}</p>
+                <p className="text-[8px] font-black uppercase tracking-wide text-blue-300">Patroli</p>
+              </div>
+              <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-2.5 text-center">
+                <p className="text-lg font-black text-white">{todaySummary.handover}</p>
+                <p className="text-[8px] font-black uppercase tracking-wide text-emerald-300">Serah Terima</p>
+              </div>
+              <div className="rounded-xl border border-amber-900/60 bg-amber-950/20 p-2.5 text-center">
+                <p className="text-lg font-black text-white">{todaySummary.incident}</p>
+                <p className="text-[8px] font-black uppercase tracking-wide text-amber-300">Insiden</p>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           {[
             { id: 'SEMUA', label: 'SEMUA' },
@@ -352,7 +463,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   onChange={(event) => setSelectedYear(Number(event.target.value))}
                   className="ops-input min-h-9 px-2 text-[10px]"
                 >
-                  {[2024, 2025, 2026].map((year) => (
+                  {availableYears.map((year) => (
                     <option key={year} value={year}>{year}</option>
                   ))}
                 </select>
@@ -360,13 +471,28 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={applyHistoryFilter}
-            className="ops-btn-primary mt-3 min-h-10 w-full px-4 text-xs lg:mt-0 lg:w-auto"
-          >
-            TAMPILKAN
-          </button>
+          <div className="mt-3 grid grid-cols-2 gap-2 lg:mt-0 lg:flex">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDay(0);
+                setSelectedMonth(jakartaNow.month);
+                setSelectedYear(jakartaNow.year);
+                setAppliedPeriod({ day: 0, month: jakartaNow.month, year: jakartaNow.year });
+                setShowAll({});
+              }}
+              className="ops-btn-secondary min-h-10 px-3 text-[10px]"
+            >
+              BULAN INI
+            </button>
+            <button
+              type="button"
+              onClick={applyHistoryFilter}
+              className="ops-btn-primary min-h-10 px-4 text-xs"
+            >
+              TAMPILKAN
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -449,10 +575,11 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             {pagination.hasMore ? (
               <button
                 type="button"
+                disabled={loadingMore}
                 onClick={() => void loadMedia(mediaList.length)}
-                className="flex min-h-10 w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs font-black text-slate-300 transition hover:bg-slate-800"
+                className="flex min-h-10 w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs font-black text-slate-300 transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
               >
-                MUAT LEBIH BANYAK ({mediaList.length}/{pagination.total})
+                {loadingMore ? 'MEMUAT RIWAYAT...' : `MUAT LEBIH BANYAK (${mediaList.length}/${pagination.total})`}
               </button>
             ) : null}
           </div>
@@ -465,7 +592,7 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         title={selectedItem?.caption || 'DETAIL FOTO'}
         description={
           selectedItem
-            ? `${selectedItem.sourceModule} • ${selectedItem.category} • ${selectedItem.shiftCode}`
+            ? `${sourceContextLabel(selectedItem)} • ${selectedItem.shiftCode}`
             : undefined
         }
         tone="neutral"
@@ -500,18 +627,110 @@ export const GalleryView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
             <div className="grid gap-2 text-xs sm:grid-cols-2">
               <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-                <div className="text-[9px] font-black uppercase tracking-wide text-slate-500">WAKTU</div>
+                <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wide text-slate-500">
+                  <Clock className="h-3 w-3" /> Waktu
+                </div>
                 <div className="mt-1 font-mono text-slate-300">
                   {new Date(selectedItem.eventAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB
                 </div>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-                <div className="text-[9px] font-black uppercase tracking-wide text-slate-500">SHIFT</div>
-                <div className="mt-1 font-bold text-slate-300">{selectedItem.shiftCode}</div>
+                <div className="text-[9px] font-black uppercase tracking-wide text-slate-500">Shift / Tanggal Operasional</div>
+                <div className="mt-1 font-bold text-slate-300">
+                  {selectedItem.shiftCode} • {selectedItem.shiftDate}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wide text-slate-500">
+                  <UserIcon className="h-3 w-3" /> Petugas
+                </div>
+                <div className="mt-1 font-bold text-slate-300">
+                  {selectedItem.sourceContext?.memberName || 'Petugas'}{selectedItem.sourceContext?.npk ? ` • ${selectedItem.sourceContext.npk}` : ''}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-[9px] font-black uppercase tracking-wide text-slate-500">Site</div>
+                <div className="mt-1 font-bold text-slate-300">
+                  {selectedItem.sourceContext?.siteName || selectedItem.siteId}
+                </div>
               </div>
             </div>
 
-            {selectedItem.latitude && selectedItem.longitude ? (
+            {selectedItem.sourceModule === 'PATROL' ? (
+              <div className="rounded-xl border border-blue-900/60 bg-blue-950/20 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wide text-blue-300">Riwayat Patroli</p>
+                    <p className="mt-1 text-sm font-black text-white">
+                      {selectedItem.sourceContext?.checkpointCode || 'CP'} • {selectedItem.sourceContext?.checkpointName || 'Checkpoint'}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${sourceContextTone(selectedItem)}`}>
+                    {selectedItem.sourceContext?.validationStatus || 'STATUS'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="rounded-lg bg-slate-950/60 p-2 text-slate-400">
+                    Ronde <span className="font-black text-white">{selectedItem.sourceContext?.roundNumber || '-'}</span>
+                  </div>
+                  <div className="rounded-lg bg-slate-950/60 p-2 text-slate-400">
+                    Jarak <span className="font-black text-white">{selectedItem.sourceContext?.calculatedDistanceM != null ? `${selectedItem.sourceContext.calculatedDistanceM.toFixed(1)}m` : '-'}</span>
+                  </div>
+                  <div className="rounded-lg bg-slate-950/60 p-2 text-slate-400">
+                    Observasi <span className="font-black text-white">{selectedItem.sourceContext?.observationStatus || '-'}</span>
+                  </div>
+                  <div className="rounded-lg bg-slate-950/60 p-2 text-slate-400">
+                    Sumber <span className="font-black text-white">{selectedItem.sourceContext?.syncSource || '-'}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedItem.sourceModule === 'HANDOVER' ? (
+              <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wide text-emerald-300">Riwayat Serah Terima</p>
+                    <p className="mt-1 text-sm font-black text-white">
+                      {selectedItem.sourceContext?.itemName || selectedItem.sourceContext?.handoverType?.replaceAll('_', ' ') || 'Serah Terima'}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${sourceContextTone(selectedItem)}`}>
+                    {selectedItem.sourceContext?.handoverStatus || 'STATUS'}
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-[10px] text-slate-300">
+                  <p>Dari <span className="font-black text-white">{selectedItem.sourceContext?.handedFrom || '-'}</span></p>
+                  <p>Kepada <span className="font-black text-white">{selectedItem.sourceContext?.handedTo || '-'}</span></p>
+                  {selectedItem.sourceContext?.itemQuantity ? <p>Jumlah <span className="font-black text-white">{selectedItem.sourceContext.itemQuantity}</span></p> : null}
+                  {selectedItem.sourceContext?.itemCondition ? <p>Kondisi <span className="font-black text-white">{selectedItem.sourceContext.itemCondition}</span></p> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedItem.sourceModule === 'INCIDENT' ? (
+              <div className="rounded-xl border border-amber-900/60 bg-amber-950/20 p-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wide text-amber-300">Riwayat Kejadian</p>
+                    <p className="mt-1 text-sm font-black text-white">
+                      {selectedItem.sourceContext?.incidentTitle || selectedItem.caption}
+                    </p>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      {selectedItem.sourceContext?.incidentCategory || '-'} • {selectedItem.sourceContext?.incidentLocation || '-'}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${sourceContextTone(selectedItem)}`}>
+                    {selectedItem.sourceContext?.incidentSeverity || 'INSIDEN'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-300">
+                  Status <span className="font-black text-white">{selectedItem.sourceContext?.incidentStatus || '-'}</span>
+                </p>
+              </div>
+            ) : null}
+
+            {selectedItem.latitude != null && selectedItem.longitude != null ? (
               <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 font-mono text-xs text-slate-400">
                 <MapPin className="h-4 w-4 shrink-0 text-blue-400" />
                 <span>

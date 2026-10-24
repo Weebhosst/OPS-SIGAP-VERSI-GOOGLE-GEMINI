@@ -13,7 +13,6 @@ interface QRScannerModalProps {
   onScanSuccess: (token: string) => void;
   expectedCheckpointCode?: string;
   expectedCheckpointName?: string;
-  availableTokens?: { code: string; name: string; token: string }[];
 }
 
 export const QRScannerModal: React.FC<QRScannerModalProps> = ({
@@ -22,15 +21,12 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   onScanSuccess,
   expectedCheckpointCode,
   expectedCheckpointName,
-  availableTokens = [],
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [manualToken, setManualToken] = useState('');
-  const [selectedQuickToken, setSelectedQuickToken] = useState('');
   const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -213,49 +209,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           )}
         </div>
 
-        {/* Fallback / Quick Simulation Section */}
-        <div className="space-y-3 border-t border-slate-800 bg-[#08111f] p-4">
-          {availableTokens && availableTokens.length > 0 && (
-            <div>
-              <label className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                Simulasi Scan Cepat Lapangan (Demo / Dev)
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {availableTokens.map((t) => (
-                  <button
-                    key={t.code}
-                    type="button"
-                    onClick={() => handleDetected(t.token)}
-                    className="flex min-h-10 items-center justify-between rounded-xl border border-slate-700 bg-slate-800 px-2.5 py-2 text-left text-xs text-slate-200 transition hover:border-slate-600 hover:bg-slate-700"
-                  >
-                    <span className="font-black text-blue-300">{t.code}</span>
-                    <span className="max-w-[110px] truncate text-[10px] text-slate-400">{t.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div className="flex gap-2">
-              <input
-                aria-label="Token QR manual"
-                type="text"
-                placeholder="Atau masukkan kode token manual..."
-                value={manualToken}
-                onChange={(e) => setManualToken(e.target.value)}
-                className="min-h-11 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15"
-              />
-              <button
-                type="button"
-                disabled={!manualToken.trim()}
-                onClick={() => handleDetected(manualToken.trim())}
-                className="flex min-h-11 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:opacity-50"
-              >
-                <ShieldCheck className="w-4 h-4" /> Validasi
-              </button>
-            </div>
-          </div>
+        <div className="border-t border-slate-800 bg-[#08111f] px-4 py-3 text-center text-[11px] leading-5 text-slate-400">
+          QR checkpoint harus dipindai langsung melalui kamera perangkat di lokasi.
         </div>
       </div>
     </div>

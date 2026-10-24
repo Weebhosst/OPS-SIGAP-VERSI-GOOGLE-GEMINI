@@ -3,104 +3,193 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { WifiOff, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
-import { offlineQueue } from '../lib/offlineQueue';
+import { AlertCircle, CheckCircle2, RefreshCw, WifiOff } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { offlineQueue, type OfflineQueueSummary } from '../lib/offlineQueue';
+
+const EMPTY_SUMMARY: OfflineQueueSummary = {
+  total: 0,
+  pending: 0,
+  failed: 0,
+  syncing: 0,
+};
 
 export const OfflineBanner: React.FC = () => {
+  const { user } = useAuth();
+  const memberUserId = user?.role === 'ANGGOTA' ? user.id : null;
   const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
+    typeof navigator !== 'undefined' ? navigator.onLine : true,
   );
-  const [pendingCount, setPendingCount] = useState(0);
+  const [summary, setSummary] = useState<OfflineQueueSummary>(EMPTY_SUMMARY);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
+    const refreshSummary = async () => {
+      if (!memberUserId) {
+        if (active) {
+          setSummary(EMPTY_SUMMARY);
+          setIsSyncing(false);
+        }
+        return;
+      }
+
+      const next = await offlineQueue.getSummary(memberUserId);
+      if (!active) return;
+      setSummary(next);
+      setIsSyncing(offlineQueue.isCurrentlySyncing());
+    };
+
+    const recoverAndSync = async () => {
+      if (!memberUserId) return;
+      offlineQueue.setActiveUser(memberUserId);
+      await offlineQueue.recoverInterruptedSync(memberUserId);
+      await refreshSummary();
+
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        await offlineQueue.syncNow(memberUserId);
+        await refreshSummary();
+      }
+    };
+
     const handleOnline = () => {
       setIsOnline(true);
-      checkPending();
+      void recoverAndSync();
     };
+
     const handleOffline = () => {
       setIsOnline(false);
-      checkPending();
+      void refreshSummary();
     };
+
+    offlineQueue.setActiveUser(memberUserId);
+    void recoverAndSync();
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    const checkPending = () => {
-      offlineQueue.getPendingCount().then((count) => {
-        setPendingCount(count);
-        setIsSyncing(offlineQueue.isCurrentlySyncing());
-      });
-    };
-
-    checkPending();
-    const unsub = offlineQueue.subscribe(checkPending);
+    const unsubscribe = offlineQueue.subscribe(() => {
+      void refreshSummary();
+    });
 
     return () => {
+      active = false;
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      unsub();
+      unsubscribe();
+      if (offlineQueue.isCurrentlySyncing() === false) {
+        offlineQueue.setActiveUser(null);
+      }
     };
-  }, []);
+  }, [memberUserId]);
 
   const handleManualSync = async () => {
-    if (isSyncing) return;
+    if (!memberUserId || isSyncing) return;
+
     setIsSyncing(true);
-    setSyncFeedback('Menyinkronkan data ke server...');
-    const res = await offlineQueue.syncNow();
-    if (res.synced > 0) {
-      setSyncFeedback(`Berhasil menyinkronkan ${res.synced} data!`);
-    } else if (res.failed > 0) {
-      setSyncFeedback(`${res.failed} data gagal sinkron. Akan dicoba lagi.`);
-    } else {
+    setSyncFeedback('Menyinkronkan data lokal ke server...');
+
+    const result = await offlineQueue.syncNow(memberUserId);
+    const next = await offlineQueue.getSummary(memberUserId);
+    setSummary(next);
+
+    if (result.synced > 0 && next.failed === 0) {
+      setSyncFeedback(`Berhasil menyinkronkan ${result.synced} data.`);
+    } else if (next.failed > 0) {
+      setSyncFeedback(`${next.failed} data masih gagal sinkron. Data tetap tersimpan di perangkat.`);
+    } else if (next.total === 0) {
       setSyncFeedback('Semua data lokal telah tersinkronisasi.');
+    } else {
+      setSyncFeedback('Sinkronisasi belum selesai. Data tetap aman di antrean lokal.');
     }
-    setTimeout(() => setSyncFeedback(null), 3500);
+
     setIsSyncing(false);
+    window.setTimeout(() => setSyncFeedback(null), 4500);
   };
 
-  // If online and no pending items, show nothing
-  if (isOnline && pendingCount === 0 && !syncFeedback) {
+  if (isOnline && summary.total === 0 && !syncFeedback) {
     return null;
   }
 
-  return (
-    <div className="sticky top-0 z-40 w-full transition-all">
-      {!isOnline ? (
-        <div className="bg-amber-600 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-2 font-medium">
-            <WifiOff className="w-4 h-4 animate-pulse" />
-            <span>
-              <strong>OFFLINE</strong> — DATA MENUNGGU SINKRONISASI ({pendingCount} pending)
+  if (!isOnline) {
+    return (
+      <div className="sticky top-0 z-40 w-full bg-amber-600 px-4 py-2 text-xs text-white shadow-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 font-semibold">
+            <WifiOff className="h-4 w-4 shrink-0 animate-pulse" />
+            <span className="truncate">
+              <strong>OFFLINE</strong>
+              {summary.total > 0
+                ? ` • ${summary.total} data tersimpan di HP dan belum final di server`
+                : ' • fitur yang memerlukan server sedang tidak tersedia'}
             </span>
           </div>
-          <span className="text-[10px] bg-amber-700/80 px-2 py-0.5 rounded font-mono">
-            Tersimpan di HP
-          </span>
+          {summary.total > 0 ? (
+            <span className="shrink-0 rounded bg-amber-700/80 px-2 py-0.5 font-mono text-[10px]">
+              LOKAL AMAN
+            </span>
+          ) : null}
         </div>
-      ) : pendingCount > 0 ? (
-        <div className="bg-blue-600 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-2 font-medium">
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{pendingCount} data siap disinkronkan ke server</span>
+      </div>
+    );
+  }
+
+  if (summary.failed > 0) {
+    return (
+      <div className="sticky top-0 z-40 w-full bg-red-700 px-4 py-2 text-xs text-white shadow-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 font-semibold">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              {summary.failed} data gagal sinkron. Data masih tersimpan di perangkat.
+            </span>
           </div>
           <button
-            onClick={handleManualSync}
+            type="button"
+            onClick={() => void handleManualSync()}
             disabled={isSyncing}
-            className="px-2.5 py-1 bg-white text-blue-700 rounded font-semibold text-[11px] hover:bg-blue-50 transition shadow-sm"
+            className="shrink-0 rounded bg-white px-2.5 py-1 text-[11px] font-black text-red-700 disabled:opacity-50"
           >
-            {isSyncing ? 'Sinkronisasi...' : 'Sinkronkan Sekarang'}
+            {isSyncing ? 'MENCOBA...' : 'COBA LAGI'}
           </button>
         </div>
-      ) : syncFeedback ? (
-        <div className="bg-emerald-600 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-2 font-medium">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{syncFeedback}</span>
+      </div>
+    );
+  }
+
+  if (summary.total > 0) {
+    return (
+      <div className="sticky top-0 z-40 w-full bg-blue-600 px-4 py-2 text-xs text-white shadow-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 font-semibold">
+            <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${isSyncing || summary.syncing > 0 ? 'animate-spin' : ''}`} />
+            <span className="truncate">
+              {isSyncing || summary.syncing > 0
+                ? 'Menyinkronkan data lokal ke server...'
+                : `${summary.total} data menunggu sinkronisasi`}
+            </span>
           </div>
+          {!isSyncing && summary.syncing === 0 ? (
+            <button
+              type="button"
+              onClick={() => void handleManualSync()}
+              className="shrink-0 rounded bg-white px-2.5 py-1 text-[11px] font-black text-blue-700"
+            >
+              SINKRONKAN
+            </button>
+          ) : null}
         </div>
-      ) : null}
+      </div>
+    );
+  }
+
+  return syncFeedback ? (
+    <div className="sticky top-0 z-40 w-full bg-emerald-600 px-4 py-2 text-xs text-white shadow-md">
+      <div className="mx-auto flex max-w-5xl items-center gap-2 font-semibold">
+        <CheckCircle2 className="h-4 w-4" />
+        <span>{syncFeedback}</span>
+      </div>
     </div>
-  );
+  ) : null;
 };

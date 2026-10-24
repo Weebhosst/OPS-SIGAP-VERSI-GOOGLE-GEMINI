@@ -16,6 +16,7 @@ interface CameraCaptureModalProps {
   latitude?: number;
   longitude?: number;
   gpsAccuracyM?: number;
+  siteLabel?: string;
 }
 
 export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
@@ -27,6 +28,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   latitude,
   longitude,
   gpsAccuracyM,
+  siteLabel,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -110,7 +112,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     const { dateString, timeString } = getJakartaDateParts();
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 15px monospace';
-    ctx.fillText(`OPS SIGAP EVIDENCE • BB92`, 16, height - bannerHeight + 22);
+    ctx.fillText(`OPS SIGAP EVIDENCE • ${siteLabel || 'FIELD'}`, 16, height - bannerHeight + 22);
 
     ctx.font = '12px monospace';
     ctx.fillStyle = '#94a3b8';
@@ -143,45 +145,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     }
   };
 
-  // Fallback file input if camera device fails
-  const handleFileFallback = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          // Add watermark
-          const bannerHeight = Math.max(60, Math.floor(img.height * 0.16));
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-          ctx.fillRect(0, img.height - bannerHeight, img.width, bannerHeight);
-          ctx.fillStyle = '#3b82f6';
-          ctx.fillRect(0, img.height - bannerHeight, img.width, 3);
-          const { dateString, timeString } = getJakartaDateParts();
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 16px monospace';
-          ctx.fillText(`OPS SIGAP EVIDENCE • BB92`, 16, img.height - bannerHeight + 24);
-          ctx.font = '13px monospace';
-          ctx.fillStyle = '#94a3b8';
-          ctx.fillText(
-            `GPS: ${latitude?.toFixed(6) || '-6.481250'}, ${longitude?.toFixed(6) || '107.631806'} • ${dateString} ${timeString} WIB`,
-            16,
-            img.height - bannerHeight + 46
-          );
-          setCapturedImage(canvas.toDataURL('image/jpeg', 0.82));
-        }
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
 
   if (!isOpen) return null;
 
@@ -231,7 +195,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
               {/* Watermark overlay preview */}
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 text-left">
                 <div className="font-mono text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-300">
-                  LIVE OVERLAY • KM 92
+                  LIVE OVERLAY • {siteLabel || 'FIELD'}
                 </div>
                 <div className="mt-1 font-mono text-[10px] text-slate-300">
                   {checkpointCode} {checkpointName ? `— ${checkpointName}` : ''}
@@ -242,16 +206,16 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#020817]/95 p-6 text-center text-slate-300" role="alert">
                   <AlertCircle className="h-10 w-10 text-amber-300" />
                   <p className="max-w-xs text-xs leading-5 text-slate-200">{cameraError}</p>
-                  <label className="cursor-pointer rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-500 focus-within:ring-2 focus-within:ring-blue-400/40">
-                    Pilih File Foto
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={handleFileFallback}
-                    />
-                  </label>
+                  <p className="max-w-xs text-[11px] leading-5 text-amber-200">
+                    Bukti operasional wajib diambil langsung melalui kamera perangkat. Foto dari galeri tidak dapat digunakan.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                  >
+                    Coba Lagi Kamera
+                  </button>
                 </div>
               )}
             </>
@@ -272,25 +236,18 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
         {/* Action Controls */}
         <div className="flex items-center justify-between border-t border-slate-800 bg-[#08111f] p-4">
           {!capturedImage ? (
-            <div className="flex w-full items-center justify-between gap-3">
-              <label className="cursor-pointer mt-0.5 text-[11px] font-medium text-slate-400 hover:text-slate-200 flex items-center gap-1.5">
-                <span>Galeri Kamera</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleFileFallback}
-                />
-              </label>
+            <div className="grid w-full grid-cols-[44px_1fr_44px] items-center gap-3">
+              <div className="text-center text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">
+                LIVE
+              </div>
 
               {/* Big Circular Shutter Button */}
               <button
                 type="button"
                 disabled={isProcessing || !!cameraError}
                 onClick={takeSnapshot}
-                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white/85 bg-emerald-600 shadow-xl shadow-emerald-950/40 transition hover:bg-emerald-500 active:scale-95 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 disabled:opacity-50"
-                aria-label="Ambil foto bukti"
+                className="mx-auto flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white/85 bg-emerald-600 shadow-xl shadow-emerald-950/40 transition hover:bg-emerald-500 active:scale-95 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 disabled:opacity-50"
+                aria-label="Ambil foto bukti langsung dari kamera"
               >
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white">
                   <Camera className="h-6 w-6 text-emerald-800" />

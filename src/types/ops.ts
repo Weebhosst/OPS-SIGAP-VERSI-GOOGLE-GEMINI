@@ -252,6 +252,31 @@ export interface IncidentReport {
   updatedAt: string;
 }
 
+export interface MediaSourceContext {
+  memberName?: string | null;
+  npk?: string | null;
+  siteName?: string | null;
+  checkpointCode?: string | null;
+  checkpointName?: string | null;
+  roundNumber?: number | null;
+  validationStatus?: ValidationStatus | null;
+  calculatedDistanceM?: number | null;
+  observationStatus?: ObservationStatus | null;
+  syncSource?: SyncSource | null;
+  handoverType?: HandoverType | null;
+  handoverStatus?: ShiftHandover['status'] | null;
+  handedFrom?: string | null;
+  handedTo?: string | null;
+  itemName?: string | null;
+  itemQuantity?: string | null;
+  itemCondition?: string | null;
+  incidentTitle?: string | null;
+  incidentCategory?: IncidentCategory | null;
+  incidentSeverity?: IncidentSeverity | null;
+  incidentStatus?: IncidentStatus | null;
+  incidentLocation?: string | null;
+}
+
 export interface MediaGalleryItem {
   id: string;
   sourceModule: 'PATROL' | 'HANDOVER' | 'INCIDENT';
@@ -275,6 +300,7 @@ export interface MediaGalleryItem {
   createdAt: string;
   createdBy: string;
   documentType?: CanonicalDocumentType;
+  sourceContext?: MediaSourceContext;
 }
 
 export type CanonicalDocumentType =
